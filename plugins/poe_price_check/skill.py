@@ -13,6 +13,7 @@ months and a hardcoded one would silently go stale.
 
 import httpx
 
+from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "poe_price_check"
@@ -93,10 +94,7 @@ async def _search_uniques(client: httpx.AsyncClient, league: str, item_name: str
 
 
 async def handle(params, ctx):
-    # The router doesn't reliably use the exact param key name we ask
-    # for — check common alternates before falling back to the raw
-    # message (2026-09-11: observed it use "item" instead of "item_name").
-    item_name = params.get("item_name") or params.get("item") or params.get("name") or params.get("query")
+    item_name = get_single_param(params, "item_name", "item", "name", "query")
     item_name = (item_name or ctx.original_message).strip()
     async with httpx.AsyncClient(timeout=20) as client:
         league = await _current_league(client)

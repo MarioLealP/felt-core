@@ -31,6 +31,14 @@ class FeltConfig(BaseSettings):
     ntfy_user: str | None = None
     ntfy_password: str | None = None
 
+    # Publish side — a separate, write-only ntfy user/topic, distinct from
+    # the read-only subscription above (least-privilege: the credential
+    # that can push to Mario's phone is not the same one that can only
+    # read the existing clockmost topic).
+    ntfy_publish_user: str | None = None
+    ntfy_publish_password: str | None = None
+    ntfy_publish_topic: str | None = None
+
     # Cloud delegation is a tool the model can call, not a router swap — see README
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
