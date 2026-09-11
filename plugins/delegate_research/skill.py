@@ -21,7 +21,9 @@ description = (
     "Delegates a research/web-search question to a cloud model, for things "
     "the local model can't reliably know on its own (current events, "
     "obscure facts, anything needing an actual web search). Only use this "
-    "when local knowledge genuinely isn't enough — not a default."
+    "when local knowledge genuinely isn't enough — not a default. NOT for "
+    "checking Felt's own ntfy alerts/notifications — use get_recent_alerts "
+    "for anything about the home server's own alerts."
 )
 parameters_schema = {
     "type": "object",

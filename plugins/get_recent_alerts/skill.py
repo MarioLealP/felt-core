@@ -5,7 +5,12 @@ from felt_core.db import get_recent_ntfy_events
 from felt_core.plugin import SkillResult
 
 name = "get_recent_alerts"
-description = "Gets recent alerts/notifications from the home server's ntfy topic."
+description = (
+    "Checks Felt's own locally-stored log of ntfy alerts/notifications from "
+    "the home server. Use this, NOT delegate_research, for any question "
+    "mentioning 'alerts', 'notifications', 'ntfy', or 'anything wrong' with "
+    "the server/system — this is local data, not a web search."
+)
 parameters_schema = {"type": "object", "properties": {}}
 
 
