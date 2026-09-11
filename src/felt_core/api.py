@@ -14,6 +14,7 @@ from urllib.parse import quote
 import httpx
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -31,6 +32,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
+
+# LAN-only right now, no auth on this API yet (same posture as
+# Ollama/ComfyUI elsewhere in this project) — permissive CORS matches
+# that reality rather than pretending there's a security boundary here.
+# Tighten this (a real origin allowlist, or auth) before this is ever
+# reachable outside the LAN.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Transcribed-Text", "X-Reply-Text"],
+)
 
 
 class ChatRequest(BaseModel):

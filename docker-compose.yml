@@ -13,7 +13,9 @@ services:
     mem_limit: 1g
     env_file: .env
     ports:
-      - "127.0.0.1:8420:8420" # loopback only; no public route needed yet
+      - "8420:8420" # LAN-reachable — a real client (felt-dashboard) needs
+        # this now; still no public/internet route, scoped by the host
+        # firewall to specific LAN clients (see clockmost-ai-assistant.md)
     volumes:
       - ./plugins:/app/plugins:ro
       - felt-data:/app/data
