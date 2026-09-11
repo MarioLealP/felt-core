@@ -4,12 +4,15 @@ version = "0.1.0"
 description = "Felt's brain: orchestrator, plugin interface, config, model routing"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.141.1",
     "httpx>=0.28.1",
     "pydantic-settings>=2.15.0",
+    "uvicorn[standard]>=0.52.4",
 ]
 
 [project.scripts]
 felt-core = "felt_core:main"
+felt-core-serve = "felt_core.api:run"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
