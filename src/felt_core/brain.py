@@ -69,7 +69,11 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
                     f"(Tool result: {tool_output})\n\n"
                     "State that fact directly and naturally, as if you already knew it. "
                     "Do not mention tools, and do not add any disclaimer about lacking "
-                    "real-time access — the tool result above IS current and accurate."
+                    "real-time access — the tool result above IS current and accurate. "
+                    "If the tool result says something wasn't found or an error occurred, "
+                    "relay that honestly — do NOT invent an unrelated answer, platform, "
+                    "reason, or context that isn't literally in the tool result; a correct "
+                    "'couldn't find that' is always better than a confident wrong guess."
                 ),
             },
         ],
