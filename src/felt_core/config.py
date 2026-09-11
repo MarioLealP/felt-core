@@ -27,6 +27,11 @@ class FeltConfig(BaseSettings):
     # felt-desktop-agent — KDE Connect etc. lives on the desktop, not here.
     desktop_agent_url: str | None = None
 
+    # OctoPrint (the Ender 3) — vendor-agnostic on purpose: if the Ender 3
+    # is ever replaced, this integration keeps working unchanged.
+    octoprint_url: str | None = None
+    octoprint_api_key: str | None = None
+
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None

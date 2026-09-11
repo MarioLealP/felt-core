@@ -1,8 +1,10 @@
 # Deliberately standalone — not folded into clockmost-infra's compose
 # ecosystem, so this file works for anyone deploying felt-core anywhere,
-# not just on clockmost's server. The `edge` network below happens to be
-# clockmost-specific (lets this reach ninerouter by Docker DNS on this
-# particular deployment); rename/remove it for a different environment.
+# not just on clockmost's server. The networks below are clockmost-
+# specific (edge reaches ninerouter/searxng by DNS; authentik reaches
+# octoprint directly, container-to-container, bypassing Caddy/SSO since
+# OctoPrint has its own separate API-key auth) — rename/remove for a
+# different environment.
 services:
   felt-core:
     build: .
@@ -17,9 +19,12 @@ services:
       - felt-data:/app/data
     networks:
       - edge
+      - authentik
 
 networks:
   edge:
+    external: true
+  authentik:
     external: true
 
 volumes:
