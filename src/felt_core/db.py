@@ -24,6 +24,20 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # Incoming ntfy messages — a log Felt can be asked about
+    # conversationally ("anything wrong recently?"), separate from both
+    # the conversation log and the facts table.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ntfy_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            message TEXT NOT NULL,
+            priority INTEGER,
+            received_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     # Durable facts — distinct from conversation history above. These
     # persist across every session, not just one conversation thread, and
     # are only written via an explicit "remember this" mechanism (the
@@ -73,3 +87,26 @@ def get_all_facts(db_path: str) -> list[str]:
     rows = conn.execute("SELECT content FROM facts ORDER BY id ASC").fetchall()
     conn.close()
     return [row[0] for row in rows]
+
+
+def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute(
+            "INSERT INTO ntfy_events (title, message, priority) VALUES (?, ?, ?)",
+            (title, message, priority),
+        )
+    conn.close()
+
+
+def get_recent_ntfy_events(db_path: str, limit: int = 10) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT title, message, priority, received_at FROM ntfy_events ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [
+        {"title": title, "message": message, "priority": priority, "received_at": received_at}
+        for title, message, priority, received_at in rows
+    ]

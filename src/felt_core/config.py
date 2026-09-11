@@ -20,6 +20,13 @@ class FeltConfig(BaseSettings):
     # chat+tool-call prompt — a separate narrow classifier is more robust).
     router_model: str = "qwen2.5:1.5b"
 
+    # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
+    # not a new notification system. Unset = the listener simply doesn't run.
+    ntfy_url: str | None = None
+    ntfy_topic: str | None = None
+    ntfy_user: str | None = None
+    ntfy_password: str | None = None
+
     # Cloud delegation is a tool the model can call, not a router swap — see README
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
