@@ -19,6 +19,7 @@ app = FastAPI(title="felt-core", version="0.1.0")
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str = "default"
 
 
 class ChatResponse(BaseModel):
@@ -28,7 +29,7 @@ class ChatResponse(BaseModel):
 @app.post("/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     config = load_config()
-    reply = await chat(req.message, config)
+    reply = await chat(req.message, config, req.session_id)
     return ChatResponse(reply=reply)
 
 
@@ -39,7 +40,7 @@ async def chat_ws(websocket: WebSocket) -> None:
     try:
         while True:
             data = await websocket.receive_json()
-            reply = await chat(data["message"], config)
+            reply = await chat(data["message"], config, data.get("session_id", "default"))
             await websocket.send_json({"reply": reply})
     except Exception:
         await websocket.close()

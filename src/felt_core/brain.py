@@ -1,19 +1,18 @@
 """The brain loop: a small router decides tool-vs-chat, the main model
-only ever converses.
+only ever converses. Now with real conversation memory (2026-09-11) — a
+session's prior messages are loaded from SQLite and included, so a
+follow-up question actually has context.
 
-2026-09-11 redesign: previously the chat model itself was prompted to
-emit a fenced tool_call block when it decided a tool applied — unreliable
-in practice (see router.py's docstring). Now routing is a separate,
-narrow classification call to a small dedicated model
-(config.router_model); the main model (config.ollama_model, chosen for
-chat quality) never sees tool-call instructions at all, it just answers —
-either the original question, or the original question plus a tool's
-result to weave into a natural reply.
+2026-09-11 redesign (kept from before): routing is a separate, narrow
+classification call to a small dedicated model (config.router_model); the
+main model (config.ollama_model, chosen for chat quality) never sees
+tool-call instructions at all, it just answers.
 """
 
 import httpx
 
 from felt_core.config import FeltConfig
+from felt_core.db import get_history, save_message
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
 from felt_core.router import decide_tool
@@ -30,14 +29,19 @@ async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> 
         return response.json()["message"]["content"]
 
 
-async def chat(message: str, config: FeltConfig) -> str:
+async def chat(message: str, config: FeltConfig, session_id: str = "default") -> str:
     registry = load_plugins(config.plugins_dir)
+    history = get_history(config.db_path, session_id)
+    save_message(config.db_path, session_id, "user", message)
 
     call = await decide_tool(message, registry, config)
+
     if call is None:
-        return await _ollama_chat(
-            [{"role": "user", "content": message}], config.ollama_model, config
+        reply = await _ollama_chat(
+            history + [{"role": "user", "content": message}], config.ollama_model, config
         )
+        save_message(config.db_path, session_id, "assistant", reply)
+        return reply
 
     skill_name, params = call
     try:
@@ -47,8 +51,9 @@ async def chat(message: str, config: FeltConfig) -> str:
     except ValueError as e:
         tool_output = f"Error: {e}"
 
-    return await _ollama_chat(
-        [
+    reply = await _ollama_chat(
+        history
+        + [
             {"role": "user", "content": message},
             {
                 "role": "user",
@@ -63,3 +68,5 @@ async def chat(message: str, config: FeltConfig) -> str:
         config.ollama_model,
         config,
     )
+    save_message(config.db_path, session_id, "assistant", reply)
+    return reply
