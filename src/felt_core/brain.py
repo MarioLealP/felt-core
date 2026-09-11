@@ -1,14 +1,17 @@
-"""The brain loop: chat, with a manual tool-calling round-trip on top.
+"""The brain loop: chat, with an optional manual tool-calling round-trip.
 
-Phase 2 (text in -> text out) plus Phase 3 (tool-calling): if the model's
-first response is a tool call (per tools.py's parseable format), the
-matching skill runs and its result is fed back to the model for a final
-natural-language reply. Otherwise the first response is the answer.
+Phase 2 (text in -> text out) plus Phase 3/4 (tool-calling + real plugin
+loading): if the model's first response is a tool call (per tools.py's
+parseable format), the matching skill runs and its result is fed back to
+the model for a final natural-language reply. Otherwise the first
+response is the answer, one model call, no tool overhead — tool use is
+available, never mandatory.
 """
 
 import httpx
 
 from felt_core.config import FeltConfig
+from felt_core.plugin_loader import load_plugins
 from felt_core.tools import build_system_prompt, parse_tool_call, run_skill
 
 
@@ -23,8 +26,9 @@ async def _ollama_chat(messages: list[dict], config: FeltConfig) -> str:
 
 
 async def chat(message: str, config: FeltConfig) -> str:
+    registry = load_plugins(config.plugins_dir)
     messages = [
-        {"role": "system", "content": build_system_prompt()},
+        {"role": "system", "content": build_system_prompt(registry)},
         {"role": "user", "content": message},
     ]
     first_response = await _ollama_chat(messages, config)
@@ -35,7 +39,7 @@ async def chat(message: str, config: FeltConfig) -> str:
 
     skill_name, params = call
     try:
-        result = await run_skill(skill_name, params)
+        result = await run_skill(skill_name, params, registry)
         tool_output = result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
