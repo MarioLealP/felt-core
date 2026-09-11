@@ -18,12 +18,12 @@ from felt_core.plugin import SkillResult
 
 name = "delegate_research"
 description = (
-    "Delegates a research/web-search question to a cloud model, for things "
-    "the local model can't reliably know on its own (current events, "
-    "obscure facts, anything needing an actual web search). Only use this "
-    "when local knowledge genuinely isn't enough — not a default. NOT for "
-    "checking Felt's own ntfy alerts/notifications — use get_recent_alerts "
-    "for anything about the home server's own alerts."
+    "Asks a cloud model to actually reason/synthesize an answer to a hard "
+    "research question — use this ONLY when web_search's raw snippets "
+    "genuinely aren't enough on their own. For a plain lookup ('what is X', "
+    "'search for X'), use web_search instead, not this. NOT for checking "
+    "Felt's own ntfy alerts/notifications — use get_recent_alerts for "
+    "anything about the home server's own alerts."
 )
 parameters_schema = {
     "type": "object",

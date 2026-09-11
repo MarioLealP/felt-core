@@ -10,7 +10,10 @@ import httpx
 from felt_core.plugin import SkillResult
 
 name = "get_weather"
-description = "Gets the current weather at the configured home location."
+description = (
+    "Gets the current weather at the configured home location — use this, "
+    "NOT web_search, for any weather question."
+)
 parameters_schema = {"type": "object", "properties": {}}
 
 _WMO_CODES = {
