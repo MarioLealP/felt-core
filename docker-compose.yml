@@ -1,0 +1,26 @@
+# Deliberately standalone — not folded into clockmost-infra's compose
+# ecosystem, so this file works for anyone deploying felt-core anywhere,
+# not just on clockmost's server. The `edge` network below happens to be
+# clockmost-specific (lets this reach ninerouter by Docker DNS on this
+# particular deployment); rename/remove it for a different environment.
+services:
+  felt-core:
+    build: .
+    image: felt-core:local
+    restart: unless-stopped
+    mem_limit: 1g
+    env_file: .env
+    ports:
+      - "127.0.0.1:8420:8420" # loopback only; no public route needed yet
+    volumes:
+      - ./plugins:/app/plugins:ro
+      - felt-data:/app/data
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  felt-data:
