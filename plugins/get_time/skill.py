@@ -14,4 +14,5 @@ parameters_schema = {"type": "object", "properties": {}}
 
 
 async def handle(params, ctx):
+    del ctx  # not needed for this skill
     return SkillResult(text=datetime.now().isoformat(timespec="seconds"))

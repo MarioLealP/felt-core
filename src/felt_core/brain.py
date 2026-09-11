@@ -11,6 +11,7 @@ available, never mandatory.
 import httpx
 
 from felt_core.config import FeltConfig
+from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
 from felt_core.tools import build_system_prompt, parse_tool_call, run_skill
 
@@ -39,7 +40,7 @@ async def chat(message: str, config: FeltConfig) -> str:
 
     skill_name, params = call
     try:
-        result = await run_skill(skill_name, params, registry)
+        result = await run_skill(skill_name, params, registry, ExecutionContext(config=config))
         tool_output = result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"

@@ -6,7 +6,10 @@ deleting one removes it — no core code changes needed.
 """
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from felt_core.config import FeltConfig
 
 
 @dataclass
@@ -22,8 +25,12 @@ class SkillResult:
     ui_action: UIAction | None = None
 
 
-class ExecutionContext(Protocol):
-    """Whatever a skill needs from the brain at call time (config, http client, etc.)."""
+@dataclass
+class ExecutionContext:
+    """What a skill gets at call time. Config only for now — grows as
+    skills need more (an http client to reuse, a db handle, etc.)."""
+
+    config: "FeltConfig"
 
 
 class Skill(Protocol):
