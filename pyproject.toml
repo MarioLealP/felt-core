@@ -1,0 +1,15 @@
+[project]
+name = "felt-core"
+version = "0.1.0"
+description = "Felt's brain: orchestrator, plugin interface, config, model routing"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-settings>=2.15.0",
+]
+
+[project.scripts]
+felt-core = "felt_core:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
