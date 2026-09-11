@@ -24,6 +24,9 @@ class FeltConfig(BaseSettings):
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None
 
+    # felt-desktop-agent — KDE Connect etc. lives on the desktop, not here.
+    desktop_agent_url: str | None = None
+
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None
