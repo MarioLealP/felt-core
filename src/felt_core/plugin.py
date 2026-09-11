@@ -27,10 +27,15 @@ class SkillResult:
 
 @dataclass
 class ExecutionContext:
-    """What a skill gets at call time. Config only for now — grows as
-    skills need more (an http client to reuse, a db handle, etc.)."""
+    """What a skill gets at call time.
+
+    `original_message` exists because the router (a small model) doesn't
+    always populate structured params correctly (2026-09-11 finding) — a
+    skill that needs a query string can fall back to the raw message
+    rather than KeyError-ing on a missing param."""
 
     config: "FeltConfig"
+    original_message: str = ""
 
 
 class Skill(Protocol):

@@ -41,7 +41,8 @@ async def chat(message: str, config: FeltConfig) -> str:
 
     skill_name, params = call
     try:
-        result = await run_skill(skill_name, params, registry, ExecutionContext(config=config))
+        ctx = ExecutionContext(config=config, original_message=message)
+        result = await run_skill(skill_name, params, registry, ctx)
         tool_output = result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
@@ -51,7 +52,12 @@ async def chat(message: str, config: FeltConfig) -> str:
             {"role": "user", "content": message},
             {
                 "role": "user",
-                "content": f"(Tool result: {tool_output})\n\nAnswer naturally using that.",
+                "content": (
+                    f"(Tool result: {tool_output})\n\n"
+                    "State that fact directly and naturally, as if you already knew it. "
+                    "Do not mention tools, and do not add any disclaimer about lacking "
+                    "real-time access — the tool result above IS current and accurate."
+                ),
             },
         ],
         config.ollama_model,

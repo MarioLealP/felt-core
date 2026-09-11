@@ -35,13 +35,18 @@ async def handle(params, ctx):
     if not config.ninerouter_url or not config.ninerouter_api_key:
         return SkillResult(text="Cloud delegation isn't configured (no ninerouter URL/key set).")
 
+    # The router doesn't always populate structured params correctly —
+    # fall back to the raw user message rather than erroring.
+    query = params.get("query") or ctx.original_message
+
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(
             f"{config.ninerouter_url}/chat/completions",
             headers={"Authorization": f"Bearer {config.ninerouter_api_key}"},
             json={
                 "model": "ag/gemini-3.8-flash",
-                "messages": [{"role": "user", "content": params["query"]}],
+                "messages": [{"role": "user", "content": query}],
+                "stream": False,
             },
         )
         response.raise_for_status()
