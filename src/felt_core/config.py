@@ -15,6 +15,11 @@ class FeltConfig(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
 
+    # Small, dedicated router model for tool-vs-chat decisions (2026-09-11
+    # finding: the chat model itself is unreliable at this under a mixed
+    # chat+tool-call prompt — a separate narrow classifier is more robust).
+    router_model: str = "qwen2.5:1.5b"
+
     # Cloud delegation is a tool the model can call, not a router swap — see README
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
