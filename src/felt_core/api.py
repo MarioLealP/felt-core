@@ -9,9 +9,12 @@ just about having *an* API surface at all, versioned so it can evolve).
 
 import asyncio
 import contextlib
+from urllib.parse import quote
 
+import httpx
 import uvicorn
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from felt_core.brain import chat
@@ -44,6 +47,35 @@ async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     config = load_config()
     reply = await chat(req.message, config, req.session_id)
     return ChatResponse(reply=reply)
+
+
+@app.post("/v1/voice-chat")
+async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "default") -> Response:
+    """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
+    the brain -> felt-voice (TTS), so a client doesn't have to."""
+    config = load_config()
+    if not config.voice_url:
+        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        stt_resp = await client.post(
+            f"{config.voice_url}/v1/stt", files={"file": (file.filename, await file.read(), file.content_type)}
+        )
+        stt_resp.raise_for_status()
+        transcribed = stt_resp.json()["text"]
+
+        reply = await chat(transcribed, config, session_id)
+
+        tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
+        tts_resp.raise_for_status()
+
+    return Response(
+        content=tts_resp.content,
+        media_type="audio/wav",
+        # Percent-encoded — headers must be ASCII-safe, a non-English reply
+        # (accents, etc.) would otherwise break this.
+        headers={"X-Transcribed-Text": quote(transcribed), "X-Reply-Text": quote(reply)},
+    )
 
 
 @app.websocket("/v1/chat/ws")

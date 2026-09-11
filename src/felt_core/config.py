@@ -20,6 +20,10 @@ class FeltConfig(BaseSettings):
     # chat+tool-call prompt — a separate narrow classifier is more robust).
     router_model: str = "qwen2.5:1.5b"
 
+    # felt-voice — STT/TTS service. Unset means voice-chat simply isn't
+    # available, not a hardcoded assumption it's always running.
+    voice_url: str | None = None
+
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None
