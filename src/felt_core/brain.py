@@ -12,7 +12,7 @@ tool-call instructions at all, it just answers.
 import httpx
 
 from felt_core.config import FeltConfig
-from felt_core.db import get_history, save_message
+from felt_core.db import get_all_facts, get_history, save_message
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
 from felt_core.router import decide_tool
@@ -29,16 +29,24 @@ async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> 
         return response.json()["message"]["content"]
 
 
+def _facts_context(config: FeltConfig) -> list[dict]:
+    facts = get_all_facts(config.db_path)
+    if not facts:
+        return []
+    bullet_list = "\n".join(f"- {fact}" for fact in facts)
+    return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
+
+
 async def chat(message: str, config: FeltConfig, session_id: str = "default") -> str:
     registry = load_plugins(config.plugins_dir)
-    history = get_history(config.db_path, session_id)
+    base = _facts_context(config) + get_history(config.db_path, session_id)
     save_message(config.db_path, session_id, "user", message)
 
     call = await decide_tool(message, registry, config)
 
     if call is None:
         reply = await _ollama_chat(
-            history + [{"role": "user", "content": message}], config.ollama_model, config
+            base + [{"role": "user", "content": message}], config.ollama_model, config
         )
         save_message(config.db_path, session_id, "assistant", reply)
         return reply
@@ -52,7 +60,7 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         tool_output = f"Error: {e}"
 
     reply = await _ollama_chat(
-        history
+        base
         + [
             {"role": "user", "content": message},
             {

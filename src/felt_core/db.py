@@ -24,6 +24,20 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # Durable facts — distinct from conversation history above. These
+    # persist across every session, not just one conversation thread, and
+    # are only written via an explicit "remember this" mechanism (the
+    # remember_fact skill), never inferred silently — keeps this
+    # auditable and correctable rather than a black box.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS facts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     return conn
 
 
@@ -45,3 +59,17 @@ def get_history(db_path: str, session_id: str, limit: int = 20) -> list[dict]:
     ).fetchall()
     conn.close()
     return [{"role": role, "content": content} for role, content in rows]
+
+
+def save_fact(db_path: str, content: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("INSERT INTO facts (content) VALUES (?)", (content,))
+    conn.close()
+
+
+def get_all_facts(db_path: str) -> list[str]:
+    conn = _connect(db_path)
+    rows = conn.execute("SELECT content FROM facts ORDER BY id ASC").fetchall()
+    conn.close()
+    return [row[0] for row in rows]
