@@ -24,6 +24,11 @@ class FeltConfig(BaseSettings):
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
 
+    # Home location, for location-dependent skills (weather, etc.) — never
+    # hardcoded, unset by default, must be set for this deployment.
+    home_latitude: float | None = None
+    home_longitude: float | None = None
+
     # Persistence
     db_path: str = "./data/felt.db"
 
