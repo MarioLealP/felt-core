@@ -76,7 +76,15 @@ async def decide_tool(
     try:
         call = json.loads(match.group(0))
     except json.JSONDecodeError:
-        return None
+        # 2026-09-12 finding: the router occasionally emits a stray
+        # quote right before a closing brace/bracket, e.g.
+        # {"skill": "x", "params": {}"} — a genuine decision, just
+        # malformed JSON. Try one targeted repair before giving up.
+        repaired = re.sub(r'"\s*([}\]])', r"\1", match.group(0))
+        try:
+            call = json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
 
     skill_name = call.get("skill")
     if not skill_name:
