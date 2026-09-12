@@ -9,6 +9,7 @@ dependencies = [
     "feedparser>=6.0.14",
     "httpx>=0.28.1",
     "pydantic-settings>=2.15.0",
+    "pyipp>=0.17.2",
     "python-multipart>=0.0.32",
     "uvicorn[standard]>=0.52.4",
 ]

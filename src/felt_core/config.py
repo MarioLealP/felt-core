@@ -32,6 +32,12 @@ class FeltConfig(BaseSettings):
     octoprint_url: str | None = None
     octoprint_api_key: str | None = None
 
+    # HP ENVY 6000 — plain IPP (Get-Printer-Attributes), no API key needed
+    # at all; confirmed reachable from the server and unauthenticated
+    # 2026-09-12. Host only (an IP or hostname), not a full URL — IPP has
+    # its own port/path convention (see printer_status/skill.py).
+    hp_printer_host: str | None = None
+
     # News/RSS digest — comma-separated feed URLs. Empty by default;
     # Mario hasn't specified which feeds he actually wants yet.
     news_feeds: str = ""
