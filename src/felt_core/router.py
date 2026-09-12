@@ -87,6 +87,15 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         '"10 minutes" is a duration from now, not a clock time; set_timer '
         "is ONLY for a duration (\"in N minutes\"), never a specific time "
         "of day.\n\n"
+        'User: "Is the shelf plug on?"\n'
+        'Correct: {"skill": "smart_home_control", "params": {"device": "shelf", "action": "status"}}\n'
+        'Wrong: {"skill": "get_container_status", "params": {"container": "shelf"}} — wrong '
+        "because this is a physical device's power state, not a server/container "
+        "health check; get_container_status is ONLY for clockmost's own docker "
+        "containers, never a light/plug/fan.\n"
+        'Also wrong: {"skill": "smart_home_control", "params": {"device": "plug"}} — wrong '
+        "to drop the device's actual name (\"shelf\") for a generic category word "
+        "(\"plug\") that isn't specific to which device is meant.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "

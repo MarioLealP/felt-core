@@ -51,14 +51,26 @@ async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, 
 
 
 def _match(query: str, states: dict[str, dict]) -> list[str]:
-    """Same exact-wins-else-substring pattern as get_container_status's
-    matching_containers — lets the caller tell "no match" apart from
-    "ambiguous, which one" instead of collapsing both into "not found"."""
+    """Same exact-wins-else-substring spirit as get_container_status's
+    matching_containers, but bidirectional — a real 2026-09-12 finding:
+    the router doesn't reliably send just the device's own name. It
+    sometimes drops it for a generic category word instead ("the shelf
+    plug" -> "plug", which IS a substring of "ExtraPlug" so a one-way
+    check still works there by luck), and sometimes keeps a generic word
+    alongside the real name ("shelf plug" for a device actually just
+    named "Shelf" — the real name is a substring of THAT query, not the
+    other way around, so a query-in-name-only check misses it). Checking
+    both directions covers either mistake without needing the router to
+    guess exactly right."""
     query = query.lower()
     exact = [eid for eid, info in states.items() if info["friendly_name"].lower() == query]
     if exact:
         return exact
-    return [eid for eid, info in states.items() if query in info["friendly_name"].lower()]
+    return [
+        eid
+        for eid, info in states.items()
+        if query in info["friendly_name"].lower() or info["friendly_name"].lower() in query
+    ]
 
 
 async def handle(params, ctx):
