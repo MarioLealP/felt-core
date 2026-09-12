@@ -52,7 +52,36 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # Small key-value store for user preferences (e.g. temperature unit)
+    # that need to persist and be changeable from any client (the
+    # dashboard, the tray app) — distinct from `facts`, which is
+    # LLM-context memory, not app configuration.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
     return conn
+
+
+def get_setting(db_path: str, key: str, default: str | None = None) -> str | None:
+    conn = _connect(db_path)
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row[0] if row else default
+
+
+def set_setting(db_path: str, key: str, value: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+    conn.close()
 
 
 def save_message(db_path: str, session_id: str, role: str, content: str) -> None:

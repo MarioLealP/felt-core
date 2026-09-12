@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from felt_core.brain import chat
 from felt_core.config import load_config
+from felt_core.db import get_setting, set_setting
 from felt_core.ntfy_listener import listen as ntfy_listen
 
 
@@ -90,6 +91,25 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         # (accents, etc.) would otherwise break this.
         headers={"X-Transcribed-Text": quote(transcribed), "X-Reply-Text": quote(reply)},
     )
+
+
+class TemperatureUnitRequest(BaseModel):
+    unit: str  # "celsius" or "fahrenheit"
+
+
+@app.post("/v1/settings/temperature-unit")
+async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
+    if req.unit not in ("celsius", "fahrenheit"):
+        raise HTTPException(status_code=422, detail="unit must be 'celsius' or 'fahrenheit'")
+    config = load_config()
+    set_setting(config.db_path, "temperature_unit", req.unit)
+    return {"unit": req.unit}
+
+
+@app.get("/v1/settings/temperature-unit")
+async def get_temperature_unit() -> dict:
+    config = load_config()
+    return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}
 
 
 @app.websocket("/v1/chat/ws")

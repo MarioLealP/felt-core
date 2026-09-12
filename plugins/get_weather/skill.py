@@ -21,6 +21,7 @@ from datetime import date
 import httpx
 
 from felt_core.date_resolution import resolve_date, upcoming_weekend
+from felt_core.db import get_setting
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -85,6 +86,7 @@ async def handle(params, ctx):
         return SkillResult(text="Weather isn't configured (no home location set).")
 
     day = str(get_single_param(params, "day", "when", "date") or "now").lower()
+    unit = get_setting(config.db_path, "temperature_unit", "celsius")
 
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(
@@ -96,6 +98,7 @@ async def handle(params, ctx):
                 "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
                 "forecast_days": 16,
                 "timezone": "auto",
+                "temperature_unit": unit,
             },
         )
         response.raise_for_status()
