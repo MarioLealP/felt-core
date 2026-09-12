@@ -13,6 +13,8 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
+from typing import Literal
+
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -98,13 +100,11 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
 
 
 class TemperatureUnitRequest(BaseModel):
-    unit: str  # "celsius" or "fahrenheit"
+    unit: Literal["celsius", "fahrenheit"]
 
 
 @app.post("/v1/settings/temperature-unit")
 async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
-    if req.unit not in ("celsius", "fahrenheit"):
-        raise HTTPException(status_code=422, detail="unit must be 'celsius' or 'fahrenheit'")
     config = load_config()
     set_setting(config.db_path, "temperature_unit", req.unit)
     return {"unit": req.unit}
