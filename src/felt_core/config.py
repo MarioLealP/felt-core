@@ -58,6 +58,13 @@ class FeltConfig(BaseSettings):
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
 
+    # Zabbix — clockmost's existing monitoring, reused rather than building
+    # a separate health-check path. Unset means the skill reports itself
+    # unavailable, same pattern as everything else here.
+    zabbix_url: str | None = None
+    zabbix_api_token: str | None = None
+    zabbix_host: str = "clockmost"
+
     # Home location, for location-dependent skills (weather, etc.) — never
     # hardcoded, unset by default, must be set for this deployment.
     home_latitude: float | None = None

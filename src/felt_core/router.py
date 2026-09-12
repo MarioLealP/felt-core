@@ -69,6 +69,11 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "phrase through EXACTLY as the user said it, under the key "
         '"day". Never reformat it into ISO format, never invent a year, '
         "never reduce a phrase like \"in 5 days\" to just the number.\n\n"
+        'User: "Check the ninerouter container."\n'
+        'Correct: {"skill": "get_container_status", "params": {"container": "ninerouter"}}\n'
+        'Wrong: {"skill": "get_container_status", "params": {}} — wrong '
+        "to drop the container/service name entirely; always extract it "
+        'under the key "container" when one is named.\n\n'
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "
