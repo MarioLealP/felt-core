@@ -109,6 +109,15 @@ def mark_alarm_fired(db_path: str, alarm_id: int) -> None:
     conn.close()
 
 
+def delete_alarm(db_path: str, alarm_id: int) -> None:
+    """Distinct from mark_alarm_fired: a cancelled alarm never fired, so
+    marking it 'fired' would be a lie — this removes the row outright."""
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("DELETE FROM alarms WHERE id = ?", (alarm_id,))
+    conn.close()
+
+
 def get_setting(db_path: str, key: str, default: str | None = None) -> str | None:
     conn = _connect(db_path)
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()

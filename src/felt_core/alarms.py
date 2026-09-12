@@ -12,10 +12,16 @@ import logging
 from datetime import datetime
 
 from felt_core.config import FeltConfig
-from felt_core.db import get_pending_alarms, mark_alarm_fired, save_alarm
+from felt_core.db import delete_alarm, get_pending_alarms, mark_alarm_fired, save_alarm
 from felt_core.notify import notify
 
 logger = logging.getLogger(__name__)
+
+# Keyed by alarm id, so cancel_alarm can actually stop the sleeping task —
+# without this, deleting the DB row wouldn't cancel a real future
+# notification, only hide it from get_pending_alarms while it's still
+# scheduled to fire on time regardless.
+_scheduled_tasks: dict[int, asyncio.Task] = {}
 
 
 async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: str) -> None:
@@ -27,11 +33,24 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
     text = f"Alarm: {label}" if label else "Alarm"
     await notify(config, text, title="Felt alarm")
     mark_alarm_fired(config.db_path, alarm_id)
+    _scheduled_tasks.pop(alarm_id, None)
 
 
-def schedule_alarm(config: FeltConfig, fire_at: datetime, label: str) -> None:
+def schedule_alarm(config: FeltConfig, fire_at: datetime, label: str) -> int:
     alarm_id = save_alarm(config.db_path, fire_at.isoformat(), label)
-    asyncio.create_task(_fire_at(config, alarm_id, fire_at, label))
+    _scheduled_tasks[alarm_id] = asyncio.create_task(_fire_at(config, alarm_id, fire_at, label))
+    return alarm_id
+
+
+def cancel_alarm(config: FeltConfig, alarm_id: int) -> bool:
+    """True if a pending alarm with this id was actually cancelled. Stops
+    the sleeping task first (see _scheduled_tasks above) — deleting only
+    the DB row would leave it scheduled to fire anyway."""
+    task = _scheduled_tasks.pop(alarm_id, None)
+    if task is not None:
+        task.cancel()
+    delete_alarm(config.db_path, alarm_id)
+    return task is not None
 
 
 def reschedule_pending_alarms(config: FeltConfig) -> None:
@@ -44,4 +63,4 @@ def reschedule_pending_alarms(config: FeltConfig) -> None:
     exists for, if felt-core happened to restart at 6am)."""
     for alarm in get_pending_alarms(config.db_path):
         fire_at = datetime.fromisoformat(alarm["fire_at"])
-        asyncio.create_task(_fire_at(config, alarm["id"], fire_at, alarm["label"]))
+        _scheduled_tasks[alarm["id"]] = asyncio.create_task(_fire_at(config, alarm["id"], fire_at, alarm["label"]))
