@@ -60,6 +60,39 @@ def _build_router_prompt(registry: dict[str, LoadedSkill]) -> str:
     )
 
 
+def parse_router_response(raw: str) -> tuple[str, dict] | None:
+    """Pure parsing logic, split out from decide_tool so it's unit-
+    testable without a live model call."""
+    match = _JSON_RE.search(raw)
+    if not match:
+        return None
+    try:
+        call = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        # 2026-09-12 finding: the router occasionally emits a stray
+        # quote right before a closing brace/bracket, e.g.
+        # {"skill": "x", "params": {}"} — a genuine decision, just
+        # malformed JSON. Try one targeted repair before giving up.
+        #
+        # Deliberately narrow: only strips a quote sandwiched BETWEEN two
+        # structural brackets ([}\]]"[}\]]), never one merely followed by
+        # a bracket — an earlier, broader version of this regex would
+        # have also eaten the legitimate closing quote of any string
+        # value that happens to end right before a brace (e.g.
+        # {"item": "Redbeak"} — a real case a test caught), corrupting
+        # otherwise-valid JSON instead of only fixing the actual bug.
+        repaired = re.sub(r'([}\]])"\s*([}\]])', r"\1\2", match.group(0))
+        try:
+            call = json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
+
+    skill_name = call.get("skill")
+    if not skill_name:
+        return None
+    return skill_name, call.get("params", {})
+
+
 async def decide_tool(
     message: str, registry: dict[str, LoadedSkill], config: FeltConfig
 ) -> tuple[str, dict] | None:
@@ -86,23 +119,4 @@ async def decide_tool(
         response.raise_for_status()
         raw = response.json()["message"]["content"]
 
-    match = _JSON_RE.search(raw)
-    if not match:
-        return None
-    try:
-        call = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        # 2026-09-12 finding: the router occasionally emits a stray
-        # quote right before a closing brace/bracket, e.g.
-        # {"skill": "x", "params": {}"} — a genuine decision, just
-        # malformed JSON. Try one targeted repair before giving up.
-        repaired = re.sub(r'"\s*([}\]])', r"\1", match.group(0))
-        try:
-            call = json.loads(repaired)
-        except json.JSONDecodeError:
-            return None
-
-    skill_name = call.get("skill")
-    if not skill_name:
-        return None
-    return skill_name, call.get("params", {})
+    return parse_router_response(raw)
