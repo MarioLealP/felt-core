@@ -74,8 +74,8 @@ def _describe_day(daily: dict, index: int) -> str:
     condition = _WMO_CODES.get(daily["weather_code"][index], f"code {daily['weather_code'][index]}")
     rain_chance = daily["precipitation_probability_max"][index]
     return (
-        f"{daily['time'][index]}: {condition}, high {daily['temperature_2m_max'][index]}°C, "
-        f"low {daily['temperature_2m_min'][index]}°C, rain chance {rain_chance}%"
+        f"{daily['time'][index]}: {condition}, high {daily['temperature_2m_max'][index]}°, "
+        f"low {daily['temperature_2m_min'][index]}°, rain chance {rain_chance}%"
     )
 
 
@@ -108,7 +108,7 @@ async def handle(params, ctx):
     if day in ("now", "right now", "currently", "current"):
         condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
         return SkillResult(
-            text=f"Right now: {current['temperature_2m']}°C, {condition}, wind {current['wind_speed_10m']} km/h"
+            text=f"Right now: {current['temperature_2m']}°, {condition}, wind {current['wind_speed_10m']} km/h"
         )
 
     if "weekend" in day:
@@ -134,5 +134,5 @@ async def handle(params, ctx):
         )
 
     index = daily["time"].index(target.isoformat())
-    prefix = f"Right now: {current['temperature_2m']}°C. " if target == today else ""
+    prefix = f"Right now: {current['temperature_2m']}°. " if target == today else ""
     return SkillResult(text=f"{prefix}{_describe_day(daily, index)}")

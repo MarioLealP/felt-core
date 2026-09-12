@@ -73,7 +73,10 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
                     "If the tool result says something wasn't found or an error occurred, "
                     "relay that honestly — do NOT invent an unrelated answer, platform, "
                     "reason, or context that isn't literally in the tool result; a correct "
-                    "'couldn't find that' is always better than a confident wrong guess."
+                    "'couldn't find that' is always better than a confident wrong guess. "
+                    "If the tool result gives a temperature as a bare number with a degree "
+                    "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
+                    "Celsius, or any other unit; Mario already knows it's Celsius."
                 ),
             },
         ],
