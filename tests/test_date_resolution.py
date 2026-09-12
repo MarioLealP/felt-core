@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 
-from felt_core.date_resolution import resolve_date, upcoming_weekend
+from felt_core.date_resolution import resolve_date, resolve_datetime, upcoming_weekend
 
 # A fixed Wednesday, so weekday-relative phrases are unambiguous.
 _TODAY = date(2026, 9, 16)
+_NOW = datetime(2026, 9, 16, 22, 0, 0)  # 10pm, so "already passed today" cases are exercised
 
 
 def test_resolve_date_today():
@@ -63,3 +64,24 @@ def test_upcoming_weekend_from_sunday_is_next_weekend():
     saturday, sunday = upcoming_weekend(sunday_today)
     assert saturday == date(2026, 9, 26)
     assert sunday == date(2026, 9, 27)
+
+
+def test_resolve_datetime_already_passed_time_rolls_to_tomorrow():
+    # Asked at 10pm for 7:30am — must mean tomorrow morning, not the
+    # 7:30am that already happened earlier today.
+    result = resolve_datetime("7:30am", _NOW)
+    assert result == datetime(2026, 9, 17, 7, 30, 0)
+
+
+def test_resolve_datetime_still_upcoming_time_today():
+    result = resolve_datetime("11pm", _NOW)
+    assert result == datetime(2026, 9, 16, 23, 0, 0)
+
+
+def test_resolve_datetime_explicit_day_and_time():
+    result = resolve_datetime("tomorrow at 9am", _NOW)
+    assert result == datetime(2026, 9, 17, 9, 0, 0)
+
+
+def test_resolve_datetime_unparseable_returns_none():
+    assert resolve_datetime("asdkjfh not a time", _NOW) is None

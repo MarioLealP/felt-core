@@ -64,7 +64,49 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # Time-of-day alarms (distinct from set_timer, which is duration-only
+    # and deliberately not persisted — assistant-skills.md, Mario
+    # 2026-09-12: "another one skill i remembered was set an alarm /
+    # timer"). Alarms ARE persisted: one set the night before has to
+    # survive a felt-core restart between then and when it fires, unlike
+    # a short timer.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS alarms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fire_at TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            fired INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     return conn
+
+
+def save_alarm(db_path: str, fire_at_iso: str, label: str) -> int:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(
+            "INSERT INTO alarms (fire_at, label) VALUES (?, ?)", (fire_at_iso, label)
+        )
+        alarm_id = cursor.lastrowid
+    conn.close()
+    return alarm_id
+
+
+def get_pending_alarms(db_path: str) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute("SELECT id, fire_at, label FROM alarms WHERE fired = 0 ORDER BY fire_at ASC").fetchall()
+    conn.close()
+    return [{"id": row[0], "fire_at": row[1], "label": row[2]} for row in rows]
+
+
+def mark_alarm_fired(db_path: str, alarm_id: int) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("UPDATE alarms SET fired = 1 WHERE id = ?", (alarm_id,))
+    conn.close()
 
 
 def get_setting(db_path: str, key: str, default: str | None = None) -> str | None:

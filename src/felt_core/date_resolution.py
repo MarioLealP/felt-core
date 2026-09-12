@@ -44,6 +44,18 @@ def _parse(day_text: str, today: date) -> date | None:
     return parsed.date() if parsed else None
 
 
+def resolve_datetime(text: str, now: datetime) -> datetime | None:
+    """Parse an arbitrary time/date phrase ("7:30am", "9pm", "tomorrow at
+    9am") into a concrete future datetime relative to `now`. Used by
+    set_alarm, where (unlike get_weather's date-only resolve_date above)
+    the time of day itself is the whole point. Confirmed 2026-09-12:
+    dateparser's PREFER_DATES_FROM="future" already rolls a bare
+    already-passed time (e.g. "7:30am" asked at 10pm) to tomorrow on its
+    own, so this needs no extra fallback logic of its own.
+    """
+    return dateparser.parse(text, settings={"RELATIVE_BASE": now, "PREFER_DATES_FROM": "future"})
+
+
 def upcoming_weekend(today: date) -> tuple[date, date]:
     """The next Saturday+Sunday pair from `today` — if `today` already
     falls on the weekend, that same weekend is returned rather than the

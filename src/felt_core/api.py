@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import chat
 from felt_core.config import load_config
 from felt_core.db import get_setting, set_setting
@@ -28,6 +29,9 @@ from felt_core.ntfy_listener import listen as ntfy_listen
 async def lifespan(app: FastAPI):
     config = load_config()
     task = asyncio.create_task(ntfy_listen(config))
+    # A pending alarm set before a restart isn't just lost — see
+    # alarms.py for why late-firing beats silently dropping it.
+    reschedule_pending_alarms(config)
     yield
     task.cancel()
 
