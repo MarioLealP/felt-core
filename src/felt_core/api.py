@@ -85,7 +85,18 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         stt_resp.raise_for_status()
         transcribed = stt_resp.json()["text"]
 
-        reply = await chat(transcribed, config, session_id)
+        if transcribed.strip():
+            reply = await chat(transcribed, config, session_id)
+        else:
+            # Real bug found live, 2026-09-12: an empty/silent recording
+            # (e.g. a wheel-tilt that immediately auto-stopped on silence,
+            # see felt-desktop-agent's audio.rs) was still handed to the
+            # router as a real message, which — faced with nothing to go
+            # on — guessed a no-required-params tool (get_weather) rather
+            # than the router having any "actually, nothing was said"
+            # option. Skipping the router entirely when there's no
+            # transcript at all is the honest answer, not a guess.
+            reply = "I didn't catch that."
 
         tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
         tts_resp.raise_for_status()
