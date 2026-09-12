@@ -70,6 +70,18 @@ class FeltConfig(BaseSettings):
     home_latitude: float | None = None
     home_longitude: float | None = None
 
+    # Home Assistant — reuses the same instance/token clockmost-console
+    # already talks to (CM_HA_URL/CM_HA_TOKEN there), not a new HA
+    # integration. Deliberately its own explicit allowlist rather than
+    # exposing every HA entity to voice control sight-unseen — empty by
+    # default, same "unset/empty = disabled" convention as news_feeds.
+    ha_url: str | None = None
+    ha_token: str | None = None
+    ha_entities: str = ""
+
+    def ha_entities_list(self) -> list[str]:
+        return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
+
     # Persistence
     db_path: str = "./data/felt.db"
 
