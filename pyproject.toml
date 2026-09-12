@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Felt's brain: orchestrator, plugin interface, config, model routing"
 requires-python = ">=3.12"
 dependencies = [
+    "dateparser>=1.2.2",
     "fastapi>=0.141.1",
     "feedparser>=6.0.14",
     "httpx>=0.28.1",

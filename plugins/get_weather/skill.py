@@ -4,42 +4,43 @@ Location comes from config (FELT_HOME_LATITUDE/LONGITUDE), never
 hardcoded — unset means the skill reports itself unavailable rather than
 silently guessing a location.
 
-2026-09-12: covers the four real questions Mario actually asks —
-current, tomorrow, weekend, and yes/no rain-today — via one combined
-Open-Meteo request (current + a week of daily data including rain
-probability), rather than a separate endpoint per case. The chat model
-answers the specific nuance ("does it rain today?") from whichever
-day's data is included in the result.
-
-KNOWN LIMITATION, flagged by Mario as "not right" (2026-09-12): this is
-a fixed small set of string-matched cases (now/today/tomorrow/weekend),
-not genuinely dynamic. It doesn't handle "next Tuesday," "in 3 days,"
-"next week," a specific date, etc. To be expanded later to actually
-parse an arbitrary day/date reference (e.g. via `dateparser` or similar)
-and index into a longer Open-Meteo forecast window generically, instead
-of hand-matching a handful of known phrases. Not built now — marked for
-later per Mario's own instruction.
+2026-09-12: covers current conditions plus any day within the forecast
+window (up to 16 days out, Open-Meteo's max) via one combined request
+(current + daily data including rain probability). "now" is its own
+branch (current conditions, not a day lookup); "weekend" resolves to
+the upcoming Saturday+Sunday pair. Everything else — "today",
+"tomorrow", "next tuesday", "in 3 days", a literal date — goes through
+`date_resolution.resolve_date`, which actually parses the phrase via
+`dateparser` instead of matching a fixed set of strings (the original
+version only handled now/today/tomorrow/weekend and was flagged by
+Mario as "not right" for exactly that reason).
 """
 
 from datetime import date
 
 import httpx
 
+from felt_core.date_resolution import resolve_date, upcoming_weekend
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "get_weather"
 description = (
-    "Gets the weather at the configured home location: current conditions, "
-    "tomorrow, the upcoming weekend, or a specific day's rain chance. Use "
-    "this, NOT web_search, for any weather question."
+    "Gets the weather at the configured home location: current conditions, or "
+    "the forecast for any day or date within the next couple weeks (today, "
+    "tomorrow, a weekday name, 'in N days', the weekend, or a specific date). "
+    "Use this, NOT web_search, for any weather question."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "day": {
             "type": "string",
-            "description": "'now' (default), 'today', 'tomorrow', or 'weekend'",
+            "description": (
+                "'now' (default) for current conditions, or a day/date reference "
+                "such as 'today', 'tomorrow', 'weekend', 'next tuesday', 'in 3 days', "
+                "or an explicit date"
+            ),
         }
     },
 }
@@ -93,7 +94,7 @@ async def handle(params, ctx):
                 "longitude": config.home_longitude,
                 "current": "temperature_2m,weather_code,wind_speed_10m",
                 "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
-                "forecast_days": 7,
+                "forecast_days": 16,
                 "timezone": "auto",
             },
         )
@@ -102,15 +103,7 @@ async def handle(params, ctx):
 
     current = data["current"]
     daily = data["daily"]
-
-    if "tomorrow" in day:
-        return SkillResult(text=f"Tomorrow — {_describe_day(daily, 1)}")
-
-    if "weekend" in day:
-        weekend_lines = [
-            _describe_day(daily, i) for i, iso in enumerate(daily["time"]) if date.fromisoformat(iso).weekday() >= 5
-        ]
-        return SkillResult(text="Weekend — " + "; ".join(weekend_lines))
+    today = date.fromisoformat(daily["time"][0])
 
     if day in ("now", "right now", "currently", "current"):
         condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
@@ -118,7 +111,28 @@ async def handle(params, ctx):
             text=f"Right now: {current['temperature_2m']}°C, {condition}, wind {current['wind_speed_10m']} km/h"
         )
 
-    # "today" and anything else (e.g. "does it rain today") — the whole
-    # day's data, including rain chance, so the model can answer either
-    # kind of question about today from the same result.
-    return SkillResult(text=f"Right now: {current['temperature_2m']}°C. Today — {_describe_day(daily, 0)}")
+    if "weekend" in day:
+        saturday, sunday = upcoming_weekend(today)
+        lines = [
+            _describe_day(daily, daily["time"].index(d.isoformat()))
+            for d in (saturday, sunday)
+            if d.isoformat() in daily["time"]
+        ]
+        if not lines:
+            return SkillResult(text="The upcoming weekend is outside the forecast window I have data for.")
+        return SkillResult(text="Weekend — " + "; ".join(lines))
+
+    target = resolve_date(day, today)
+    if target is None:
+        # Couldn't parse it as a date at all — best-effort fall back to
+        # today, same as the original behavior for an unrecognized phrase.
+        target = today
+
+    if target.isoformat() not in daily["time"]:
+        return SkillResult(
+            text=f"{target.isoformat()} is outside the forecast window I have data for (next {len(daily['time'])} days)."
+        )
+
+    index = daily["time"].index(target.isoformat())
+    prefix = f"Right now: {current['temperature_2m']}°C. " if target == today else ""
+    return SkillResult(text=f"{prefix}{_describe_day(daily, index)}")

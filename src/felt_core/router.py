@@ -12,6 +12,7 @@ to have a conversation or justify a refusal, just to classify.
 
 import json
 import re
+from datetime import date
 
 import httpx
 
@@ -21,12 +22,14 @@ from felt_core.plugin_loader import LoadedSkill
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def _build_router_prompt(registry: dict[str, LoadedSkill]) -> str:
+def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = None) -> str:
     tool_lines = "\n".join(
         f"- {skill.name}: {skill.description}" for skill in registry.values()
     )
+    today = today or date.today()
     return (
         "You are a routing classifier, not a conversational assistant. "
+        f"For reference, today's date is {today.isoformat()}.\n"
         "Given the user's message, decide whether one of these tools "
         "should be called to answer it:\n"
         f"{tool_lines}\n\n"
@@ -53,6 +56,19 @@ def _build_router_prompt(registry: dict[str, LoadedSkill]) -> str:
         "pattern (word.word/ or word.word, e.g. 'site.com'). Found one? "
         "news_digest, always, no matter how the rest of the sentence is "
         "phrased. Found none? Never news_digest.\n\n"
+        'User: "What\'s the weather in 5 days?"\n'
+        'Correct: {"skill": "get_weather", "params": {"day": "in 5 days"}}\n'
+        'Wrong: {"skill": "get_weather", "params": {"days": 5}} — wrong '
+        "param key (must be \"day\"), and wrong to extract just the "
+        "number out of the phrase.\n\n"
+        'User: "What\'s the weather on october 3rd?"\n'
+        'Correct: {"skill": "get_weather", "params": {"day": "october 3rd"}}\n'
+        'Wrong: {"skill": "get_weather", "params": {"date": "2023-10-03"}} — '
+        "wrong to invent a year that isn't in the message.\n\n"
+        "RULE for get_weather's day/date argument: always pass the "
+        "phrase through EXACTLY as the user said it, under the key "
+        '"day". Never reformat it into ISO format, never invent a year, '
+        "never reduce a phrase like \"in 5 days\" to just the number.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "
