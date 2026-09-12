@@ -10,6 +10,15 @@ Open-Meteo request (current + a week of daily data including rain
 probability), rather than a separate endpoint per case. The chat model
 answers the specific nuance ("does it rain today?") from whichever
 day's data is included in the result.
+
+KNOWN LIMITATION, flagged by Mario as "not right" (2026-09-12): this is
+a fixed small set of string-matched cases (now/today/tomorrow/weekend),
+not genuinely dynamic. It doesn't handle "next Tuesday," "in 3 days,"
+"next week," a specific date, etc. To be expanded later to actually
+parse an arbitrary day/date reference (e.g. via `dateparser` or similar)
+and index into a longer Open-Meteo forecast window generically, instead
+of hand-matching a handful of known phrases. Not built now — marked for
+later per Mario's own instruction.
 """
 
 from datetime import date
