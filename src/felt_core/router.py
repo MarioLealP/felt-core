@@ -74,6 +74,19 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Wrong: {"skill": "get_container_status", "params": {}} — wrong '
         "to drop the container/service name entirely; always extract it "
         'under the key "container" when one is named.\n\n'
+        'User: "Set an alarm for 7:45am, label it gym."\n'
+        'Correct: {"skill": "set_alarm", "params": {"time": "7:45am", "label": "gym"}}\n'
+        'Wrong: {"skill": "set_timer", "params": {"minutes": ...}} — wrong '
+        "because a clock time (a specific time of day, with am/pm or "
+        "\"o'clock\", or a day+time like \"tomorrow at 9am\") means "
+        "set_alarm, never set_timer, no matter how close the wording "
+        "sounds to a timer.\n\n"
+        'User: "Set a timer for 10 minutes."\n'
+        'Correct: {"skill": "set_timer", "params": {"minutes": 10}}\n'
+        'Wrong: {"skill": "set_alarm", "params": {...}} — wrong because '
+        '"10 minutes" is a duration from now, not a clock time; set_timer '
+        "is ONLY for a duration (\"in N minutes\"), never a specific time "
+        "of day.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "
