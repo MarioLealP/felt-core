@@ -35,7 +35,7 @@ async def handle(params, ctx):
     if not config.desktop_agent_url:
         return SkillResult(text="Media control isn't configured (no desktop agent URL set).")
 
-    action = str(get_single_param(params, "action", "command") or "status").lower()
+    action = str(get_single_param(params, "action", "command", ignore_keys=("level", "volume")) or "status").lower()
 
     if "next" in action or "skip" in action:
         operation = "next"
@@ -53,7 +53,7 @@ async def handle(params, ctx):
             if operation == "status":
                 response = await client.get(f"{config.desktop_agent_url}/v1/media/status")
             elif operation == "volume":
-                level = get_single_param(params, "level", "volume")
+                level = get_single_param(params, "level", "volume", ignore_keys=("action", "command"))
                 if level is None:
                     return SkillResult(text="What volume level (0.0 to 1.0)?")
                 response = await client.post(f"{config.desktop_agent_url}/v1/media/volume", params={"level": level})

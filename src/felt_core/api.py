@@ -9,22 +9,32 @@ just about having *an* API surface at all, versioned so it can evolve).
 
 import asyncio
 import contextlib
+from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 import httpx
 import uvicorn
-from typing import Literal
-
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import chat
 from felt_core.config import load_config
-from felt_core.db import get_setting, set_setting
+from felt_core.db import (
+    add_shopping_item,
+    clear_checked_shopping_items,
+    delete_shopping_item,
+    get_setting,
+    get_shopping_items,
+    set_setting,
+    set_shopping_item_checked,
+)
 from felt_core.ntfy_listener import listen as ntfy_listen
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 
 
 @contextlib.asynccontextmanager
@@ -125,6 +135,53 @@ async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
 async def get_temperature_unit() -> dict:
     config = load_config()
     return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}
+
+
+class ShoppingItemRequest(BaseModel):
+    text: str
+
+
+@app.get("/v1/shopping-list")
+async def get_shopping_list_endpoint() -> list[dict]:
+    config = load_config()
+    return get_shopping_items(config.db_path)
+
+
+@app.post("/v1/shopping-list")
+async def add_shopping_list_item_endpoint(req: ShoppingItemRequest) -> dict:
+    config = load_config()
+    item_id = add_shopping_item(config.db_path, req.text)
+    return {"id": item_id}
+
+
+@app.delete("/v1/shopping-list/checked")
+async def clear_checked_shopping_list_endpoint() -> dict:
+    # Registered before the /{item_id} routes below — FastAPI matches path
+    # operations in declaration order, and "checked" would otherwise be
+    # captured as a (non-integer, 422-rejected) item_id by DELETE
+    # /v1/shopping-list/{item_id} instead of hitting this route.
+    config = load_config()
+    clear_checked_shopping_items(config.db_path)
+    return {"ok": True}
+
+
+@app.patch("/v1/shopping-list/{item_id}")
+async def set_shopping_item_checked_endpoint(item_id: int, checked: bool) -> dict:
+    config = load_config()
+    set_shopping_item_checked(config.db_path, item_id, checked)
+    return {"ok": True}
+
+
+@app.delete("/v1/shopping-list/{item_id}")
+async def delete_shopping_item_endpoint(item_id: int) -> dict:
+    config = load_config()
+    delete_shopping_item(config.db_path, item_id)
+    return {"ok": True}
+
+
+@app.get("/shopping-list")
+async def shopping_list_page() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "shopping-list.html")
 
 
 @app.websocket("/v1/chat/ws")

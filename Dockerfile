@@ -5,6 +5,7 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
+COPY static/ ./static/
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8420

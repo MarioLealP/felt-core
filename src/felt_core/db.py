@@ -81,6 +81,20 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # A running shopping list — voice-editable (the shopping_list skill)
+    # and checkable from a phone browser (the /shopping-list mini-app in
+    # api.py), both against this same table so either one immediately
+    # sees what the other did.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shopping_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            checked INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     return conn
 
 
@@ -167,6 +181,45 @@ def get_all_facts(db_path: str) -> list[str]:
     rows = conn.execute("SELECT content FROM facts ORDER BY id ASC").fetchall()
     conn.close()
     return [row[0] for row in rows]
+
+
+def add_shopping_item(db_path: str, text: str) -> int:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute("INSERT INTO shopping_list (text) VALUES (?)", (text,))
+        item_id = cursor.lastrowid
+    conn.close()
+    return item_id
+
+
+def get_shopping_items(db_path: str) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT id, text, checked FROM shopping_list ORDER BY checked ASC, id ASC"
+    ).fetchall()
+    conn.close()
+    return [{"id": row[0], "text": row[1], "checked": bool(row[2])} for row in rows]
+
+
+def set_shopping_item_checked(db_path: str, item_id: int, checked: bool) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("UPDATE shopping_list SET checked = ? WHERE id = ?", (int(checked), item_id))
+    conn.close()
+
+
+def delete_shopping_item(db_path: str, item_id: int) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("DELETE FROM shopping_list WHERE id = ?", (item_id,))
+    conn.close()
+
+
+def clear_checked_shopping_items(db_path: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("DELETE FROM shopping_list WHERE checked = 1")
+    conn.close()
 
 
 def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> None:

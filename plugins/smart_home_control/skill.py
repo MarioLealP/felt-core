@@ -78,7 +78,7 @@ async def handle(params, ctx):
     if not config.ha_url or not config.ha_token or not config.ha_entities_list():
         return SkillResult(text="Smart home control isn't configured (no Home Assistant entities allowed).")
 
-    device = get_single_param(params, "device", "name", "entity")
+    device = get_single_param(params, "device", "name", "entity", ignore_keys=("action", "command"))
     if not device:
         return SkillResult(text="Which device?")
 
@@ -98,7 +98,9 @@ async def handle(params, ctx):
 
         entity_id = matches[0]
         friendly_name = states[entity_id]["friendly_name"]
-        action = str(get_single_param(params, "action", "command") or "status").lower()
+        action = str(
+            get_single_param(params, "action", "command", ignore_keys=("device", "name", "entity")) or "status"
+        ).lower()
 
         if "on" in action and "off" not in action:
             service = "turn_on"
