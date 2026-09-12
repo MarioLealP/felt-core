@@ -32,11 +32,27 @@ def _build_router_prompt(registry: dict[str, LoadedSkill]) -> str:
         f"{tool_lines}\n\n"
         "IMPORTANT: if more than one tool could technically apply, always "
         "pick the most SPECIFIC one over a general-purpose one (e.g. "
-        "web_search). Worked example:\n"
+        "web_search). Worked examples:\n"
         'User: "What\'s the weather like right now?"\n'
         'Correct: {"skill": "get_weather", "params": {}}\n'
         'Wrong: {"skill": "web_search", "params": {"query": "weather"}} '
         "— wrong because a dedicated weather tool exists.\n\n"
+        'User: "What\'s new on news.ycombinator.com/rss?"\n'
+        'Correct: {"skill": "news_digest", "params": {"feed_url": "news.ycombinator.com/rss"}}\n'
+        'Wrong: {"skill": "web_search", "params": {"query": "news.ycombinator.com/rss"}} '
+        "— wrong because the message contains an actual feed URL, which "
+        "news_digest handles directly.\n\n"
+        'User: "Search the web for today\'s top news headline."\n'
+        'Correct: {"skill": "web_search", "params": {"query": "top news headline"}}\n'
+        'Wrong: {"skill": "news_digest", "params": {"feed_url": "..."}} — '
+        "wrong because this message has NO URL in it at all. Never invent "
+        "or reuse a feed_url from an example — only use news_digest when "
+        "the CURRENT message literally contains a URL.\n\n"
+        "MECHANICAL RULE, overrides wording/topic similarity: scan the "
+        "CURRENT message character-by-character for 'http' or a domain "
+        "pattern (word.word/ or word.word, e.g. 'site.com'). Found one? "
+        "news_digest, always, no matter how the rest of the sentence is "
+        "phrased. Found none? Never news_digest.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "

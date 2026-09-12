@@ -18,7 +18,10 @@ description = (
     "straightforward lookups. NOT the same as delegate_research (which asks "
     "a cloud model to actually reason/synthesize) — only escalate to that if "
     "these snippets genuinely aren't enough. NOT for weather (use "
-    "get_weather instead) or for Felt's own alerts (use get_recent_alerts)."
+    "get_weather instead) or for Felt's own alerts (use get_recent_alerts). "
+    "For a general 'what's the news' or 'top headline' question with no "
+    "specific feed URL mentioned, use THIS, not news_digest — news_digest "
+    "is only for a specific, already-known feed URL."
 )
 parameters_schema = {
     "type": "object",

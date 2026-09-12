@@ -32,6 +32,13 @@ class FeltConfig(BaseSettings):
     octoprint_url: str | None = None
     octoprint_api_key: str | None = None
 
+    # News/RSS digest — comma-separated feed URLs. Empty by default;
+    # Mario hasn't specified which feeds he actually wants yet.
+    news_feeds: str = ""
+
+    def news_feeds_list(self) -> list[str]:
+        return [f.strip() for f in self.news_feeds.split(",") if f.strip()]
+
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None

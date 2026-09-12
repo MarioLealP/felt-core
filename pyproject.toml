@@ -5,6 +5,7 @@ description = "Felt's brain: orchestrator, plugin interface, config, model routi
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "feedparser>=6.0.14",
     "httpx>=0.28.1",
     "pydantic-settings>=2.15.0",
     "python-multipart>=0.0.32",
