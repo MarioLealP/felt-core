@@ -4,13 +4,15 @@ Location comes from config (FELT_HOME_LATITUDE/LONGITUDE), never
 hardcoded — unset means the skill reports itself unavailable rather than
 silently guessing a location.
 
-2026-09-12 finding: this originally only ever fetched *current*
-conditions — asking "what's the weather tomorrow" silently returned
-today's weather instead, with no error or indication anything was off.
-Now checks the requested day and calls Open-Meteo's daily forecast
-endpoint for "tomorrow", current conditions otherwise (unchanged
-behavior/API call for the already-verified "right now" case).
+2026-09-12: covers the four real questions Mario actually asks —
+current, tomorrow, weekend, and yes/no rain-today — via one combined
+Open-Meteo request (current + a week of daily data including rain
+probability), rather than a separate endpoint per case. The chat model
+answers the specific nuance ("does it rain today?") from whichever
+day's data is included in the result.
 """
+
+from datetime import date
 
 import httpx
 
@@ -19,15 +21,16 @@ from felt_core.plugin import SkillResult
 
 name = "get_weather"
 description = (
-    "Gets the weather at the configured home location — for today/right now, "
-    "or tomorrow if asked. Use this, NOT web_search, for any weather question."
+    "Gets the weather at the configured home location: current conditions, "
+    "tomorrow, the upcoming weekend, or a specific day's rain chance. Use "
+    "this, NOT web_search, for any weather question."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "day": {
             "type": "string",
-            "description": "'today' (default) or 'tomorrow' — only these two are supported",
+            "description": "'now' (default), 'today', 'tomorrow', or 'weekend'",
         }
     },
 }
@@ -57,34 +60,12 @@ _WMO_CODES = {
 }
 
 
-async def _current(client: httpx.AsyncClient, lat: float, lon: float) -> str:
-    response = await client.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={"latitude": lat, "longitude": lon, "current": "temperature_2m,weather_code,wind_speed_10m"},
-    )
-    response.raise_for_status()
-    current = response.json()["current"]
-    condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
-    return f"Right now: {current['temperature_2m']}°C, {condition}, wind {current['wind_speed_10m']} km/h"
-
-
-async def _tomorrow(client: httpx.AsyncClient, lat: float, lon: float) -> str:
-    response = await client.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={
-            "latitude": lat,
-            "longitude": lon,
-            "daily": "temperature_2m_max,temperature_2m_min,weather_code",
-            "forecast_days": 2,
-            "timezone": "auto",
-        },
-    )
-    response.raise_for_status()
-    daily = response.json()["daily"]
-    condition = _WMO_CODES.get(daily["weather_code"][1], f"code {daily['weather_code'][1]}")
+def _describe_day(daily: dict, index: int) -> str:
+    condition = _WMO_CODES.get(daily["weather_code"][index], f"code {daily['weather_code'][index]}")
+    rain_chance = daily["precipitation_probability_max"][index]
     return (
-        f"Tomorrow ({daily['time'][1]}): {condition}, "
-        f"high {daily['temperature_2m_max'][1]}°C, low {daily['temperature_2m_min'][1]}°C"
+        f"{daily['time'][index]}: {condition}, high {daily['temperature_2m_max'][index]}°C, "
+        f"low {daily['temperature_2m_min'][index]}°C, rain chance {rain_chance}%"
     )
 
 
@@ -93,12 +74,42 @@ async def handle(params, ctx):
     if config.home_latitude is None or config.home_longitude is None:
         return SkillResult(text="Weather isn't configured (no home location set).")
 
-    day = str(get_single_param(params, "day", "when", "date") or "today").lower()
+    day = str(get_single_param(params, "day", "when", "date") or "now").lower()
 
     async with httpx.AsyncClient(timeout=20) as client:
-        if "tomorrow" in day:
-            text = await _tomorrow(client, config.home_latitude, config.home_longitude)
-        else:
-            text = await _current(client, config.home_latitude, config.home_longitude)
+        response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": config.home_latitude,
+                "longitude": config.home_longitude,
+                "current": "temperature_2m,weather_code,wind_speed_10m",
+                "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
+                "forecast_days": 7,
+                "timezone": "auto",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
 
-    return SkillResult(text=text)
+    current = data["current"]
+    daily = data["daily"]
+
+    if "tomorrow" in day:
+        return SkillResult(text=f"Tomorrow — {_describe_day(daily, 1)}")
+
+    if "weekend" in day:
+        weekend_lines = [
+            _describe_day(daily, i) for i, iso in enumerate(daily["time"]) if date.fromisoformat(iso).weekday() >= 5
+        ]
+        return SkillResult(text="Weekend — " + "; ".join(weekend_lines))
+
+    if day in ("now", "right now", "currently", "current"):
+        condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
+        return SkillResult(
+            text=f"Right now: {current['temperature_2m']}°C, {condition}, wind {current['wind_speed_10m']} km/h"
+        )
+
+    # "today" and anything else (e.g. "does it rain today") — the whole
+    # day's data, including rain chance, so the model can answer either
+    # kind of question about today from the same result.
+    return SkillResult(text=f"Right now: {current['temperature_2m']}°C. Today — {_describe_day(daily, 0)}")
