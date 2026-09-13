@@ -102,6 +102,19 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "wrong because Mario wants something MADE, not an existing photo found "
         "online; any \"draw/generate/make/create an image\" phrasing means "
         "generate_image, never web_search.\n\n"
+        'User: "What does the Eiffel Tower look like?"\n'
+        'Correct: {"skill": "web_search", "params": {"query": "Eiffel Tower"}}\n'
+        'Wrong: {"skill": "generate_image", "params": {"prompt": "the Eiffel Tower"}} — '
+        "wrong because \"what does X look like\" asks about a REAL, EXISTING "
+        "thing — that's always web_search. generate_image is ONLY for an "
+        "explicit draw/generate/make/create request for something imagined, "
+        "never for describing something real.\n\n"
+        'User: "Find a photo of a red panda."\n'
+        'Correct: {"skill": "web_search", "params": {"query": "red panda photo"}}\n'
+        'Wrong: {"skill": "generate_image", "params": {"prompt": "a red panda"}} — '
+        '"find/show a photo/picture of X" means locating an EXISTING real '
+        "photo, web_search every time; generate_image is only for "
+        "draw/generate/make/create wording, never find/show.\n\n"
         'User: "Do I have any new emails?"\n'
         'Correct: {"skill": "check_email", "params": {}}\n'
         'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '
