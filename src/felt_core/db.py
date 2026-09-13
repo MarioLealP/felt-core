@@ -81,6 +81,24 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # Proactive email awareness (see email_watcher.py) — one row per new
+    # message the watcher has already pinged Mario about. `uid` is the
+    # IMAP UID (unique within a mailbox), used both to avoid re-notifying
+    # the same message across restarts and, once resolved, to fetch the
+    # full body for summarizing. `resolved` distinguishes "already
+    # summarized on confirmation" from "still waiting for a yes/no."
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pending_emails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL UNIQUE,
+            sender TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            resolved INTEGER NOT NULL DEFAULT 0,
+            notified_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     # A running shopping list — voice-editable (the shopping_list skill)
     # and checkable from a phone browser (the /shopping-list mini-app in
     # api.py), both against this same table so either one immediately
@@ -219,6 +237,55 @@ def clear_checked_shopping_items(db_path: str) -> None:
     conn = _connect(db_path)
     with conn:
         conn.execute("DELETE FROM shopping_list WHERE checked = 1")
+    conn.close()
+
+
+def is_known_email_uid(db_path: str, uid: str) -> bool:
+    conn = _connect(db_path)
+    row = conn.execute("SELECT 1 FROM pending_emails WHERE uid = ?", (uid,)).fetchone()
+    conn.close()
+    return row is not None
+
+
+def save_pending_email(db_path: str, uid: str, sender: str, subject: str) -> int:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(
+            "INSERT INTO pending_emails (uid, sender, subject) VALUES (?, ?, ?)",
+            (uid, sender, subject),
+        )
+        email_id = cursor.lastrowid
+    conn.close()
+    return email_id
+
+
+def get_unresolved_pending_email(db_path: str) -> dict | None:
+    """The most recent still-unanswered "want me to summarize?" ping, if
+    any — there's only ever meant to be one live at a time from Mario's
+    point of view, so the newest is the one a bare "yes" refers to."""
+    conn = _connect(db_path)
+    row = conn.execute(
+        "SELECT id, uid, sender, subject FROM pending_emails WHERE resolved = 0 ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {"id": row[0], "uid": row[1], "sender": row[2], "subject": row[3]}
+
+
+def get_recent_pending_emails(db_path: str, limit: int = 5) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT sender, subject, resolved FROM pending_emails ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return [{"sender": s, "subject": subj, "resolved": bool(r)} for s, subj, r in rows]
+
+
+def mark_email_resolved(db_path: str, email_id: int) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("UPDATE pending_emails SET resolved = 1 WHERE id = ?", (email_id,))
     conn.close()
 
 

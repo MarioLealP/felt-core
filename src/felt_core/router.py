@@ -96,6 +96,11 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Also wrong: {"skill": "smart_home_control", "params": {"device": "plug"}} — wrong '
         "to drop the device's actual name (\"shelf\") for a generic category word "
         "(\"plug\") that isn't specific to which device is meant.\n\n"
+        'User: "Do I have any new emails?"\n'
+        'Correct: {"skill": "check_email", "params": {}}\n'
+        'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '
+        "because get_recent_alerts is only for ntfy/server alerts, never "
+        "email.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "

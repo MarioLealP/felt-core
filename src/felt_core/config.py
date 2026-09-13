@@ -88,6 +88,19 @@ class FeltConfig(BaseSettings):
     def ha_entities_list(self) -> list[str]:
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
+    # Proactive email awareness (assistant-skills.md, Mario 2026-09-11:
+    # "on email arrives -> You have mail from X, want me summarize?").
+    # Unset host = the watcher simply doesn't start, same "unset/empty =
+    # disabled" convention as everything else here. Poll-based (not IMAP
+    # IDLE) — Mario's own spec explicitly allows "IDLE for push, or a
+    # short poll interval," and polling is far simpler to get right.
+    imap_host: str | None = None
+    imap_port: int = 993
+    imap_user: str | None = None
+    imap_password: str | None = None
+    imap_mailbox: str = "INBOX"
+    imap_poll_seconds: int = 60
+
     # Persistence
     db_path: str = "./data/felt.db"
 

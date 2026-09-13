@@ -9,14 +9,64 @@ main model (config.ollama_model, chosen for chat quality) never sees
 tool-call instructions at all, it just answers.
 """
 
+import asyncio
+import re
+
 import httpx
 
 from felt_core.config import FeltConfig
-from felt_core.db import get_all_facts, get_history, save_message
+from felt_core.db import (
+    get_all_facts,
+    get_history,
+    get_unresolved_pending_email,
+    mark_email_resolved,
+    save_message,
+)
+from felt_core.email_watcher import fetch_email_body
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
 from felt_core.router import decide_tool
 from felt_core.tools import run_skill
+
+# Deliberately a plain keyword set, not another router call: a bare "yes"
+# has no content for a tool-vs-chat classifier to work with (the router
+# never sees conversation history, only the current message — see
+# router.py), and this only ever fires when a pending_emails row already
+# says a confirmation is being waited on, so the blast radius of a false
+# positive is small (summarizing an email Mario didn't actually ask
+# about) compared to the complexity of a more "proper" intent check.
+_AFFIRMATIVE_RE = re.compile(
+    r"^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|please|do it|summarize( it)?)[.!]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _looks_affirmative(message: str) -> bool:
+    return bool(_AFFIRMATIVE_RE.match(message))
+
+
+async def _summarize_pending_email(config: FeltConfig, session_id: str, message: str) -> str:
+    pending = get_unresolved_pending_email(config.db_path)
+    assert pending is not None  # only called when the caller already confirmed this
+    body = await asyncio.to_thread(fetch_email_body, config, pending["uid"])
+    summary = await _ollama_chat(
+        [
+            {
+                "role": "user",
+                "content": (
+                    f"Summarize this email from {pending['sender']} "
+                    f"(subject: {pending['subject']}) in 2-3 sentences, "
+                    f"conversationally, as if telling a friend what it says:\n\n{body[:6000]}"
+                ),
+            }
+        ],
+        config.ollama_model,
+        config,
+    )
+    mark_email_resolved(config.db_path, pending["id"])
+    save_message(config.db_path, session_id, "user", message)
+    save_message(config.db_path, session_id, "assistant", summary)
+    return summary
 
 
 async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> str:
@@ -38,6 +88,14 @@ def _facts_context(config: FeltConfig) -> list[dict]:
 
 
 async def chat(message: str, config: FeltConfig, session_id: str = "default") -> str:
+    # Checked before anything else, including history/facts loading — a
+    # bare "yes" answering the proactive "want me to summarize it?" ping
+    # (email_watcher.py) has to be caught here or it falls through to the
+    # router with zero context and either misroutes or gets a generic
+    # chat reply that doesn't know any email exists.
+    if _looks_affirmative(message) and get_unresolved_pending_email(config.db_path):
+        return await _summarize_pending_email(config, session_id, message)
+
     registry = load_plugins(config.plugins_dir)
     base = _facts_context(config) + get_history(config.db_path, session_id)
     save_message(config.db_path, session_id, "user", message)

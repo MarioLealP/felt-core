@@ -33,6 +33,7 @@ from felt_core.db import (
     set_setting,
     set_shopping_item_checked,
 )
+from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
@@ -41,12 +42,14 @@ _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
-    task = asyncio.create_task(ntfy_listen(config))
+    ntfy_task = asyncio.create_task(ntfy_listen(config))
+    email_task = asyncio.create_task(email_watch(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
     yield
-    task.cancel()
+    ntfy_task.cancel()
+    email_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
