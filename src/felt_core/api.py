@@ -27,6 +27,7 @@ from felt_core.db import (
     add_shopping_item,
     clear_checked_shopping_items,
     delete_shopping_item,
+    get_history,
     get_setting,
     get_shopping_items,
     set_setting,
@@ -78,6 +79,17 @@ async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     config = load_config()
     reply = await chat(req.message, config, req.session_id)
     return ChatResponse(reply=reply)
+
+
+@app.get("/v1/history")
+async def history_endpoint(session_id: str = "default", limit: int = 100) -> list[dict]:
+    """A client's chat window is otherwise blank on every restart even
+    though the conversation is already durable in SQLite (`get_history`
+    was previously only read internally, to build the brain's own
+    context) — this just exposes that same data so a dashboard can
+    restore what was actually said."""
+    config = load_config()
+    return get_history(config.db_path, session_id, limit)
 
 
 @app.post("/v1/voice-chat")
