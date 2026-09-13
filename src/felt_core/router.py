@@ -96,6 +96,12 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Also wrong: {"skill": "smart_home_control", "params": {"device": "plug"}} — wrong '
         "to drop the device's actual name (\"shelf\") for a generic category word "
         "(\"plug\") that isn't specific to which device is meant.\n\n"
+        'User: "Draw me a picture of a cat riding a motorcycle."\n'
+        'Correct: {"skill": "generate_image", "params": {"prompt": "a cat riding a motorcycle"}}\n'
+        'Wrong: {"skill": "web_search", "params": {"query": "cat riding a motorcycle"}} — '
+        "wrong because Mario wants something MADE, not an existing photo found "
+        "online; any \"draw/generate/make/create an image\" phrasing means "
+        "generate_image, never web_search.\n\n"
         'User: "Do I have any new emails?"\n'
         'Correct: {"skill": "check_email", "params": {}}\n'
         'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '

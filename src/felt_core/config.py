@@ -88,6 +88,19 @@ class FeltConfig(BaseSettings):
     def ha_entities_list(self) -> list[str]:
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
+    # ComfyUI (image generation) — the Nitro5's raw LAN address, same
+    # direct-not-through-SSO pattern as ollama_url (comfy.clockmost.com is
+    # Authentik-gated for Mario's own browser use; a backend skill talks
+    # to the box directly, same as felt-core already does for Ollama).
+    # Unset = disabled, same convention as everything else here. Shares
+    # the Nitro5's one GPU with Ollama — Mario swaps them by hand, so
+    # this only actually works while ComfyUI is the one he's got running.
+    comfyui_url: str | None = None
+    # The Authentik-fronted hostname, for the link shown back to Mario
+    # (his browser already has an SSO session there; felt-core's own
+    # calls never go through it). Falls back to comfyui_url if unset.
+    comfyui_display_url: str | None = None
+
     # Proactive email awareness (assistant-skills.md, Mario 2026-09-11:
     # "on email arrives -> You have mail from X, want me summarize?").
     # Unset host = the watcher simply doesn't start, same "unset/empty =
