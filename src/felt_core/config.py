@@ -114,6 +114,12 @@ class FeltConfig(BaseSettings):
     imap_mailbox: str = "INBOX"
     imap_poll_seconds: int = 60
 
+    # Personal document search (drive-rag, a sibling internal service on the
+    # server) — RAG over Mario's locally-synced Google Drive (docs, PDFs,
+    # his Obsidian vault). Unset = the skill reports itself unconfigured,
+    # same convention as everything else here.
+    drive_rag_url: str | None = None
+
     # Google Calendar — Felt's own dedicated OAuth client (2026-09-14),
     # not a shared/borrowed credential. Mario's "Desktop app" OAuth
     # client from Google Cloud Console; refresh_token was minted via a

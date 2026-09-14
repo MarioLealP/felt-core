@@ -120,6 +120,12 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '
         "because get_recent_alerts is only for ntfy/server alerts, never "
         "email.\n\n"
+        'User: "Find that PDF about the car insurance renewal."\n'
+        'Correct: {"skill": "search_documents", "params": {"question": "car insurance renewal"}}\n'
+        'Wrong: {"skill": "web_search", "params": {"query": "car insurance renewal"}} — '
+        "wrong because this is Mario's OWN personal document, not something to find on "
+        "the internet; search_documents is for his own files (Drive/Obsidian), web_search "
+        "is only for public web content.\n\n"
         'User: "What\'s on my calendar today?"\n'
         'Correct: {"skill": "list_calendar_events", "params": {}}\n\n'
         'User: "Do I have anything on Friday?"\n'
