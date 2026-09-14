@@ -35,6 +35,7 @@ from felt_core.db import (
 )
 from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
+from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 
@@ -44,12 +45,14 @@ async def lifespan(app: FastAPI):
     config = load_config()
     ntfy_task = asyncio.create_task(ntfy_listen(config))
     email_task = asyncio.create_task(email_watch(config))
+    poe_cache_task = asyncio.create_task(poe_trade_cache_watch(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
     yield
     ntfy_task.cancel()
     email_task.cancel()
+    poe_cache_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)

@@ -114,6 +114,11 @@ class FeltConfig(BaseSettings):
     imap_mailbox: str = "INBOX"
     imap_poll_seconds: int = 60
 
+    # Path of Exile 2 trade-API reference-data cache (poe_trade_cache.py)
+    # — the item name -> base-type index + league list, refreshed weekly.
+    # Lives next to the sqlite db by default, on the same persistent volume.
+    poe_trade_cache_path: str = "./data/poe_trade_cache.json"
+
     # Persistence
     db_path: str = "./data/felt.db"
 
