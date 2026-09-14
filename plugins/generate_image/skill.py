@@ -17,11 +17,11 @@ hand-translate exactly, not worth a generic graph converter for such
 simple workflows.
 
 Each template's positive-prompt node holds a `{prompt}` placeholder
-rather than being blindly overwritten — sd15/sdxl's is just the
-placeholder alone, but animexld's is `"{prompt}, masterpiece, best
-quality, anime style, highly detailed"`, so substituting in Mario's
-actual subject keeps that style's quality-tag suffix instead of
-replacing it outright.
+rather than being blindly overwritten — sd15's is just the placeholder
+alone, but sdxl's is `"{prompt}, masterpiece, best quality"` and
+animexld's is `"{prompt}, masterpiece, best quality, anime style, highly
+detailed"`, so substituting in Mario's actual subject keeps each style's
+quality-tag suffix instead of replacing it outright.
 """
 
 import asyncio

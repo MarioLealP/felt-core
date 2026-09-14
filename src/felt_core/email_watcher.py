@@ -60,14 +60,20 @@ def _fetch_unseen(config: FeltConfig) -> list[dict]:
     structure for ones Mario never asks about)."""
     conn = _connect(config)
     try:
-        status, data = conn.search(None, "UNSEEN")
+        # IMAP UID commands, not plain sequence-number commands: sequence
+        # numbers are transient and shift down whenever an older message
+        # in the mailbox is deleted, which would silently corrupt the
+        # uid-based dedup in pending_emails (2026-09-14 review finding).
+        status, data = conn.uid("SEARCH", None, "UNSEEN")
         if status != "OK":
             return []
         uids = data[0].split()
         found = []
         for uid in uids:
             uid_str = uid.decode()
-            status, msg_data = conn.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+            status, msg_data = conn.uid(
+                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"
+            )
             if status != "OK" or not msg_data or not msg_data[0]:
                 continue
             raw_headers = msg_data[0][1]
@@ -89,7 +95,7 @@ def fetch_email_body(config: FeltConfig, uid: str) -> str:
     only when Mario actually confirms he wants a summary."""
     conn = _connect(config)
     try:
-        status, msg_data = conn.fetch(uid.encode(), "(RFC822)")
+        status, msg_data = conn.uid("FETCH", uid.encode(), "(RFC822)")
         if status != "OK" or not msg_data or not msg_data[0]:
             return ""
         msg = email.message_from_bytes(msg_data[0][1])

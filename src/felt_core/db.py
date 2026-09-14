@@ -179,12 +179,16 @@ def save_message(db_path: str, session_id: str, role: str, content: str) -> None
 
 def get_history(db_path: str, session_id: str, limit: int = 20) -> list[dict]:
     conn = _connect(db_path)
+    # ORDER BY id DESC so LIMIT keeps the MOST RECENT messages (once a
+    # session passes the limit, ASC would keep returning the oldest ones
+    # forever, permanently hiding anything recent — 2026-09-14 review
+    # finding). Reverse back to chronological order before returning.
     rows = conn.execute(
-        "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC LIMIT ?",
+        "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
         (session_id, limit),
     ).fetchall()
     conn.close()
-    return [{"role": role, "content": content} for role, content in rows]
+    return [{"role": role, "content": content} for role, content in reversed(rows)]
 
 
 def save_fact(db_path: str, content: str) -> None:
@@ -262,10 +266,19 @@ def save_pending_email(db_path: str, uid: str, sender: str, subject: str) -> int
 def get_unresolved_pending_email(db_path: str) -> dict | None:
     """The most recent still-unanswered "want me to summarize?" ping, if
     any — there's only ever meant to be one live at a time from Mario's
-    point of view, so the newest is the one a bare "yes" refers to."""
+    point of view, so the newest is the one a bare "yes" refers to.
+
+    Bounded to the last 10 minutes: without this, a "yes" said days after
+    ignoring a ping would wrongly reopen it and blurt out a stale email
+    summary in response to something unrelated (2026-09-14 review
+    finding). 10 minutes is a generous window for "still talking about
+    the thing that was just pinged," not a precise cutoff Mario ever
+    specified."""
     conn = _connect(db_path)
     row = conn.execute(
-        "SELECT id, uid, sender, subject FROM pending_emails WHERE resolved = 0 ORDER BY id DESC LIMIT 1"
+        "SELECT id, uid, sender, subject FROM pending_emails "
+        "WHERE resolved = 0 AND notified_at >= datetime('now', '-10 minutes') "
+        "ORDER BY id DESC LIMIT 1"
     ).fetchone()
     conn.close()
     if row is None:
