@@ -120,6 +120,16 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '
         "because get_recent_alerts is only for ntfy/server alerts, never "
         "email.\n\n"
+        'User: "Play Bohemian Rhapsody."\n'
+        'Correct: {"skill": "play_music", "params": {"query": "Bohemian Rhapsody"}}\n'
+        'Wrong: {"skill": "media_control", "params": {"action": "play_pause"}} — wrong '
+        "because Mario named a SPECIFIC song to start, not a transport-control action on "
+        "whatever's already loaded; media_control is ONLY for pause/skip/volume/status on "
+        "something already playing, never for starting something new by name.\n\n"
+        'User: "Pause the music."\n'
+        'Correct: {"skill": "media_control", "params": {"action": "play_pause"}}\n'
+        'Wrong: {"skill": "play_music", "params": {}} — wrong because no song/artist was '
+        "named; a bare pause/skip/volume request is always media_control.\n\n"
         'User: "Find that PDF about the car insurance renewal."\n'
         'Correct: {"skill": "search_documents", "params": {"question": "car insurance renewal"}}\n'
         'Wrong: {"skill": "web_search", "params": {"query": "car insurance renewal"}} — '

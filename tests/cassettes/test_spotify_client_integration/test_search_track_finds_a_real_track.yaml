@@ -1,0 +1,135 @@
+interactions:
+- request:
+    body: grant_type=refresh_token
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '170'
+      content-type:
+      - application/x-www-form-urlencoded
+      host:
+      - accounts.spotify.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: POST
+    uri: https://accounts.spotify.com/api/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAACA1yQy3KCMABFf6XDuswglCjdoaAIKAapIhsmhgAC8gjhZaf/Xuuy23vu5pxvDmFM
+        2jZkVU5K7pNbQm0IvEyPQLn1/bl5XqrpAfZL41hIFcKOOwOb2aNudpjsy9zVlNIQH6I3J9oGy35h
+        SXJIUjDvUjUYeMlvDZrdJw0oF/E6LHimm6gxdJ63uyI5jeKxsWtimdhwoclKWRVWrOgkaz3KLsuS
+        qpBnTm5nw2r86nT4AU+KnnuLaxwHo4KClbU7eHuhSXbTXj3D0g5PVn+QEgO1PQJOdYTKhCIAM6rZ
+        TeMBFKf00jsxDOEm2K517p17WYdsqsmfOkGU0OdKxvpGSRvenkEkIAjvXIur16VrCeXvVXSLJ74u
+        0HRFOOdbhhh5eyFKUPQPcD+/AAAA//8DADFcWLFkAQAA
+    headers:
+      accept-ranges:
+      - bytes
+      connection:
+      - keep-alive
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      date:
+      - Mon, 14 Sep 2026 22:03:57 GMT
+      request-id:
+      - e7acc665-cb67-434e-b794-af3a53c7199c
+      server:
+      - envoy
+      strict-transport-security:
+      - max-age=300
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      via:
+      - HTTP/1.1 fringe, HTTP/2 edgeproxy, 1.1 google, 1.1 varnish
+      x-cache:
+      - MISS
+      x-cache-hits:
+      - '0'
+      x-content-type-options:
+      - nosniff
+      x-envoy-upstream-service-time:
+      - '11'
+      x-served-by:
+      - cache-lis1490025-LIS
+      x-timer:
+      - S1789423438.864051,VS0,VE48
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - api.spotify.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://api.spotify.com/v1/search?q=Bohemian+Rhapsody+Queen&type=track&limit=1
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAOxV22rjMBD9lSDYPrm15djOxhCWlLLtXnrZtksXlmJkaxyLyJdIclsT+u8r2U6T
+        Fgxpn1dP0kiaM+fMjLRGSpBkKVG4RpmAFIUoU6qSoW2Tih3JqlQsbY6SMrcfsC2BiCT7UqapBDVz
+        DjjLmZrhg1UNopkdlxnkjBSfXOc6I5UsaaOnv2qA4kA1FcxaKGSh9hoKsYUKeFLvgcQfhezuo9Cx
+        UCXggZW1plzUnFtIlYpwFLoWYgpybf67RoTHdW40aSeRcaXD7KwWIkIxqbqTmgCIgvCoFrxVsY9/
+        h1VZQfGKVnffxjSFa++M3J3Ed6uvZz+XT3KBKXq29shEH8KQD82FageDuwXJDaFWKL3c8Gud6nUt
+        mF72kGFnDofCvbc+JoIR08a3y7j5tkyD0xtx6cNkcXfjzc/31MB4kEMuNhIM7uZkAV0OM2CLTBdH
+        4OnyeGRUZf1c09kJQQeQ0EKj2+1dm8TBJMABdfSI3ck4pST2CA7GJJ6mAY0nbjL1XQDNZosxdrYY
+        7Xx/DAyOuxdG4O3QeA+C99nHwwg60UxGFScNibmuFyVqeCml+ejCgI/manSbweiyAkG0ygI4EAkR
+        JcqcwtOJf4jxoYvf7EW6KxMmWVnoU5Q0qO/LaPM8YXdbpn0bvqlSYw2H6+l/075pWspkEhV1HoNo
+        32JaC6J0AiLzBo59H/ue6eyKs8S81inhEnZandFWOSZFomFPj3+fT7DjTgPHM2J8ROE21bb7nZ0w
+        ZzX/I68es6vV3F2RH6dqP4G7Yhly0es7vCsjXibmL+i5Dlf75t8ZbX4dkw8DvhUUv2Ro8we9TlBr
+        DYfY3j8//wMAAP//AwBOlIYfmwcAAA==
+    headers:
+      alt-svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      - h3=":443"; ma=2592000
+      cache-control:
+      - public, max-age=0
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json; charset=utf-8
+      date:
+      - Mon, 14 Sep 2026 22:03:57 GMT
+      etag:
+      - '"MC-ImVmNThiYjI4NzMxMWZlNWI4ZTQ1ODMzOGNiYzM3NjJjIg=="'
+      mc-cache-policy:
+      - public
+      mc-cache-ttl:
+      - '7200'
+      mc-etag:
+      - '"ef58bb287311fe5b8e458338cbc3762c"'
+      server:
+      - envoy
+      server-timing:
+      - edge;dur=262
+      strict-transport-security:
+      - max-age=31536000
+      transfer-encoding:
+      - chunked
+      via:
+      - HTTP/2 edgeproxy, 1.1 google
+      x-content-type-options:
+      - nosniff
+      x-robots-tag:
+      - noindex, nofollow
+    status:
+      code: 200
+      message: OK
+version: 1

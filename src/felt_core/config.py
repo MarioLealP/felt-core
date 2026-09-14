@@ -130,6 +130,15 @@ class FeltConfig(BaseSettings):
     google_calendar_client_secret: str | None = None
     google_calendar_refresh_token: str | None = None
 
+    # Spotify — Felt's own dedicated OAuth client (2026-09-14), for
+    # play_music (search + start new playback by name). Distinct from
+    # media_control, which only controls whatever's already loaded via
+    # local MPRIS on the desktop. Unset = the skill reports itself
+    # unconfigured, same convention as everything else here.
+    spotify_client_id: str | None = None
+    spotify_client_secret: str | None = None
+    spotify_refresh_token: str | None = None
+
     # Path of Exile 2 trade-API reference-data cache (poe_trade_cache.py)
     # — the item name -> base-type index + league list, refreshed weekly.
     # Lives next to the sqlite db by default, on the same persistent volume.

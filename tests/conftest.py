@@ -81,3 +81,13 @@ def google_calendar_config():
             "FELT_GOOGLE_CALENDAR_REFRESH_TOKEN", "dummy-refresh-token"
         ),
     )
+
+
+@pytest.fixture
+def spotify_config():
+    """Same real-credentials-only-for-recording story as google_calendar_config."""
+    return FeltConfig(
+        spotify_client_id=os.environ.get("FELT_SPOTIFY_CLIENT_ID", "dummy-client-id"),
+        spotify_client_secret=os.environ.get("FELT_SPOTIFY_CLIENT_SECRET", "dummy-client-secret"),
+        spotify_refresh_token=os.environ.get("FELT_SPOTIFY_REFRESH_TOKEN", "dummy-refresh-token"),
+    )

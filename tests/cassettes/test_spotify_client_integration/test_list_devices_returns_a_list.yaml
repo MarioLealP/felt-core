@@ -1,0 +1,53 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - api.spotify.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://api.spotify.com/v1/me/player/devices
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAFyNQQ6CMBBF95yi6VoTEEurW49hDKllSBqBNp0p0RDuLohEw/L//97MkDDGK+it
+        AeTszK5smJqps9UcuVQg01xKJZQ0YgqyUCo/SK0zUxWnLLunogYAvvtqWGpDtofZphDh1/tge01Q
+        IiBa181ArRv8IwIgBWsIqu3Y6fZzkZvGmUfrkPaN7eJzfYvRexcIy941sd0+p5df7ItrfSQIq7bQ
+        pYdgoKMZEcdpGdktGd8AAAD//wMAjf2nshoBAAA=
+    headers:
+      alt-svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      - h3=":443"; ma=2592000
+      cache-control:
+      - private, max-age=0
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json; charset=utf-8
+      date:
+      - Mon, 14 Sep 2026 22:03:57 GMT
+      server:
+      - envoy
+      server-timing:
+      - edge;dur=9
+      strict-transport-security:
+      - max-age=31536000
+      transfer-encoding:
+      - chunked
+      via:
+      - HTTP/2 edgeproxy, 1.1 google
+      x-content-type-options:
+      - nosniff
+      x-robots-tag:
+      - noindex, nofollow
+    status:
+      code: 200
+      message: OK
+version: 1
