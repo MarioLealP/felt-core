@@ -114,6 +114,16 @@ class FeltConfig(BaseSettings):
     imap_mailbox: str = "INBOX"
     imap_poll_seconds: int = 60
 
+    # Google Calendar — Felt's own dedicated OAuth client (2026-09-14),
+    # not a shared/borrowed credential. Mario's "Desktop app" OAuth
+    # client from Google Cloud Console; refresh_token was minted via a
+    # one-time local consent flow requesting the full read/write
+    # "calendar" scope. Unset = the skill reports itself unconfigured,
+    # same convention as everything else here.
+    google_calendar_client_id: str | None = None
+    google_calendar_client_secret: str | None = None
+    google_calendar_refresh_token: str | None = None
+
     # Path of Exile 2 trade-API reference-data cache (poe_trade_cache.py)
     # — the item name -> base-type index + league list, refreshed weekly.
     # Lives next to the sqlite db by default, on the same persistent volume.

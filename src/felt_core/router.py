@@ -120,6 +120,18 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Wrong: {"skill": "get_recent_alerts", "params": {}} — wrong '
         "because get_recent_alerts is only for ntfy/server alerts, never "
         "email.\n\n"
+        'User: "What\'s on my calendar today?"\n'
+        'Correct: {"skill": "list_calendar_events", "params": {}}\n\n'
+        'User: "Do I have anything on Friday?"\n'
+        'Correct: {"skill": "list_calendar_events", "params": {"day": "friday"}}\n\n'
+        'User: "Add a dentist appointment Friday at 3pm."\n'
+        'Correct: {"skill": "create_calendar_event", "params": '
+        '{"title": "dentist appointment", "when": "friday at 3pm"}}\n'
+        'Wrong: {"skill": "set_alarm", "params": {"time": "friday at 3pm", '
+        '"label": "dentist appointment"}} — wrong because this is a calendar '
+        "appointment to remember, not an alarm to ring; set_alarm is ONLY for "
+        "a literal alarm/reminder ring, create_calendar_event is for actual "
+        "calendar events.\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "

@@ -10,20 +10,44 @@ writing/changing a `@pytest.mark.vcr` test, run once with
 generated `tests/cassettes/...` file.
 """
 
+import json
+import os
+
 import pytest
 
+from felt_core.config import FeltConfig
 
-def _scrub_response_cookies(response):
-    """`filter_headers` only strips REQUEST headers — vcrpy doesn't wire
-    it into response recording at all (checked its source directly,
-    2026-09-14). The trade API hands back a Set-Cookie with an anonymous
-    per-request POESESSID even for unauthenticated calls; not a real
-    credential, but a session-shaped token has no business sitting in a
-    committed test fixture, so it needs this explicit response filter."""
+_SECRET_JSON_FIELDS = ("access_token", "refresh_token", "id_token", "client_secret")
+
+
+def _scrub_response_secrets(response):
+    """Applied to every recorded response, project-wide: strips cookies
+    (`filter_headers` only covers REQUEST headers — vcrpy doesn't wire it
+    into response recording at all, checked its source 2026-09-14) and
+    redacts any top-level JSON field that's secret-shaped by name (an
+    OAuth token endpoint response, for instance) so a real credential
+    never ends up sitting in a committed cassette, regardless of which
+    skill's test recorded it."""
     headers = response.get("headers", {})
     for key in list(headers):
         if key.lower() in ("set-cookie", "cookie"):
             del headers[key]
+
+    body = response.get("body", {})
+    raw = body.get("string")
+    if raw:
+        try:
+            text = raw.decode() if isinstance(raw, bytes) else raw
+            data = json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict) and any(field in data for field in _SECRET_JSON_FIELDS):
+            for field in _SECRET_JSON_FIELDS:
+                if field in data:
+                    data[field] = "REDACTED"
+            new_raw = json.dumps(data)
+            body["string"] = new_raw.encode() if isinstance(raw, bytes) else new_raw
+
     return response
 
 
@@ -36,5 +60,24 @@ def vcr_config():
         # instead of relying on recorded order alone.
         "match_on": ["method", "scheme", "host", "port", "path", "query", "body"],
         "filter_headers": ["authorization", "cookie"],
-        "before_record_response": _scrub_response_cookies,
+        "filter_post_data_parameters": ["client_secret", "refresh_token", "client_id"],
+        "before_record_response": _scrub_response_secrets,
     }
+
+
+@pytest.fixture
+def google_calendar_config():
+    """Real credentials only matter for the one-time `--record-mode=once`
+    recording pass (export FELT_GOOGLE_CALENDAR_* first) — on ordinary
+    replay runs the HTTP layer is intercepted before any real request
+    goes out, so these dummy fallbacks are all a normal `pytest` run
+    ever needs."""
+    return FeltConfig(
+        google_calendar_client_id=os.environ.get("FELT_GOOGLE_CALENDAR_CLIENT_ID", "dummy-client-id"),
+        google_calendar_client_secret=os.environ.get(
+            "FELT_GOOGLE_CALENDAR_CLIENT_SECRET", "dummy-client-secret"
+        ),
+        google_calendar_refresh_token=os.environ.get(
+            "FELT_GOOGLE_CALENDAR_REFRESH_TOKEN", "dummy-refresh-token"
+        ),
+    )

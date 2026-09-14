@@ -1,0 +1,123 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - www.googleapis.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://www.googleapis.com/calendar/v3/users/me/calendarList
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/92UXWvbMBSG7/MrjHNbMjn+SgaDsqyFwVpKWxbWtQzFPnG0yjpCktOF0v8+SbbX
+        rPRjpaUXM9gInfe8OtJzrOtBEF4yUYbvg7CgHERJ1bAffGHahDtWAYZWTnEeyjhermWawToW04Lg
+        eegFAn6Zk40oTvEShFPODn9M+EGe5PLbp73VV30239eL+f6GzifkkHwUdiwXs/TnYkw+eAdmoNY2
+        8/sgCK7t+0RZe8KojUsMtquL0gnJkgmJoiyKCCFtdVbCvJM0I4nKNFUDGoYr5Kykm91KYSNH61Fv
+        P6oQKw6jAusuWzd1Te1y1mIfFKMl6gDq4Mh7Ud6pStCFYtIwFH8rg5IaqgPrBzUqatia3pdvWA1n
+        KMAl7zUKJbyzO11YtzZeIEf12W8k76YWtLh05Yty5oIuNEzGZTYdd4IlKrgrIP7ptwYcCgPO1agG
+        2klaFKD1MXJfiwJagvqzySVtuDmG2tIB5Yld9PWJJSgQBRy54pVh4MIepvXkHK/AltGLTpA37qxO
+        NxJ68E64oqLCxugDABP6uQv3vbGfm50XNUeeRHE6nYyTLInTNLrTHBwot5QZyt2qpozfz/8R1TP4
+        RdljAKeTDPJXBIhX4v/gl0ZpHkUpicfjjOQP8UvyfwJ4j+w5BJNHCE6XEL0pQX/M1x2AGswK2/sO
+        ZSPbNDfPRGM8qpj4KYck6OALNGzJCuqInoAxTFRb8LejW6y7Fe3B2R5wC8IahJnZC8Nfgjt9+LYi
+        cCfedkXbDQ+7uD6CF3pQ26ecv0I1x6Cl3frT9Ww1fHuwUrGu9W7hvsGfNrDjm8FvZd1rLt4HAAA=
+    headers:
+      alt-svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      cache-control:
+      - private, max-age=0, must-revalidate, no-transform
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json; charset=UTF-8
+      date:
+      - Mon, 14 Sep 2026 20:48:04 GMT
+      expires:
+      - Mon, 14 Sep 2026 20:48:04 GMT
+      server:
+      - ESF
+      transfer-encoding:
+      - chunked
+      vary:
+      - Origin
+      - X-Origin
+      - Referer
+      x-content-type-options:
+      - nosniff
+      x-frame-options:
+      - SAMEORIGIN
+      x-l2-request-path:
+      - l2-managed-14
+      x-xss-protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - www.googleapis.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://www.googleapis.com/calendar/v3/calendars/lealmario47%40gmail.com/events?singleEvents=true&orderBy=startTime&timeMin=2026-09-15T00%3A00%3A00%2B01%3A00&timeMax=2026-09-16T00%3A00%3A00%2B01%3A00
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61T227TQBB9z1dY5gUETda3OImEKKKlgFoQVWhJKA9re+Is2Yu7u3ZIq/w7uxtH
+        SQWkEkKKI2vmzJnxmTP3Hc9fEF74I8/PMQVeYPkEGuBa+S9MDjQube7Gr6Jo1lRJH5qID3MkbnwH
+        UDVjWK4shgKm5p2IOD0uGSa0mwvmQAWoXJJKE8Et0MXqqsAaXOMQhf0jNDwK4nGIRnE6ClB3iOKp
+        w2nCYCo4WOBpLUUFvXOiMsNkszjPQalLQV1eLDnItuMM11RfAjMfB1KZ7LeO592bx/MZ6LlwnStR
+        1ZUtsFHCaw0WGSETWHe875aJaGAPy/+sV8uyEyxK0sEgSvv9IEjiQRBvBDMQ4qqDRaPrakhCCiwf
+        ljkOOBdC/sCqhSmNda1cI8FnRDIj1iYz14yeE76wubnWlRr1esvlslsKUVKwqve2s/XcbK+AFC8v
+        rnVYvLtafrperLKzKz25o3wSnv7MWNJk0YfbydeL0sTn2VkwzxltPp4Ur7PPbctcwqFtIYSmLfKR
+        vSZpukXuWectUO0Z8bXn5vWeKjwDTwuvAAoanu1PIaSpcJswalubHfSeawR0ZkBa1mAD6w2ZkCXm
+        5A7+E51Zl9Q7KivC2Fj3gQ7JOEhGCJnfcxSY/y3j3z2+1wCc6x6lj/6RnrzB9Mv7k8PWPN5ZbLtE
+        uK2B55YbbSJy7+baaWsFJ5uD/F03t/DxqnLTtWfrt/fXWXd+AY7PMgGhBAAA
+    headers:
+      alt-svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      cache-control:
+      - private, max-age=0, must-revalidate, no-transform
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json; charset=UTF-8
+      date:
+      - Mon, 14 Sep 2026 20:48:04 GMT
+      expires:
+      - Mon, 14 Sep 2026 20:48:04 GMT
+      server:
+      - ESF
+      transfer-encoding:
+      - chunked
+      vary:
+      - Origin
+      - X-Origin
+      - Referer
+      x-content-type-options:
+      - nosniff
+      x-frame-options:
+      - SAMEORIGIN
+      x-l2-request-path:
+      - l2-managed-14
+      x-xss-protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1
