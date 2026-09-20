@@ -9,8 +9,10 @@ just about having *an* API surface at all, versioned so it can evolve).
 
 import asyncio
 import contextlib
+import json
+from dataclasses import asdict
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
@@ -67,7 +69,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Transcribed-Text", "X-Reply-Text"],
+    expose_headers=["X-Transcribed-Text", "X-Reply-Text", "X-UI-Action", "X-Animation-Tag"],
 )
 
 
@@ -78,13 +80,25 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    # Both purely additive - an older client that only reads `reply` is
+    # unaffected. ui_action mirrors SkillResult.ui_action (e.g.
+    # {"kind": "toast", "payload": {...}}); animation_tag is what
+    # felt-tray should relay to felt-overlay (see felt_core.animation).
+    # Both are None for a plain conversational reply with no triggered
+    # skill, or a skill whose tag/ui_action just haven't been set yet.
+    ui_action: dict[str, Any] | None = None
+    animation_tag: str | None = None
 
 
 @app.post("/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     config = load_config()
-    reply = await chat(req.message, config, req.session_id)
-    return ChatResponse(reply=reply)
+    result = await chat(req.message, config, req.session_id)
+    return ChatResponse(
+        reply=result.reply,
+        ui_action=asdict(result.ui_action) if result.ui_action else None,
+        animation_tag=result.animation_tag,
+    )
 
 
 @app.get("/v1/history")
@@ -113,8 +127,13 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         stt_resp.raise_for_status()
         transcribed = stt_resp.json()["text"]
 
+        ui_action: dict[str, Any] | None = None
+        animation_tag: str | None = None
         if transcribed.strip():
-            reply = await chat(transcribed, config, session_id)
+            result = await chat(transcribed, config, session_id)
+            reply = result.reply
+            ui_action = asdict(result.ui_action) if result.ui_action else None
+            animation_tag = result.animation_tag
         else:
             # Real bug found live, 2026-09-12: an empty/silent recording
             # (e.g. a wheel-tilt that immediately auto-stopped on silence,
@@ -129,12 +148,21 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
         tts_resp.raise_for_status()
 
+    headers = {
+        # Percent-encoded — headers must be ASCII-safe, a non-English reply
+        # (accents, etc.) would otherwise break this.
+        "X-Transcribed-Text": quote(transcribed),
+        "X-Reply-Text": quote(reply),
+    }
+    if ui_action is not None:
+        headers["X-UI-Action"] = quote(json.dumps(ui_action))
+    if animation_tag is not None:
+        headers["X-Animation-Tag"] = quote(animation_tag)
+
     return Response(
         content=tts_resp.content,
         media_type="audio/wav",
-        # Percent-encoded — headers must be ASCII-safe, a non-English reply
-        # (accents, etc.) would otherwise break this.
-        headers={"X-Transcribed-Text": quote(transcribed), "X-Reply-Text": quote(reply)},
+        headers=headers,
     )
 
 
@@ -209,8 +237,14 @@ async def chat_ws(websocket: WebSocket) -> None:
     try:
         while True:
             data = await websocket.receive_json()
-            reply = await chat(data["message"], config, data.get("session_id", "default"))
-            await websocket.send_json({"reply": reply})
+            result = await chat(data["message"], config, data.get("session_id", "default"))
+            await websocket.send_json(
+                {
+                    "reply": result.reply,
+                    "ui_action": asdict(result.ui_action) if result.ui_action else None,
+                    "animation_tag": result.animation_tag,
+                }
+            )
     except Exception:
         await websocket.close()
 

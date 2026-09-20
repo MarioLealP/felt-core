@@ -71,6 +71,43 @@ _WMO_CODES = {
 }
 
 
+# Maps a WMO weather code to a more specific reaction tag than this
+# skill's "reaction/weather" default (plugins/tags.json) - based on the
+# CURRENT actual condition, not whatever day's forecast is being reported,
+# since the reaction is Felt responding to what's really happening right
+# now, not shapeshifting for a hypothetical future day. Codes with no
+# mapping here (partly cloudy, fog, etc.) fall through to None, which
+# means "just use the skill's manifest default" - not every condition
+# needs its own dedicated animation, only the ones actually worth calling
+# out. Sourced from the real 2026-09-20 worked example: 7 placeholder
+# clips split sun/rain/storm/generic-fallback - snow has no dedicated
+# content yet, but the tag is still set here since the fallback lookup
+# (felt-overlay side) gracefully broadens to generic weather on its own.
+_CONDITION_TAGS = {
+    0: "reaction/weather/sun",
+    1: "reaction/weather/sun",
+    51: "reaction/weather/rain",
+    53: "reaction/weather/rain",
+    55: "reaction/weather/rain",
+    61: "reaction/weather/rain",
+    63: "reaction/weather/rain",
+    65: "reaction/weather/rain",
+    80: "reaction/weather/rain",
+    81: "reaction/weather/rain",
+    82: "reaction/weather/rain",
+    71: "reaction/weather/snow",
+    73: "reaction/weather/snow",
+    75: "reaction/weather/snow",
+    95: "reaction/weather/storm",
+    96: "reaction/weather/storm",
+    99: "reaction/weather/storm",
+}
+
+
+def _condition_tag(weather_code: int) -> str | None:
+    return _CONDITION_TAGS.get(weather_code)
+
+
 def _describe_day(daily: dict, index: int) -> str:
     condition = _WMO_CODES.get(daily["weather_code"][index], f"code {daily['weather_code'][index]}")
     rain_chance = daily["precipitation_probability_max"][index]
@@ -108,10 +145,19 @@ async def handle(params, ctx):
     daily = data["daily"]
     today = date.fromisoformat(daily["time"][0])
 
+    # Always derived from the CURRENT condition, regardless of which day's
+    # forecast is actually being reported - the reaction is Felt
+    # responding to what's really happening right now, not shapeshifting
+    # for a hypothetical future day. None (no specific mapping for this
+    # code) means "just use this skill's plugins/tags.json default" - see
+    # felt_core.animation.resolve_animation_tag.
+    tag = _condition_tag(current["weather_code"])
+
     if day in ("now", "right now", "currently", "current"):
         condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
         return SkillResult(
-            text=f"Right now: {current['temperature_2m']}°, {condition}, wind {current['wind_speed_10m']} km/h"
+            text=f"Right now: {current['temperature_2m']}°, {condition}, wind {current['wind_speed_10m']} km/h",
+            animation_tag=tag,
         )
 
     if "weekend" in day:
@@ -122,8 +168,10 @@ async def handle(params, ctx):
             if d.isoformat() in daily["time"]
         ]
         if not lines:
-            return SkillResult(text="The upcoming weekend is outside the forecast window I have data for.")
-        return SkillResult(text="Weekend — " + "; ".join(lines))
+            return SkillResult(
+                text="The upcoming weekend is outside the forecast window I have data for.", animation_tag=tag
+            )
+        return SkillResult(text="Weekend — " + "; ".join(lines), animation_tag=tag)
 
     target = resolve_date(day, today)
     if target is None:
@@ -133,9 +181,10 @@ async def handle(params, ctx):
 
     if target.isoformat() not in daily["time"]:
         return SkillResult(
-            text=f"{target.isoformat()} is outside the forecast window I have data for (next {len(daily['time'])} days)."
+            text=f"{target.isoformat()} is outside the forecast window I have data for (next {len(daily['time'])} days).",
+            animation_tag=tag,
         )
 
     index = daily["time"].index(target.isoformat())
     prefix = f"Right now: {current['temperature_2m']}°. " if target == today else ""
-    return SkillResult(text=f"{prefix}{_describe_day(daily, index)}")
+    return SkillResult(text=f"{prefix}{_describe_day(daily, index)}", animation_tag=tag)

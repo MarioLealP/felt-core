@@ -23,6 +23,13 @@ class SkillResult:
     text: str | None = None
     voice_line: str | None = None
     ui_action: UIAction | None = None
+    # Overrides the skill's default tag from plugins/tags.json when the
+    # skill's own OUTPUT (not just "this skill ran") warrants something
+    # more specific - e.g. get_weather defaults to "reaction/weather" via
+    # the manifest, but sets "reaction/weather/storm" here when the actual
+    # forecast condition is severe. None means "use the manifest default
+    # for this skill, whatever it is" - most skills won't set this.
+    animation_tag: str | None = None
 
 
 @dataclass

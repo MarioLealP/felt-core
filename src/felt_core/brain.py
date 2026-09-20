@@ -11,9 +11,11 @@ tool-call instructions at all, it just answers.
 
 import asyncio
 import re
+from dataclasses import dataclass
 
 import httpx
 
+from felt_core.animation import resolve_animation_tag
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_all_facts,
@@ -23,10 +25,23 @@ from felt_core.db import (
     save_message,
 )
 from felt_core.email_watcher import fetch_email_body
-from felt_core.plugin import ExecutionContext
+from felt_core.plugin import ExecutionContext, UIAction
 from felt_core.plugin_loader import load_plugins
 from felt_core.router import decide_tool
 from felt_core.tools import run_skill
+
+
+@dataclass
+class ChatResult:
+    """What chat() actually produces - a reply plus whatever side-channel
+    output the triggered skill (if any) wants relayed: a UI action (e.g.
+    a toast) and/or an animation tag for felt-overlay. A plain
+    conversational reply (no tool call) has neither - there's nothing to
+    react to."""
+
+    reply: str
+    ui_action: UIAction | None = None
+    animation_tag: str | None = None
 
 # Deliberately a plain keyword set, not another router call: a bare "yes"
 # has no content for a tool-vs-chat classifier to work with (the router
@@ -87,14 +102,15 @@ def _facts_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
 
 
-async def chat(message: str, config: FeltConfig, session_id: str = "default") -> str:
+async def chat(message: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
     # Checked before anything else, including history/facts loading — a
     # bare "yes" answering the proactive "want me to summarize it?" ping
     # (email_watcher.py) has to be caught here or it falls through to the
     # router with zero context and either misroutes or gets a generic
     # chat reply that doesn't know any email exists.
     if _looks_affirmative(message) and get_unresolved_pending_email(config.db_path):
-        return await _summarize_pending_email(config, session_id, message)
+        summary = await _summarize_pending_email(config, session_id, message)
+        return ChatResult(reply=summary)
 
     registry = load_plugins(config.plugins_dir)
     base = _facts_context(config) + get_history(config.db_path, session_id)
@@ -107,9 +123,15 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
             base + [{"role": "user", "content": message}], config.ollama_model, config
         )
         save_message(config.db_path, session_id, "assistant", reply)
-        return reply
+        return ChatResult(reply=reply)
 
     skill_name, params = call
+    # None (not the ValueError branch's job alone) so the animation/ui_action
+    # lookup below has something safe to check regardless of which path
+    # was taken - a skill that raised never gets a reaction, same as
+    # before this change, just made explicit rather than an implicit
+    # leftover variable from a previous call.
+    result = None
     try:
         ctx = ExecutionContext(config=config, original_message=message)
         result = await run_skill(skill_name, params, registry, ctx)
@@ -142,4 +164,11 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         config,
     )
     save_message(config.db_path, session_id, "assistant", reply)
-    return reply
+
+    if result is None:
+        return ChatResult(reply=reply)
+    return ChatResult(
+        reply=reply,
+        ui_action=result.ui_action,
+        animation_tag=resolve_animation_tag(registry.get(skill_name), result),
+    )

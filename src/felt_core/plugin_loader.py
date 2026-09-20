@@ -10,6 +10,7 @@ service down with it.
 """
 
 import importlib.util
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,21 @@ class LoadedSkill:
     description: str
     parameters_schema: dict[str, Any]
     handle: Callable[[dict[str, Any], Any], Awaitable[SkillResult]]
+    # This skill's default reaction tag from plugins/tags.json, or None if
+    # it has no entry there yet - see that file for the full design.
+    default_tag: str | None = None
+
+
+def _load_tags_manifest(plugins_dir: Path) -> dict[str, str]:
+    manifest_path = plugins_dir / "tags.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        data = json.loads(manifest_path.read_text())
+    except Exception:
+        logger.exception("Failed to parse %s, skill tags will be unavailable", manifest_path)
+        return {}
+    return {key: value for key, value in data.items() if not key.startswith("_")}
 
 
 def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
@@ -33,6 +49,8 @@ def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
     base = Path(plugins_dir)
     if not base.is_dir():
         return registry
+
+    tags_manifest = _load_tags_manifest(base)
 
     for entry in sorted(base.iterdir()):
         skill_file = entry / "skill.py"
@@ -47,6 +65,7 @@ def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
                 description=module.description,
                 parameters_schema=module.parameters_schema,
                 handle=module.handle,
+                default_tag=tags_manifest.get(module.name),
             )
             registry[skill.name] = skill
         except Exception:
