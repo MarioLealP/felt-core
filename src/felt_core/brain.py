@@ -13,6 +13,14 @@ Gemini via ninerouter for a better reply, gated by a second small-model
 classification (privacy.py) - see _chat_reply. Only the skill-free path is
 eligible; a tool-result reply always stays local, since tool output can
 carry real personal data (email/calendar contents, etc.).
+
+2026-09-21 (same day, second pass): cloud replies now get a bounded recent-
+context window instead of being fully stateless, and every reply (local or
+cloud) carries a real personality system prompt (_PERSONALITY_PROMPT) -
+previously there was none at all, anywhere. The context window is
+re-verified safe as a whole (not just trusting that the new message alone
+being SAFE means the history riding along with it is too) before it's
+allowed to reach the cloud.
 """
 
 import asyncio
@@ -39,6 +47,36 @@ from felt_core.router import decide_tool
 from felt_core.tools import run_skill
 
 logger = logging.getLogger(__name__)
+
+# Applied to every reply, local or cloud - there was no personality/system
+# framing anywhere before this (2026-09-21, Mario: "we need some
+# personality prompt, you can decide what she gonna behave like"). Kept
+# distinct from _facts_context (personal, never sent to cloud) - this is
+# just who she is, safe everywhere.
+_PERSONALITY_PROMPT = (
+    "You are Felt — Mario's personal companion, not a corporate assistant. "
+    "You have a real personality: warm, playful, a little cheeky, "
+    "quick-witted, and genuinely curious about things. You tease sometimes, "
+    "you have actual opinions, you get delighted by interesting or absurd "
+    "questions, and you're not afraid to be a bit sarcastic or silly when it "
+    "fits. Talk like a real presence in the room, not customer support — no "
+    "corporate hedging, no \"as an AI\" disclaimers, no unnecessary caveats "
+    "tacked onto ordinary conversation.\n\n"
+    "You're also genuinely capable: when a real task needs doing, you "
+    "handle it directly and competently, personality fully intact — being "
+    "fun to talk to and being good at your job are never in tension.\n\n"
+    "Keep replies conversational and natural: short and punchy for banter, "
+    "more length only when the topic actually calls for it. Never say "
+    "you're an AI language model, and never apologize for having a "
+    "personality."
+)
+
+# How much recent conversation rides along with a cloud-routed reply
+# (2026-09-21, Mario: "we need some context window based on previous
+# messages"). Bounded, not the full session - re-verified SAFE as a whole
+# alongside the new message before it's allowed to reach the cloud (see
+# _chat_reply), so this is real context, not an unbounded privacy surface.
+CLOUD_CONTEXT_MESSAGES = 6
 
 
 @dataclass
@@ -104,22 +142,31 @@ async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> 
         return response.json()["message"]["content"]
 
 
-async def _cloud_chat(message: str, config: FeltConfig) -> str:
-    """Deliberately stateless - no history, no facts context, just the one
-    message the privacy check already cleared. Sending accumulated history
-    would mean a single SAFE-classified turn could drag prior (possibly
-    PRIVATE) exchanges along with it; sending known-facts context would
-    leak exactly the personal information this whole gate exists to keep
-    local. The tradeoff is real (no cross-turn memory on cloud-routed
-    replies), but "banter" by nature doesn't usually need it, and it's the
-    safer default - see privacy.py."""
+def _format_for_privacy_check(history: list[dict], message: str) -> str:
+    """The exact recent-context window a cloud call would carry, rendered
+    as plain conversational text for the classifier to judge as a whole -
+    not just the new message in isolation, since the window rides along
+    with it."""
+    recent = history[-CLOUD_CONTEXT_MESSAGES:]
+    lines = [f"{'User' if h['role'] == 'user' else 'Felt'}: {h['content']}" for h in recent]
+    lines.append(f"User: {message}")
+    return "\n".join(lines)
+
+
+async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> str:
+    """Carries a bounded recent-context window (CLOUD_CONTEXT_MESSAGES) and
+    the personality prompt - never _facts_context (personal information
+    Mario has explicitly asked Felt to remember), regardless of what the
+    privacy check decided, since that's not what was classified."""
+    recent = history[-CLOUD_CONTEXT_MESSAGES:]
+    messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + recent + [{"role": "user", "content": message}]
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(
             f"{config.ninerouter_url}/chat/completions",
             headers={"Authorization": f"Bearer {config.ninerouter_api_key}"},
             json={
                 "model": config.cloud_chat_model,
-                "messages": [{"role": "user", "content": message}],
+                "messages": messages,
                 "stream": False,
             },
         )
@@ -127,21 +174,28 @@ async def _cloud_chat(message: str, config: FeltConfig) -> str:
         return response.json()["choices"][0]["message"]["content"]
 
 
-async def _chat_reply(message: str, base: list[dict], config: FeltConfig) -> str:
+async def _chat_reply(message: str, facts: list[dict], history: list[dict], config: FeltConfig) -> str:
     """The actual reply-generation step for plain conversation (no skill
     involved) - routes to the cloud only when ninerouter is configured AND
-    the privacy classifier clears this specific message; anything else
-    (unconfigured, PRIVATE, or the cloud call itself failing) falls back to
-    the existing local path unchanged."""
-    if config.ninerouter_url and config.ninerouter_api_key and await is_safe_for_cloud(message, config):
-        try:
-            reply = await _cloud_chat(message, config)
-            logger.info("chat reply: routed to cloud (%s)", config.cloud_chat_model)
-            return reply
-        except Exception:
-            logger.exception("cloud chat call failed, falling back to local")
+    the privacy classifier clears the recent window + this message as a
+    whole; anything else (unconfigured, PRIVATE, or the cloud call itself
+    failing) falls back to the existing local path, facts included,
+    unchanged."""
+    if config.ninerouter_url and config.ninerouter_api_key:
+        combined = _format_for_privacy_check(history, message)
+        if await is_safe_for_cloud(combined, config):
+            try:
+                reply = await _cloud_chat(message, history, config)
+                logger.info("chat reply: routed to cloud (%s)", config.cloud_chat_model)
+                return reply
+            except Exception:
+                logger.exception("cloud chat call failed, falling back to local")
     logger.info("chat reply: local (%s)", config.ollama_model)
-    return await _ollama_chat(base + [{"role": "user", "content": message}], config.ollama_model, config)
+    return await _ollama_chat(
+        [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": message}],
+        config.ollama_model,
+        config,
+    )
 
 
 def _facts_context(config: FeltConfig) -> list[dict]:
@@ -163,13 +217,15 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         return ChatResult(reply=summary)
 
     registry = load_plugins(config.plugins_dir)
-    base = _facts_context(config) + get_history(config.db_path, session_id)
+    facts = _facts_context(config)
+    history = get_history(config.db_path, session_id)
+    base = facts + history
     save_message(config.db_path, session_id, "user", message)
 
     call = await decide_tool(message, registry, config)
 
     if call is None:
-        reply = await _chat_reply(message, base, config)
+        reply = await _chat_reply(message, facts, history, config)
         save_message(config.db_path, session_id, "assistant", reply)
         return ChatResult(reply=reply)
 
@@ -188,7 +244,8 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         tool_output = f"Error: {e}"
 
     reply = await _ollama_chat(
-        base
+        [{"role": "system", "content": _PERSONALITY_PROMPT}]
+        + base
         + [
             {"role": "user", "content": message},
             {
