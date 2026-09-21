@@ -16,6 +16,7 @@ carry real personal data (email/calendar contents, etc.).
 """
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 
@@ -36,6 +37,8 @@ from felt_core.plugin_loader import load_plugins
 from felt_core.privacy import is_safe_for_cloud
 from felt_core.router import decide_tool
 from felt_core.tools import run_skill
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -132,9 +135,12 @@ async def _chat_reply(message: str, base: list[dict], config: FeltConfig) -> str
     the existing local path unchanged."""
     if config.ninerouter_url and config.ninerouter_api_key and await is_safe_for_cloud(message, config):
         try:
-            return await _cloud_chat(message, config)
+            reply = await _cloud_chat(message, config)
+            logger.info("chat reply: routed to cloud (%s)", config.cloud_chat_model)
+            return reply
         except Exception:
-            pass  # fall through to local - never leave the user without a reply over this
+            logger.exception("cloud chat call failed, falling back to local")
+    logger.info("chat reply: local (%s)", config.ollama_model)
     return await _ollama_chat(base + [{"role": "user", "content": message}], config.ollama_model, config)
 
 
