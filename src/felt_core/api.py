@@ -112,6 +112,31 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
     return get_history(config.db_path, session_id, limit)
 
 
+async def _synthesize_reply(
+    reply: str,
+    ui_action: dict[str, Any] | None,
+    animation_tag: str | None,
+    config: Any,
+    client: httpx.AsyncClient,
+    extra_headers: dict[str, str] | None = None,
+) -> Response:
+    """Shared by voice-chat and text-chat: TTS the reply and build the same
+    audio/wav + X-* header response shape, so a client doesn't need to know
+    or care which input mode produced it."""
+    tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
+    tts_resp.raise_for_status()
+
+    # Percent-encoded — headers must be ASCII-safe, a non-English reply
+    # (accents, etc.) would otherwise break this.
+    headers = {"X-Reply-Text": quote(reply), **(extra_headers or {})}
+    if ui_action is not None:
+        headers["X-UI-Action"] = quote(json.dumps(ui_action))
+    if animation_tag is not None:
+        headers["X-Animation-Tag"] = quote(animation_tag)
+
+    return Response(content=tts_resp.content, media_type="audio/wav", headers=headers)
+
+
 @app.post("/v1/voice-chat")
 async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "default") -> Response:
     """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
@@ -145,25 +170,31 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
             # transcript at all is the honest answer, not a guess.
             reply = "I didn't catch that."
 
-        tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
-        tts_resp.raise_for_status()
+        return await _synthesize_reply(
+            reply, ui_action, animation_tag, config, client, {"X-Transcribed-Text": quote(transcribed)}
+        )
 
-    headers = {
-        # Percent-encoded — headers must be ASCII-safe, a non-English reply
-        # (accents, etc.) would otherwise break this.
-        "X-Transcribed-Text": quote(transcribed),
-        "X-Reply-Text": quote(reply),
-    }
-    if ui_action is not None:
-        headers["X-UI-Action"] = quote(json.dumps(ui_action))
-    if animation_tag is not None:
-        headers["X-Animation-Tag"] = quote(animation_tag)
 
-    return Response(
-        content=tts_resp.content,
-        media_type="audio/wav",
-        headers=headers,
-    )
+@app.post("/v1/text-chat")
+async def text_chat_endpoint(req: ChatRequest) -> Response:
+    """Same shape as /v1/voice-chat's response (audio/wav + X-Reply-Text/
+    X-Animation-Tag headers) but for already-typed text - so a typed
+    message gets the same TTS + reaction-animation treatment a spoken one
+    does, minus the STT step (Mario, 2026-09-21: "hook up the chat like it
+    was voice input, need her to reply with TTS + animation")."""
+    config = load_config()
+    if not config.voice_url:
+        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
+
+    result = await chat(req.message, config, req.session_id)
+    async with httpx.AsyncClient(timeout=60) as client:
+        return await _synthesize_reply(
+            result.reply,
+            asdict(result.ui_action) if result.ui_action else None,
+            result.animation_tag,
+            config,
+            client,
+        )
 
 
 class TemperatureUnitRequest(BaseModel):
