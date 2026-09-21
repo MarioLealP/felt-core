@@ -198,6 +198,37 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
         )
 
 
+class ScreenContextRequest(BaseModel):
+    description: str
+
+
+@app.post("/v1/context/screen")
+async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "default") -> Response:
+    """Receives passive screen observations from felt-vision.
+    Returns audio+animation headers just like chat, but handles pure-silent
+    reactions by skipping TTS entirely."""
+    config = load_config()
+    from felt_core.brain import process_screen_context
+    
+    result = await process_screen_context(req.description, config, session_id)
+    
+    if not result.reply.strip():
+        # Pure silent body-language reaction
+        headers = {}
+        if result.animation_tag is not None:
+            headers["X-Animation-Tag"] = quote(result.animation_tag)
+        return Response(content=b"", media_type="audio/wav", headers=headers)
+        
+    async with httpx.AsyncClient(timeout=60) as client:
+        return await _synthesize_reply(
+            result.reply,
+            asdict(result.ui_action) if result.ui_action else None,
+            result.animation_tag,
+            config,
+            client,
+        )
+
+
 class TemperatureUnitRequest(BaseModel):
     unit: Literal["celsius", "fahrenheit"]
 

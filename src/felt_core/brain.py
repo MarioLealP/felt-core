@@ -281,3 +281,76 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         ui_action=result.ui_action,
         animation_tag=resolve_animation_tag(registry.get(skill_name), result),
     )
+
+
+async def process_screen_context(description: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
+    """Handles passive screen context from felt-vision. Follows the 'Interestingness' rule:
+    stay silent for mundane things, spoken reply for interesting things.
+
+    2026-09-22 fix: this used to have the model invent its own animation tag
+    vocabulary (bracket tags like [nod], [look_bored], [lean_in]) for the
+    silent case. None of those exist anywhere in the real animation
+    library (felt-animation's actual tags look like "gesture/nodding",
+    "emotion/happy", scanned from disk - see felt-animation/library.py) -
+    felt-core (which runs on the server) has no way to know that real set,
+    it's desktop-local state. Every single reaction was silently dropped
+    by felt-overlay's exact tag lookup ("no clips loaded for tag 'nod'"),
+    which is why Mario saw zero reactions at all ("there is no reaction
+    voice and response"). Fixed by never inventing a tag here - always
+    animation_tag=None, same as every other plain-chat reply, so
+    felt-animation's own classify_reaction() (already proven, already
+    validated against the real known_tags) picks it downstream instead.
+    """
+
+    # Inject observation into history so she has context for future chats.
+    # Saved as 'user' role but wrapped in brackets so it feels like an observation,
+    # ensuring compatibility with strict LLM role constraints (like Gemini).
+    observation_text = f"[System Observation: The user's screen currently shows: {description}]"
+    save_message(config.db_path, session_id, "user", observation_text)
+
+    history = get_history(config.db_path, session_id)
+    facts = _facts_context(config)
+
+    # "Respond with exactly one word" for the silent case, not "respond with
+    # nothing" - the same lesson router.py/privacy.py already learned the
+    # hard way: small models asked for a truly empty response tend to
+    # produce SOMETHING anyway (an "Okay", a description) rather than
+    # reliably staying silent. A literal, easy-to-match keyword is what
+    # actually works.
+    prompt = (
+        "You just observed the user's screen. Read the most recent System Observation.\n\n"
+        "Decide: is this genuinely interesting, unusual, or worth reacting to out loud? Most "
+        "everyday screen content (menus, documents, code, ordinary browsing, routine gameplay) "
+        "is NOT - only react to something that actually stands out.\n\n"
+        "If it's worth reacting to: respond with ONLY the short, snappy spoken reaction itself "
+        "(max 1 sentence), nothing else. Do NOT mention you're looking at a screen.\n"
+        "If it's not worth reacting to: respond with exactly the single word NONE, nothing else."
+    )
+
+    # Route based on privacy classifier
+    if config.gemini_api_key and await is_safe_for_cloud(description, config):
+        try:
+            logger.info("screen context reaction: routed to cloud")
+            reply_raw = await _cloud_chat(prompt, history, config)
+        except Exception:
+            logger.exception("cloud screen context failed, falling back to local")
+            reply_raw = await _ollama_chat(
+                [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": prompt}],
+                config.ollama_model,
+                config,
+            )
+    else:
+        logger.info("screen context reaction: local")
+        reply_raw = await _ollama_chat(
+            [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": prompt}],
+            config.ollama_model,
+            config,
+        )
+
+    reply_raw = reply_raw.strip()
+
+    if not reply_raw or reply_raw.strip(" .!\"'").upper() == "NONE":
+        return ChatResult(reply="", animation_tag=None)
+
+    save_message(config.db_path, session_id, "assistant", reply_raw)
+    return ChatResult(reply=reply_raw, animation_tag=None)
