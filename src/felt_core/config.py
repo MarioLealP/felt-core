@@ -64,6 +64,13 @@ class FeltConfig(BaseSettings):
     ninerouter_url: str | None = None
     ninerouter_api_key: str | None = None
 
+    # Plain-chat cloud routing (2026-09-21, Mario: local conversation
+    # quality is weak, wire safe/banter-only replies to Gemini via
+    # ninerouter) — see privacy.py for the gate. Reuses the same
+    # ninerouter_url/ninerouter_api_key as delegate_research; unset means
+    # this is simply unavailable, same convention as everything else here.
+    cloud_chat_model: str = "ag/gemini-3.8-flash"
+
     # Zabbix — clockmost's existing monitoring, reused rather than building
     # a separate health-check path. Unset means the skill reports itself
     # unavailable, same pattern as everything else here.

@@ -7,6 +7,12 @@ follow-up question actually has context.
 classification call to a small dedicated model (config.router_model); the
 main model (config.ollama_model, chosen for chat quality) never sees
 tool-call instructions at all, it just answers.
+
+2026-09-21: plain conversation (no skill involved) can also be routed to
+Gemini via ninerouter for a better reply, gated by a second small-model
+classification (privacy.py) - see _chat_reply. Only the skill-free path is
+eligible; a tool-result reply always stays local, since tool output can
+carry real personal data (email/calendar contents, etc.).
 """
 
 import asyncio
@@ -27,6 +33,7 @@ from felt_core.db import (
 from felt_core.email_watcher import fetch_email_body
 from felt_core.plugin import ExecutionContext, UIAction
 from felt_core.plugin_loader import load_plugins
+from felt_core.privacy import is_safe_for_cloud
 from felt_core.router import decide_tool
 from felt_core.tools import run_skill
 
@@ -94,6 +101,43 @@ async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> 
         return response.json()["message"]["content"]
 
 
+async def _cloud_chat(message: str, config: FeltConfig) -> str:
+    """Deliberately stateless - no history, no facts context, just the one
+    message the privacy check already cleared. Sending accumulated history
+    would mean a single SAFE-classified turn could drag prior (possibly
+    PRIVATE) exchanges along with it; sending known-facts context would
+    leak exactly the personal information this whole gate exists to keep
+    local. The tradeoff is real (no cross-turn memory on cloud-routed
+    replies), but "banter" by nature doesn't usually need it, and it's the
+    safer default - see privacy.py."""
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            f"{config.ninerouter_url}/chat/completions",
+            headers={"Authorization": f"Bearer {config.ninerouter_api_key}"},
+            json={
+                "model": config.cloud_chat_model,
+                "messages": [{"role": "user", "content": message}],
+                "stream": False,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+
+async def _chat_reply(message: str, base: list[dict], config: FeltConfig) -> str:
+    """The actual reply-generation step for plain conversation (no skill
+    involved) - routes to the cloud only when ninerouter is configured AND
+    the privacy classifier clears this specific message; anything else
+    (unconfigured, PRIVATE, or the cloud call itself failing) falls back to
+    the existing local path unchanged."""
+    if config.ninerouter_url and config.ninerouter_api_key and await is_safe_for_cloud(message, config):
+        try:
+            return await _cloud_chat(message, config)
+        except Exception:
+            pass  # fall through to local - never leave the user without a reply over this
+    return await _ollama_chat(base + [{"role": "user", "content": message}], config.ollama_model, config)
+
+
 def _facts_context(config: FeltConfig) -> list[dict]:
     facts = get_all_facts(config.db_path)
     if not facts:
@@ -119,9 +163,7 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     call = await decide_tool(message, registry, config)
 
     if call is None:
-        reply = await _ollama_chat(
-            base + [{"role": "user", "content": message}], config.ollama_model, config
-        )
+        reply = await _chat_reply(message, base, config)
         save_message(config.db_path, session_id, "assistant", reply)
         return ChatResult(reply=reply)
 
