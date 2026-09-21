@@ -154,18 +154,22 @@ def _format_for_privacy_check(history: list[dict], message: str) -> str:
 
 
 async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> str:
-    """Carries a bounded recent-context window (CLOUD_CONTEXT_MESSAGES) and
-    the personality prompt - never _facts_context (personal information
-    Mario has explicitly asked Felt to remember), regardless of what the
-    privacy check decided, since that's not what was classified."""
+    """Google's Gemini API directly (its OpenAI-compatible endpoint) - NOT
+    ninerouter/Antigravity, which contaminates every reply with its own
+    coding-agent identity no matter what system prompt is supplied (see
+    config.py's gemini_api_key comment). Carries a bounded recent-context
+    window (CLOUD_CONTEXT_MESSAGES) and the personality prompt - never
+    _facts_context (personal information Mario has explicitly asked Felt
+    to remember), regardless of what the privacy check decided, since
+    that's not what was classified."""
     recent = history[-CLOUD_CONTEXT_MESSAGES:]
     messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + recent + [{"role": "user", "content": message}]
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(
-            f"{config.ninerouter_url}/chat/completions",
-            headers={"Authorization": f"Bearer {config.ninerouter_api_key}"},
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            headers={"Authorization": f"Bearer {config.gemini_api_key}"},
             json={
-                "model": config.cloud_chat_model,
+                "model": config.gemini_chat_model,
                 "messages": messages,
                 "stream": False,
             },
@@ -176,17 +180,17 @@ async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> 
 
 async def _chat_reply(message: str, facts: list[dict], history: list[dict], config: FeltConfig) -> str:
     """The actual reply-generation step for plain conversation (no skill
-    involved) - routes to the cloud only when ninerouter is configured AND
-    the privacy classifier clears the recent window + this message as a
-    whole; anything else (unconfigured, PRIVATE, or the cloud call itself
-    failing) falls back to the existing local path, facts included,
-    unchanged."""
-    if config.ninerouter_url and config.ninerouter_api_key:
+    involved) - routes to the cloud only when a Gemini API key is
+    configured AND the privacy classifier clears the recent window + this
+    message as a whole; anything else (unconfigured, PRIVATE, or the cloud
+    call itself failing) falls back to the existing local path, facts
+    included, unchanged."""
+    if config.gemini_api_key:
         combined = _format_for_privacy_check(history, message)
         if await is_safe_for_cloud(combined, config):
             try:
                 reply = await _cloud_chat(message, history, config)
-                logger.info("chat reply: routed to cloud (%s)", config.cloud_chat_model)
+                logger.info("chat reply: routed to cloud (%s)", config.gemini_chat_model)
                 return reply
             except Exception:
                 logger.exception("cloud chat call failed, falling back to local")

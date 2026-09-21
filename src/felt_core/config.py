@@ -65,11 +65,18 @@ class FeltConfig(BaseSettings):
     ninerouter_api_key: str | None = None
 
     # Plain-chat cloud routing (2026-09-21, Mario: local conversation
-    # quality is weak, wire safe/banter-only replies to Gemini via
-    # ninerouter) — see privacy.py for the gate. Reuses the same
-    # ninerouter_url/ninerouter_api_key as delegate_research; unset means
-    # this is simply unavailable, same convention as everything else here.
-    cloud_chat_model: str = "ag/gemini-3.8-flash"
+    # quality is weak, wire safe/banter-only replies to Gemini) — see
+    # privacy.py for the gate. Talks to Google's Gemini API directly, NOT
+    # via ninerouter/Antigravity — found live, 2026-09-21: every "ag/"
+    # model on ninerouter carries Antigravity's own baked-in coding-agent
+    # system identity ("Ready for work. What need fix?" for "how are you
+    # feeling"), which no client-supplied system prompt could override,
+    # even in total isolation with no other context. Google's own free
+    # tier (aistudio.google.com/apikey) has no such contamination. Unset
+    # means this is simply unavailable, same convention as everything else
+    # here.
+    gemini_api_key: str | None = None
+    gemini_chat_model: str = "gemini-flash-lite-latest"
 
     # Zabbix — clockmost's existing monitoring, reused rather than building
     # a separate health-check path. Unset means the skill reports itself
