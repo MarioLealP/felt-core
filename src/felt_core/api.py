@@ -10,6 +10,7 @@ just about having *an* API surface at all, versioned so it can evolve).
 import asyncio
 import contextlib
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
@@ -281,5 +282,10 @@ async def chat_ws(websocket: WebSocket) -> None:
 
 
 def run() -> None:
+    # No logging config existed anywhere in this codebase - felt_core's own
+    # logger.info() calls (e.g. brain.py's cloud-vs-local chat routing)
+    # were silently dropped below the default WARNING threshold. Only
+    # uvicorn's own access-log lines were ever visible.
+    logging.basicConfig(level=logging.INFO)
     config = load_config()
     uvicorn.run(app, host=config.host, port=config.port)
