@@ -30,6 +30,53 @@ def _ok_response(text: str) -> tuple[int, dict]:
     return 200, {"candidates": [{"content": {"parts": [{"text": text}]}}]}
 
 
+async def test_thinking_part_is_skipped_for_the_real_answer(tmp_path, monkeypatch):
+    # Real bug, 2026-09-22 (WP-06): Gemma 4 models emit a hidden
+    # "thought": true part ahead of the real answer - _extract_text used
+    # to blindly grab parts[0], returning the raw chain-of-thought instead
+    # of the actual reply whenever a model does this.
+    config = _config(tmp_path)
+
+    async def fake_post(model, payload, cfg):
+        return 200, {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": "*  Plan: say something about the weather...", "thought": True},
+                            {"text": "It's lovely and clear out there!"},
+                        ]
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
+
+    result = await cloud.cloud_generate("conversation", "sys", [{"role": "user", "content": "hey"}], config)
+
+    assert result == "It's lovely and clear out there!"
+
+
+async def test_all_thinking_no_final_answer_yields_empty_string(tmp_path, monkeypatch):
+    # The pathological case (truncated mid-thought, MAX_TOKENS) - better
+    # an empty reply than reading the model's internal reasoning aloud.
+    config = _config(tmp_path)
+
+    async def fake_post(model, payload, cfg):
+        return 200, {
+            "candidates": [
+                {"content": {"parts": [{"text": "*  Still thinking about it...", "thought": True}]}}
+            ]
+        }
+
+    monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
+
+    result = await cloud.cloud_generate("conversation", "sys", [{"role": "user", "content": "hey"}], config)
+
+    assert result == ""
+
+
 async def test_purpose_routing_conversation_uses_conversation_model(tmp_path, monkeypatch):
     config = _config(tmp_path)
     seen_models = []

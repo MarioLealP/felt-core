@@ -236,10 +236,27 @@ def _build_payload(system: str, contents: list[dict], generation_config: dict, u
 
 
 def _extract_text(body: dict) -> str:
+    """The Gemma 4 models emit hidden 'thinking' parts ahead of the real
+    answer (found live, 2026-09-22, WP-06: the weather precompute's first
+    real run came back as a raw chain-of-thought transcript, not a spoken
+    line) - each such part is flagged `"thought": true` in the response
+    and isn't meant to be surfaced. Skip those, return the first part
+    that actually has real text. If every part is a thought (truncated
+    mid-reasoning - see _SKILL_PHRASING_MAX_TOKENS's comment for why that
+    should now be rare, not impossible), there's honestly nothing to say
+    - empty string, same as any other "nothing usable came back" case
+    already handled by every caller."""
     try:
-        return body["candidates"][0]["content"]["parts"][0]["text"]
+        parts = body["candidates"][0]["content"]["parts"]
     except (KeyError, IndexError, TypeError):
         return ""
+    for part in parts:
+        if part.get("thought"):
+            continue
+        text = part.get("text")
+        if text:
+            return text
+    return ""
 
 
 def _extract_json_block(text: str) -> str:
