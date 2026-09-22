@@ -30,16 +30,21 @@ class LoadedSkill:
     # This skill's default reaction tag from plugins/tags.json, or None if
     # it has no entry there yet - see that file for the full design.
     default_tag: str | None = None
+    # This skill's privacy class from plugins/skills.json (WP-06) -
+    # "public"/"google_ok" go straight to cloud phrasing, "gated" checks
+    # the result text first, "local" never leaves the box. Fail-closed
+    # default: a skill missing from the manifest is "local".
+    privacy: str = "local"
 
 
-def _load_tags_manifest(plugins_dir: Path) -> dict[str, str]:
-    manifest_path = plugins_dir / "tags.json"
+def _load_json_manifest(plugins_dir: Path, filename: str) -> dict[str, str]:
+    manifest_path = plugins_dir / filename
     if not manifest_path.is_file():
         return {}
     try:
         data = json.loads(manifest_path.read_text())
     except Exception:
-        logger.exception("Failed to parse %s, skill tags will be unavailable", manifest_path)
+        logger.exception("Failed to parse %s, its entries will be unavailable", manifest_path)
         return {}
     return {key: value for key, value in data.items() if not key.startswith("_")}
 
@@ -50,7 +55,8 @@ def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
     if not base.is_dir():
         return registry
 
-    tags_manifest = _load_tags_manifest(base)
+    tags_manifest = _load_json_manifest(base, "tags.json")
+    skills_manifest = _load_json_manifest(base, "skills.json")
 
     for entry in sorted(base.iterdir()):
         skill_file = entry / "skill.py"
@@ -66,6 +72,7 @@ def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
                 parameters_schema=module.parameters_schema,
                 handle=module.handle,
                 default_tag=tags_manifest.get(module.name),
+                privacy=skills_manifest.get(module.name, "local"),
             )
             registry[skill.name] = skill
         except Exception:

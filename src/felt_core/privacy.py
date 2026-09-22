@@ -28,15 +28,21 @@ _PRIVACY_PROMPT = (
     "personal details about them; health, medical, or financial "
     "information; home address, exact location, or physical security "
     "details; passwords, keys, tokens, or other credentials; the home "
-    "server/network/smart-home devices by name; the contents of emails, "
-    "calendar events, documents, or messages; anything that reads like it's "
-    "quoting or relying on private facts Felt already knows about Mario "
-    "specifically.\n\n"
+    "server/network/smart-home devices by name; the contents of documents "
+    "or personal messages; a fact Felt has been explicitly asked to "
+    "remember about Mario; anything that reads like it's quoting or "
+    "relying on private facts Felt already knows about Mario specifically.\n\n"
     "Answer SAFE only for plain small talk, jokes, general-knowledge "
     "questions, opinions, or casual conversation with none of the above in "
     "it. A general-knowledge or creative request being ABOUT a topic (space, "
     "cats, philosophy, whatever) is never PRIVATE by itself - only actual "
-    "personal/sensitive content makes it PRIVATE.\n\n"
+    "personal/sensitive content makes it PRIVATE. A plain fact or result "
+    "with nothing sensitive in it - a device status, a calendar time, a "
+    "public schedule - is SAFE even if it came from a personal skill; "
+    "PRIVATE is about the CONTENT, not which skill produced it (Mario,\n"
+    "2026-09-22: \"stuff like your shelf light is on isn't private,\" and "
+    "email/calendar/alarms/shopping-list/music results are fine too since "
+    "Google already has that data).\n\n"
     "Worked examples:\n"
     'Message: "tell me a joke about cats"\n'
     "Correct: SAFE — a request for generic humor, no personal content at all.\n\n"
@@ -46,6 +52,10 @@ _PRIVACY_PROMPT = (
     "Correct: SAFE — casual banter continuing a joke, still nothing personal.\n\n"
     'Message: "whats a good recipe for pasta carbonara"\n'
     "Correct: SAFE — general knowledge, no personal details.\n\n"
+    'Message: "your shelf plug is on"\n'
+    "Correct: SAFE — a device status, not a sensitive fact about Mario.\n\n"
+    'Message: "Dentist Tuesday 3pm"\n'
+    "Correct: SAFE — a plain schedule time, nothing sensitive in it.\n\n"
     'Message: "whats my moms phone number again"\n'
     "Correct: PRIVATE — a specific family member's personal contact info.\n\n"
     'Message: "remind me what I told you about my doctor appointment"\n'
@@ -53,6 +63,8 @@ _PRIVACY_PROMPT = (
     "confidence.\n\n"
     'Message: "whats the wifi password"\n'
     "Correct: PRIVATE — a credential.\n\n"
+    'Message: "<a paragraph copied from a medical document>"\n'
+    "Correct: PRIVATE — document contents, and health information besides.\n\n"
     "When genuinely unsure ONLY (i.e. the message plausibly references real "
     "personal information about Mario or someone he knows, not just a topic "
     "in general), answer PRIVATE.\n\n"

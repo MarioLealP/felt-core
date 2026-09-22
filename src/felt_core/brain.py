@@ -26,12 +26,13 @@ allowed to reach the cloud.
 import asyncio
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
 
-from felt_core import metrics
+from felt_core import metrics, tts_cache
 from felt_core.animation import resolve_animation_tag
 from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
@@ -52,6 +53,7 @@ from felt_core.plugin import ExecutionContext, UIAction
 from felt_core.plugin_loader import load_plugins
 from felt_core.privacy import is_safe_for_cloud
 from felt_core.router import decide_tool
+from felt_core.speech import strip_for_tts
 from felt_core.tools import run_skill
 
 logger = logging.getLogger(__name__)
@@ -158,20 +160,27 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
     pending = get_unresolved_pending_email(config.db_path)
     assert pending is not None  # only called when the caller already confirmed this
     body = await asyncio.to_thread(fetch_email_body, config, pending["uid"])
-    summary = await _ollama_chat(
-        [
-            {
-                "role": "user",
-                "content": (
-                    f"Summarize this email from {pending['sender']} "
-                    f"(subject: {pending['subject']}) in 2-3 sentences, "
-                    f"conversationally, as if telling a friend what it says:\n\n{body[:6000]}"
-                ),
-            }
-        ],
-        config.ollama_model,
-        config,
+    prompt = (
+        f"Summarize this email from {pending['sender']} "
+        f"(subject: {pending['subject']}) in 2-3 sentences, "
+        f"conversationally, as if telling a friend what it says:\n\n{body[:6000]}"
     )
+
+    # google_ok (plugins/skills.json: check_email) - straight to cloud, no
+    # privacy check, WP-06 (Mario: "Google already has my email"). Falls
+    # back to the existing local path on CloudUnavailable or any other
+    # cloud error, same as every other cloud call site.
+    summary = None
+    if config.gemini_api_key:
+        try:
+            async with metrics.timed("reply", route="cloud", model=config.cloud_model_conversation):
+                summary = await cloud_generate("summary", _PERSONALITY_PROMPT, [{"role": "user", "content": prompt}], config)
+        except Exception:
+            logger.exception("cloud email summary failed, falling back to local")
+    if summary is None:
+        async with metrics.timed("reply", route="local", model=config.ollama_model):
+            summary = await _ollama_chat([{"role": "user", "content": prompt}], config.ollama_model, config)
+
     mark_email_resolved(config.db_path, pending["id"])
     save_message(config.db_path, session_id, "user", message)
     save_message(config.db_path, session_id, "assistant", summary)
@@ -279,6 +288,183 @@ async def _timed_privacy_check(text: str, config: FeltConfig) -> bool:
         return await is_safe_for_cloud(text, config)
 
 
+def _tool_result_instruction(tool_output: str) -> str:
+    """Shared by every phrasing call site (the normal skill-reply path,
+    skill_phrasing's cloud branch, and the weather precompute) so they all
+    give the model the identical instruction, not three copies that could
+    drift apart."""
+    return (
+        f"(Tool result: {tool_output})\n\n"
+        "State that fact directly and naturally, as if you already knew it. "
+        "Do not mention tools, and do not add any disclaimer about lacking "
+        "real-time access — the tool result above IS current and accurate. "
+        "If the tool result says something wasn't found or an error occurred, "
+        "relay that honestly — do NOT invent an unrelated answer, platform, "
+        "reason, or context that isn't literally in the tool result; a correct "
+        "'couldn't find that' is always better than a confident wrong guess. "
+        "If the tool result gives a temperature as a bare number with a degree "
+        "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
+        "Celsius, or any other unit; Mario already knows it's Celsius.\n\n"
+        "Answer in one or two short spoken sentences; then, only if it fits, "
+        "one short bit of personality (an opinion, a suggestion)."
+    )
+
+
+# Cloud skill-phrasing replies get a tighter cap than a normal local reply
+# (_REPLY_MAX_TOKENS=160) - the WP-06 spec's own number, and Gemma/Gemini
+# are both fast and cheap enough on the free tier that a slightly shorter
+# ceiling costs nothing while keeping these replies snappy.
+_SKILL_PHRASING_MAX_TOKENS = 120
+
+
+async def _phrase_skill_result(
+    message: str,
+    tool_output: str,
+    history: list[dict],
+    base: list[dict],
+    skill_privacy: str,
+    config: FeltConfig,
+) -> str:
+    """Routes a skill's result to cloud or local phrasing by its privacy
+    class (plugins/skills.json, WP-06, Mario 2026-09-22: "fetching data
+    always stays local; the result text may be phrased in the cloud"):
+    public/google_ok skills go straight to cloud; gated skills run the
+    tool OUTPUT itself through is_safe_for_cloud first, cloud only if it
+    passes; local skills never call cloud_generate at all - not even a
+    classifier call, so there's no path from a "local" skill to the cloud
+    even if that text would otherwise read as SAFE. Falls back to the
+    existing local path (facts included, unchanged) on CloudUnavailable
+    or any other cloud error."""
+    route_cloud = skill_privacy in ("public", "google_ok")
+    if skill_privacy == "gated":
+        route_cloud = await is_safe_for_cloud(tool_output, config)
+        logger.info(
+            "skill phrasing: gated result %s the cloud privacy check",
+            "passed" if route_cloud else "failed",
+        )
+
+    if route_cloud and config.gemini_api_key:
+        try:
+            # The tool result is already trusted for this skill's class,
+            # but recent chat HISTORY might not be about the same thing at
+            # all - re-verified safe as its own window before riding along
+            # (same "don't just trust the new message alone" rule as
+            # _chat_reply's cloud gate), and simply dropped (not blocked)
+            # if it doesn't pass, since the tool result itself is still
+            # fine to phrase in the cloud either way.
+            history_window = history[-CLOUD_CONTEXT_MESSAGES:]
+            if history_window and not await is_safe_for_cloud(
+                _format_for_privacy_check(history_window, message), config
+            ):
+                history_window = []
+            messages = history_window + [
+                {"role": "user", "content": message},
+                {"role": "user", "content": _tool_result_instruction(tool_output)},
+            ]
+            async with metrics.timed("reply", route="cloud", model=config.cloud_model_volume):
+                return await cloud_generate(
+                    "skill_phrasing", _PERSONALITY_PROMPT, messages, config, max_tokens=_SKILL_PHRASING_MAX_TOKENS
+                )
+        except Exception:
+            logger.exception("cloud skill phrasing failed, falling back to local")
+
+    async with metrics.timed("reply", route="local", model=config.ollama_model):
+        return await _ollama_chat(
+            [{"role": "system", "content": _PERSONALITY_PROMPT}]
+            + base
+            + [
+                {"role": "user", "content": message},
+                {"role": "user", "content": _tool_result_instruction(tool_output)},
+            ],
+            config.ollama_model,
+            config,
+            max_tokens=_REPLY_MAX_TOKENS,
+        )
+
+
+# WP-06: "what's the weather right now?" measured 33s end to end (17.4s of
+# it just local phrasing) - a background loop keeps a ready-to-serve
+# answer warm so the common case skips the phrasing model AND TTS
+# entirely. Module-level, not per-request state; refreshed by
+# refresh_weather_precompute() (started from api.lifespan) every
+# _WEATHER_PRECOMPUTE_INTERVAL_S, and read by chat()'s fast path below.
+_WEATHER_PRECOMPUTE_INTERVAL_S = 15 * 60
+_WEATHER_PRECOMPUTE_MAX_AGE_S = 20 * 60
+_WEATHER_NOW_PHRASES = {"now", "right now", "currently", "current", ""}
+_weather_precompute: dict | None = None
+
+
+def _weather_precompute_fresh() -> dict | None:
+    if _weather_precompute is None:
+        return None
+    if time.monotonic() - _weather_precompute["computed_at"] > _WEATHER_PRECOMPUTE_MAX_AGE_S:
+        return None
+    return _weather_precompute
+
+
+async def refresh_weather_precompute(config: FeltConfig) -> None:
+    """One full precompute pass: run get_weather("now") for real, phrase
+    it (cloud, same as a live request would), pre-render its TTS, and warm
+    the TTS cache with that exact text - so chat()'s fast path and
+    api._synthesize_reply's cache lookup are naturally consistent (both
+    key off the identical `line` string, no separate coordination)."""
+    global _weather_precompute
+
+    registry = load_plugins(config.plugins_dir)
+    if "get_weather" not in registry:
+        return
+
+    ctx = ExecutionContext(config=config, original_message="what's the weather right now?")
+    try:
+        result = await run_skill("get_weather", {"day": "now"}, registry, ctx)
+    except ValueError:
+        logger.warning("weather precompute: get_weather isn't registered, skipping")
+        return
+    tool_output = result.voice_line or result.text or ""
+
+    line = tool_output
+    if config.gemini_api_key:
+        try:
+            line = await cloud_generate(
+                "skill_phrasing",
+                _PERSONALITY_PROMPT,
+                [
+                    {"role": "user", "content": "what's the weather right now?"},
+                    {"role": "user", "content": _tool_result_instruction(tool_output)},
+                ],
+                config,
+                max_tokens=_SKILL_PHRASING_MAX_TOKENS,
+            )
+        except Exception:
+            logger.exception("weather precompute: cloud phrasing failed, using the raw tool output")
+
+    if config.voice_url:
+        try:
+            tts_text = strip_for_tts(line)
+            async with httpx.AsyncClient(timeout=30) as client:
+                tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
+                tts_resp.raise_for_status()
+            tts_cache.put(tts_text, tts_resp.content)
+        except Exception:
+            logger.exception("weather precompute: TTS pre-render failed")
+
+    _weather_precompute = {
+        "line": line,
+        "animation_tag": result.animation_tag,
+        "computed_at": time.monotonic(),
+    }
+    logger.info("weather precompute refreshed: %r", line)
+
+
+async def weather_precompute_loop(config: FeltConfig) -> None:
+    while True:
+        try:
+            await refresh_weather_precompute(config)
+        except Exception:
+            logger.exception("weather precompute loop iteration failed")
+        await asyncio.sleep(_WEATHER_PRECOMPUTE_INTERVAL_S)
+
+
 async def chat(message: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
     # Checked before anything else, including history/facts loading — a
     # bare "yes" answering the proactive "want me to summarize it?" ping
@@ -333,6 +519,27 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
             )
             call = None
 
+    # WP-06 fast path: the router already did the real classification work
+    # (deciding this IS a "weather right now" question) - if a fresh
+    # precomputed answer exists, skip run_skill AND the phrasing model
+    # entirely and hand back that exact line, so api._synthesize_reply's
+    # TTS cache (keyed on that same text, warmed by the precompute) is a
+    # guaranteed hit too.
+    if call is not None and call[0] == "get_weather":
+        day = str(call[1].get("day", "now") or "now").lower()
+        if day in _WEATHER_NOW_PHRASES:
+            precompute = _weather_precompute_fresh()
+            if precompute is not None:
+                if privacy_task is not None:
+                    privacy_task.cancel()
+                    try:
+                        await privacy_task
+                    except asyncio.CancelledError:
+                        pass
+                logger.info("weather fast path: serving the precomputed line, no skill/phrasing calls")
+                save_message(config.db_path, session_id, "assistant", precompute["line"])
+                return ChatResult(reply=precompute["line"], animation_tag=precompute["animation_tag"])
+
     if call is None:
         # Fail-closed exactly like is_safe_for_cloud's own internal catch
         # (privacy.py): a broken/cancelled task must never read as "safe".
@@ -364,39 +571,15 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         ctx = ExecutionContext(config=config, original_message=message)
         async with metrics.timed("skill", skill=skill_name):
             result = await run_skill(skill_name, params, registry, ctx)
-        tool_output = result.text or ""
+        # voice_line (if the skill set one) over the full text - WP-06:
+        # it's already the spoken-form summary, `text` is the fuller
+        # toast/chat form (see plugin.py's SkillResult).
+        tool_output = result.voice_line or result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
 
-    async with metrics.timed("reply", route="local", model=config.ollama_model):
-        reply = await _ollama_chat(
-            [{"role": "system", "content": _PERSONALITY_PROMPT}]
-            + base
-            + [
-                {"role": "user", "content": message},
-                {
-                    "role": "user",
-                    "content": (
-                        f"(Tool result: {tool_output})\n\n"
-                        "State that fact directly and naturally, as if you already knew it. "
-                        "Do not mention tools, and do not add any disclaimer about lacking "
-                        "real-time access — the tool result above IS current and accurate. "
-                        "If the tool result says something wasn't found or an error occurred, "
-                        "relay that honestly — do NOT invent an unrelated answer, platform, "
-                        "reason, or context that isn't literally in the tool result; a correct "
-                        "'couldn't find that' is always better than a confident wrong guess. "
-                        "If the tool result gives a temperature as a bare number with a degree "
-                        "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
-                        "Celsius, or any other unit; Mario already knows it's Celsius.\n\n"
-                        "Answer in one or two short spoken sentences; then, only if it fits, "
-                        "one short bit of personality (an opinion, a suggestion)."
-                    ),
-                },
-            ],
-            config.ollama_model,
-            config,
-            max_tokens=_REPLY_MAX_TOKENS,
-        )
+    skill_privacy = registry[skill_name].privacy if skill_name in registry else "local"
+    reply = await _phrase_skill_result(message, tool_output, history, base, skill_privacy, config)
     save_message(config.db_path, session_id, "assistant", reply)
 
     if result is None:

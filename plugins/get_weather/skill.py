@@ -16,6 +16,7 @@ version only handled now/today/tomorrow/weekend and was flagged by
 Mario as "not right" for exactly that reason).
 """
 
+import time
 from datetime import date
 
 import httpx
@@ -24,6 +25,18 @@ from felt_core.date_resolution import resolve_date, upcoming_weekend
 from felt_core.db import get_setting
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
+
+# WP-06: the fetch itself only ever cost ~0.3s, so this cache isn't the
+# real latency win (the phrasing/TTS precompute is) - it's here mainly so
+# the 15-minute precompute background task and a real user's "what's the
+# weather" request within the same window share one Open-Meteo call
+# instead of two. 20 min covers "current conditions" well; the daily
+# forecast half of the same response is fine far longer than that (Mario
+# suggested 12h), but one shared TTL for the whole response is simpler
+# and the precompute loop (every 15 min) already keeps it fresher than
+# 20 min in practice.
+_CACHE_TTL_S = 20 * 60
+_cache: dict[tuple, tuple[dict, float]] = {}
 
 name = "get_weather"
 description = (
@@ -117,20 +130,19 @@ def _describe_day(daily: dict, index: int) -> str:
     )
 
 
-async def handle(params, ctx):
-    config = ctx.config
-    if config.home_latitude is None or config.home_longitude is None:
-        return SkillResult(text="Weather isn't configured (no home location set).")
-
-    day = str(get_single_param(params, "day", "when", "date") or "now").lower()
-    unit = get_setting(config.db_path, "temperature_unit", "celsius")
+async def _fetch(lat: float, lon: float, unit: str) -> dict:
+    key = (lat, lon, unit)
+    cached = _cache.get(key)
+    now = time.monotonic()
+    if cached is not None and now - cached[1] < _CACHE_TTL_S:
+        return cached[0]
 
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
-                "latitude": config.home_latitude,
-                "longitude": config.home_longitude,
+                "latitude": lat,
+                "longitude": lon,
                 "current": "temperature_2m,weather_code,wind_speed_10m",
                 "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
                 "forecast_days": 16,
@@ -140,6 +152,20 @@ async def handle(params, ctx):
         )
         response.raise_for_status()
         data = response.json()
+
+    _cache[key] = (data, now)
+    return data
+
+
+async def handle(params, ctx):
+    config = ctx.config
+    if config.home_latitude is None or config.home_longitude is None:
+        return SkillResult(text="Weather isn't configured (no home location set).")
+
+    day = str(get_single_param(params, "day", "when", "date") or "now").lower()
+    unit = get_setting(config.db_path, "temperature_unit", "celsius")
+
+    data = await _fetch(config.home_latitude, config.home_longitude, unit)
 
     current = data["current"]
     daily = data["daily"]

@@ -25,9 +25,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from felt_core import metrics
+from felt_core import metrics, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
-from felt_core.brain import chat, process_screen_context
+from felt_core.brain import chat, process_screen_context, weather_precompute_loop
 from felt_core.cloud import cloud_status
 from felt_core.config import load_config
 from felt_core.db import (
@@ -58,6 +58,10 @@ async def lifespan(app: FastAPI):
     ntfy_task = asyncio.create_task(ntfy_listen(config))
     email_task = asyncio.create_task(email_watch(config))
     poe_cache_task = asyncio.create_task(poe_trade_cache_watch(config))
+    # WP-06: keeps a ready-to-serve "what's the weather right now" answer
+    # (text + pre-rendered TTS) warm at all times, refreshed every 15 min -
+    # see brain.py's weather_precompute_loop/refresh_weather_precompute.
+    weather_task = asyncio.create_task(weather_precompute_loop(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -72,6 +76,7 @@ async def lifespan(app: FastAPI):
     ntfy_task.cancel()
     email_task.cancel()
     poe_cache_task.cancel()
+    weather_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
@@ -179,9 +184,17 @@ async def _synthesize_reply(
     or care which input mode produced it."""
     tts_text = strip_for_tts(reply)
     logger.debug("TTS input after strip_for_tts: %r", tts_text)
-    async with metrics.timed("tts", chars=len(tts_text)):
-        tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
-        tts_resp.raise_for_status()
+
+    # WP-06: a cache hit here (warmed by brain.py's weather precompute
+    # loop) means the common "what's the weather right now?" turn makes
+    # zero calls to felt-voice at all.
+    audio_bytes = tts_cache.get(tts_text)
+    if audio_bytes is None:
+        async with metrics.timed("tts", chars=len(tts_text)):
+            tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
+            tts_resp.raise_for_status()
+        audio_bytes = tts_resp.content
+        tts_cache.put(tts_text, audio_bytes)
 
     # Percent-encoded — headers must be ASCII-safe, a non-English reply
     # (accents, etc.) would otherwise break this.
@@ -191,7 +204,7 @@ async def _synthesize_reply(
     if animation_tag is not None:
         headers["X-Animation-Tag"] = quote(animation_tag)
 
-    return Response(content=tts_resp.content, media_type="audio/wav", headers=headers)
+    return Response(content=audio_bytes, media_type="audio/wav", headers=headers)
 
 
 @app.post("/v1/voice-chat")
