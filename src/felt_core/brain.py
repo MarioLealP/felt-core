@@ -34,10 +34,15 @@ from felt_core.animation import resolve_animation_tag
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_all_facts,
+    get_current_screen_description,
     get_history,
+    get_recent_observations,
     get_unresolved_pending_email,
     mark_email_resolved,
     save_message,
+    save_observation,
+    seconds_since_last_spoken_reaction,
+    set_observation_reply,
 )
 from felt_core.email_watcher import fetch_email_body
 from felt_core.plugin import ExecutionContext, UIAction
@@ -178,7 +183,27 @@ async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> 
         return response.json()["choices"][0]["message"]["content"]
 
 
-async def _chat_reply(message: str, facts: list[dict], history: list[dict], config: FeltConfig) -> str:
+def _facts_context(config: FeltConfig) -> list[dict]:
+    facts = get_all_facts(config.db_path)
+    if not facts:
+        return []
+    bullet_list = "\n".join(f"- {fact}" for fact in facts)
+    return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
+
+
+async def _local_reply(messages_tail: list[dict], config: FeltConfig, *, include_facts: bool) -> str:
+    """The local (Ollama) reply path, factored out of three near-identical
+    call sites (2026-09-22, WP-02) - plain chat's fallback, and both of
+    screen-context's local branches. Always carries the personality
+    prompt; facts (Mario's remembered personal info) are opt-in per
+    caller, since screen-reaction replies don't need them (WP-02: "Facts
+    are not needed; don't include them")."""
+    facts = _facts_context(config) if include_facts else []
+    messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + messages_tail
+    return await _ollama_chat(messages, config.ollama_model, config)
+
+
+async def _chat_reply(message: str, history: list[dict], config: FeltConfig) -> str:
     """The actual reply-generation step for plain conversation (no skill
     involved) - routes to the cloud only when a Gemini API key is
     configured AND the privacy classifier clears the recent window + this
@@ -195,19 +220,9 @@ async def _chat_reply(message: str, facts: list[dict], history: list[dict], conf
             except Exception:
                 logger.exception("cloud chat call failed, falling back to local")
     logger.info("chat reply: local (%s)", config.ollama_model)
-    return await _ollama_chat(
-        [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": message}],
-        config.ollama_model,
-        config,
+    return await _local_reply(
+        history + [{"role": "user", "content": message}], config, include_facts=True
     )
-
-
-def _facts_context(config: FeltConfig) -> list[dict]:
-    facts = get_all_facts(config.db_path)
-    if not facts:
-        return []
-    bullet_list = "\n".join(f"- {fact}" for fact in facts)
-    return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
 
 
 async def chat(message: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
@@ -223,13 +238,26 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     registry = load_plugins(config.plugins_dir)
     facts = _facts_context(config)
     history = get_history(config.db_path, session_id)
+
+    # WP-02: "what do you think of this?" needs something to refer to.
+    # `description` is already the privacy-filtered artifact (felt-vision's
+    # own anti-PII system prompt runs before it ever reaches felt-core), so
+    # this is safe to include on both the local and cloud paths, same as
+    # the rest of `history` below. Only when fresh enough to still be
+    # "current" - a stale observation would be a stale, misleading answer.
+    current_screen = get_current_screen_description(config.db_path, session_id, max_age_seconds=120)
+    if current_screen:
+        history = history + [
+            {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}
+        ]
+
     base = facts + history
     save_message(config.db_path, session_id, "user", message)
 
     call = await decide_tool(message, registry, config)
 
     if call is None:
-        reply = await _chat_reply(message, facts, history, config)
+        reply = await _chat_reply(message, history, config)
         save_message(config.db_path, session_id, "assistant", reply)
         return ChatResult(reply=reply)
 
@@ -283,9 +311,26 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     )
 
 
+# No NONE option (2026-09-22, WP-02, Mario's rule: screen reactions are
+# always spoken - frequency is a deterministic cooldown, never the model
+# choosing silence). Previous prompt let the model answer NONE, and on the
+# cloud path Gemini said NONE 11/11 times - she effectively never reacted.
+_SCREEN_REACTION_PROMPT = (
+    "You just glanced at Mario's screen. Say ONE short, natural spoken remark "
+    "about it (max ~15 words), in character. Never say you're looking at a "
+    "screen or describe it neutrally. React like a friend sitting next to him."
+)
+
+
+def _observations_block(observations: list[dict]) -> str:
+    lines = "\n".join(f"- {obs['description']}" for obs in observations)
+    return f"Recently on screen (oldest first):\n{lines}"
+
+
 async def process_screen_context(description: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
-    """Handles passive screen context from felt-vision. Follows the 'Interestingness' rule:
-    stay silent for mundane things, spoken reply for interesting things.
+    """Handles passive screen context from felt-vision - always produces a
+    spoken reaction (Mario's rule), rate-limited by a deterministic
+    cooldown rather than the model deciding to stay silent.
 
     2026-09-22 fix: this used to have the model invent its own animation tag
     vocabulary (bracket tags like [nod], [look_bored], [lean_in]) for the
@@ -293,64 +338,71 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
     library (felt-animation's actual tags look like "gesture/nodding",
     "emotion/happy", scanned from disk - see felt-animation/library.py) -
     felt-core (which runs on the server) has no way to know that real set,
-    it's desktop-local state. Every single reaction was silently dropped
-    by felt-overlay's exact tag lookup ("no clips loaded for tag 'nod'"),
-    which is why Mario saw zero reactions at all ("there is no reaction
-    voice and response"). Fixed by never inventing a tag here - always
-    animation_tag=None, same as every other plain-chat reply, so
-    felt-animation's own classify_reaction() (already proven, already
-    validated against the real known_tags) picks it downstream instead.
+    it's desktop-local state. Fixed by never inventing a tag here - always
+    animation_tag=None, so felt-animation's own classify_reaction()
+    (already proven, already validated against the real known_tags) picks
+    it downstream instead.
+
+    WP-02 (2026-09-22): observations moved to their own table
+    (screen_observations, never `messages`) - saving one as a fake `user`
+    message wiped real conversation out of get_history's 20-row window
+    after ~20 window switches, and made every observation show up as a
+    fake "Mario said" bubble in the dashboard chat.
     """
+    obs_id = save_observation(config.db_path, session_id, description)
 
-    # Inject observation into history so she has context for future chats.
-    # Saved as 'user' role but wrapped in brackets so it feels like an observation,
-    # ensuring compatibility with strict LLM role constraints (like Gemini).
-    observation_text = f"[System Observation: The user's screen currently shows: {description}]"
-    save_message(config.db_path, session_id, "user", observation_text)
+    seconds_since = seconds_since_last_spoken_reaction(config.db_path, session_id)
+    if seconds_since is not None and seconds_since < config.screen_reaction_cooldown_s:
+        logger.info(
+            "screen reaction: on cooldown (%.0fs since last spoken reaction, need %ds) - no model call",
+            seconds_since,
+            config.screen_reaction_cooldown_s,
+        )
+        return ChatResult(reply="", animation_tag=None)
 
-    history = get_history(config.db_path, session_id)
-    facts = _facts_context(config)
+    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
 
-    # "Respond with exactly one word" for the silent case, not "respond with
-    # nothing" - the same lesson router.py/privacy.py already learned the
-    # hard way: small models asked for a truly empty response tend to
-    # produce SOMETHING anyway (an "Okay", a description) rather than
-    # reliably staying silent. A literal, easy-to-match keyword is what
-    # actually works.
-    prompt = (
-        "You just observed the user's screen. Read the most recent System Observation.\n\n"
-        "Decide: is this genuinely interesting, unusual, or worth reacting to out loud? Most "
-        "everyday screen content (menus, documents, code, ordinary browsing, routine gameplay) "
-        "is NOT - only react to something that actually stands out.\n\n"
-        "If it's worth reacting to: respond with ONLY the short, snappy spoken reaction itself "
-        "(max 1 sentence), nothing else. Do NOT mention you're looking at a screen.\n"
-        "If it's not worth reacting to: respond with exactly the single word NONE, nothing else."
-    )
+    async def _local_attempt() -> str:
+        # Last 4 REAL chat messages, not facts - facts are personal-info
+        # recall, irrelevant to reacting to what's on screen right now.
+        history_tail = get_history(config.db_path, session_id)[-4:]
+        return await _local_reply(
+            [{"role": "system", "content": observations_block}]
+            + history_tail
+            + [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+            config,
+            include_facts=False,
+        )
 
-    # Route based on privacy classifier
     if config.gemini_api_key and await is_safe_for_cloud(description, config):
         try:
             logger.info("screen context reaction: routed to cloud")
-            reply_raw = await _cloud_chat(prompt, history, config)
+            # No chat history at all on the cloud path (WP-02) - only
+            # personality + the observations block + the prompt, passed as
+            # history=[] so _cloud_chat's own recent-context slice is empty.
+            reply_raw = await _cloud_chat(
+                f"{observations_block}\n\n{_SCREEN_REACTION_PROMPT}", [], config
+            )
         except Exception:
             logger.exception("cloud screen context failed, falling back to local")
-            reply_raw = await _ollama_chat(
-                [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": prompt}],
-                config.ollama_model,
-                config,
-            )
+            reply_raw = await _local_attempt()
     else:
         logger.info("screen context reaction: local")
-        reply_raw = await _ollama_chat(
-            [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + history + [{"role": "user", "content": prompt}],
-            config.ollama_model,
-            config,
-        )
+        reply_raw = await _local_attempt()
 
-    reply_raw = reply_raw.strip()
+    reply_raw = reply_raw.strip(" \n\"'")
 
-    if not reply_raw or reply_raw.strip(" .!\"'").upper() == "NONE":
-        return ChatResult(reply="", animation_tag=None)
+    # A legacy habit (the old NONE-option prompt) some models still fall
+    # back to even with the new prompt - retried once, locally, rather than
+    # silently accepted, so a transient bad cloud reply doesn't just vanish
+    # a reaction that Mario's rule says must be spoken.
+    if not reply_raw or reply_raw.upper() == "NONE":
+        logger.info("screen reaction empty/NONE, retrying once on the local path")
+        reply_raw = (await _local_attempt()).strip(" \n\"'")
+        if not reply_raw or reply_raw.upper() == "NONE":
+            logger.warning("screen reaction still empty after local retry - returning silent")
+            return ChatResult(reply="", animation_tag=None)
 
+    set_observation_reply(config.db_path, obs_id, reply_raw)
     save_message(config.db_path, session_id, "assistant", reply_raw)
     return ChatResult(reply=reply_raw, animation_tag=None)

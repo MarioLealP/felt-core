@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from felt_core.alarms import reschedule_pending_alarms
-from felt_core.brain import chat
+from felt_core.brain import chat, process_screen_context
 from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
@@ -208,10 +208,8 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
     Returns audio+animation headers just like chat, but handles pure-silent
     reactions by skipping TTS entirely."""
     config = load_config()
-    from felt_core.brain import process_screen_context
-    
     result = await process_screen_context(req.description, config, session_id)
-    
+
     if not result.reply.strip():
         # Pure silent body-language reaction
         headers = {}

@@ -20,6 +20,12 @@ class FeltConfig(BaseSettings):
     # chat+tool-call prompt — a separate narrow classifier is more robust).
     router_model: str = "qwen2.5:1.5b"
 
+    # Deterministic frequency limit for spoken screen-observation reactions
+    # (WP-02, Mario: screen reactions are always spoken - the model never
+    # decides to stay silent, so this cooldown is what actually limits how
+    # often she reacts). See brain.py's process_screen_context.
+    screen_reaction_cooldown_s: int = 90
+
     # felt-voice — STT/TTS service. Unset means voice-chat simply isn't
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None
