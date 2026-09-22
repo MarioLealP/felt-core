@@ -39,6 +39,9 @@ from felt_core.db import (
 from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
+from felt_core.speech import strip_for_tts
+
+logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 
@@ -124,7 +127,9 @@ async def _synthesize_reply(
     """Shared by voice-chat and text-chat: TTS the reply and build the same
     audio/wav + X-* header response shape, so a client doesn't need to know
     or care which input mode produced it."""
-    tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": reply})
+    tts_text = strip_for_tts(reply)
+    logger.debug("TTS input after strip_for_tts: %r", tts_text)
+    tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
     tts_resp.raise_for_status()
 
     # Percent-encoded — headers must be ASCII-safe, a non-English reply

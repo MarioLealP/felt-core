@@ -31,7 +31,7 @@ async def test_none_reply_triggers_exactly_one_local_retry(tmp_path, monkeypatch
     config = _config(tmp_path)  # no gemini key -> straight to the local path
     calls = []
 
-    async def fake_ollama_chat(messages, model, cfg):
+    async def fake_ollama_chat(messages, model, cfg, **kwargs):
         calls.append(messages)
         return "NONE" if len(calls) == 1 else "okay something real"
 
@@ -47,7 +47,7 @@ async def test_still_empty_after_retry_returns_silent_and_stops(tmp_path, monkey
     config = _config(tmp_path)
     calls = []
 
-    async def fake_ollama_chat(messages, model, cfg):
+    async def fake_ollama_chat(messages, model, cfg, **kwargs):
         calls.append(messages)
         return "NONE"
 
@@ -63,7 +63,7 @@ async def test_second_call_inside_cooldown_makes_zero_model_calls(tmp_path, monk
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
     calls = []
 
-    async def fake_ollama_chat(messages, model, cfg):
+    async def fake_ollama_chat(messages, model, cfg, **kwargs):
         calls.append(messages)
         return "reacted!"
 
@@ -81,7 +81,7 @@ async def test_second_call_inside_cooldown_makes_zero_model_calls(tmp_path, monk
 async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_path, monkeypatch):
     config = _config(tmp_path)
 
-    async def fake_ollama_chat(messages, model, cfg):
+    async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "look at that"
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)

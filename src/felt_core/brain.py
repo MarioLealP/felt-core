@@ -26,6 +26,7 @@ allowed to reach the cloud.
 import asyncio
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
@@ -73,7 +74,10 @@ _PERSONALITY_PROMPT = (
     "Keep replies conversational and natural: short and punchy for banter, "
     "more length only when the topic actually calls for it. Never say "
     "you're an AI language model, and never apologize for having a "
-    "personality."
+    "personality.\n\n"
+    "Everything you say is spoken aloud by a voice, never shown as text: "
+    "no markdown, no lists, no emoji, no URLs; say numbers and units the "
+    "way a person would out loud; lead with the answer."
 )
 
 # How much recent conversation rides along with a cloud-routed reply
@@ -82,6 +86,14 @@ _PERSONALITY_PROMPT = (
 # alongside the new message before it's allowed to reach the cloud (see
 # _chat_reply), so this is real context, not an unbounded privacy surface.
 CLOUD_CONTEXT_MESSAGES = 6
+
+# Every reply is spoken aloud, not read - a long local-model reply means a
+# long, rambly TTS clip (2026-09-22 finding: a weather reply's ~0.8 MB WAV,
+# 12s of TTS alone out of a 33s turn). Ollama's own generation-length cap
+# (num_predict), not a client-side truncation that could cut a sentence in
+# half mid-word - the personality prompt's own "lead with the answer"
+# instruction is what keeps a capped reply from feeling chopped off.
+_REPLY_MAX_TOKENS = 160
 
 
 @dataclass
@@ -113,6 +125,33 @@ def _looks_affirmative(message: str) -> bool:
     return bool(_AFFIRMATIVE_RE.match(message))
 
 
+# 2026-09-22 finding: "tell me something fun about octopuses" was routed by
+# the small router (qwen2.5:1.5b) to generate_image - a real ComfyUI job got
+# submitted, polled for ~48s, and the whole turn took 136s for a message
+# with zero make-intent. generate_image has a real side effect (a GPU job)
+# and a real cost (time), unlike every other skill here, so it gets a
+# second, narrower check the router itself doesn't do: an explicit
+# draw/make-an-image verb+noun pairing, not just topical similarity to
+# "image" as a concept.
+_IMAGE_INTENT_RE = re.compile(
+    r"\b(draw|paint|sketch|generate|make|create|render|design)\b.*"
+    r"\b(image|picture|pic|drawing|painting|art|portrait|wallpaper|illustration)\b"
+    r"|\b(draw|paint|sketch)\s+(me|us|a|an|the)\b",
+    re.IGNORECASE,
+)
+
+
+def _guard_generate_image(message: str) -> bool:
+    return bool(_IMAGE_INTENT_RE.search(message))
+
+
+# A table, not a single if-statement, so another expensive/side-effect
+# skill can get its own guard later without touching chat()'s control flow.
+_SKILL_GUARDS: dict[str, Callable[[str], bool]] = {
+    "generate_image": _guard_generate_image,
+}
+
+
 async def _summarize_pending_email(config: FeltConfig, session_id: str, message: str) -> str:
     pending = get_unresolved_pending_email(config.db_path)
     assert pending is not None  # only called when the caller already confirmed this
@@ -137,12 +176,19 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
     return summary
 
 
-async def _ollama_chat(messages: list[dict], model: str, config: FeltConfig) -> str:
+async def _ollama_chat(
+    messages: list[dict], model: str, config: FeltConfig, *, max_tokens: int | None = None
+) -> str:
+    payload: dict = {"model": model, "messages": messages, "stream": False}
+    if max_tokens is not None:
+        # Replies are spoken aloud, not read - a long, rambly reply means
+        # a long, rambly TTS clip (2026-09-22 finding: a weather reply's
+        # ~0.8 MB WAV, 12s of TTS alone out of a 33s turn). num_predict is
+        # Ollama's own generation-length cap, not a client-side truncation
+        # that could cut a sentence in half mid-word.
+        payload["options"] = {"num_predict": max_tokens}
     async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{config.ollama_url}/api/chat",
-            json={"model": model, "messages": messages, "stream": False},
-        )
+        response = await client.post(f"{config.ollama_url}/api/chat", json=payload)
         response.raise_for_status()
         return response.json()["message"]["content"]
 
@@ -200,25 +246,30 @@ async def _local_reply(messages_tail: list[dict], config: FeltConfig, *, include
     are not needed; don't include them")."""
     facts = _facts_context(config) if include_facts else []
     messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + messages_tail
-    return await _ollama_chat(messages, config.ollama_model, config)
+    return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
 
-async def _chat_reply(message: str, history: list[dict], config: FeltConfig) -> str:
+async def _chat_reply(message: str, history: list[dict], config: FeltConfig, safe: bool | None) -> str:
     """The actual reply-generation step for plain conversation (no skill
     involved) - routes to the cloud only when a Gemini API key is
-    configured AND the privacy classifier clears the recent window + this
-    message as a whole; anything else (unconfigured, PRIVATE, or the cloud
-    call itself failing) falls back to the existing local path, facts
-    included, unchanged."""
-    if config.gemini_api_key:
-        combined = _format_for_privacy_check(history, message)
-        if await is_safe_for_cloud(combined, config):
-            try:
-                reply = await _cloud_chat(message, history, config)
-                logger.info("chat reply: routed to cloud (%s)", config.gemini_chat_model)
-                return reply
-            except Exception:
-                logger.exception("cloud chat call failed, falling back to local")
+    configured AND `safe` (the privacy classifier's verdict on the recent
+    window + this message as a whole) is True; anything else
+    (unconfigured, PRIVATE, or the cloud call itself failing) falls back
+    to the existing local path, facts included, unchanged.
+
+    `safe` is precomputed by the caller (chat()), started as a task
+    running concurrently with the router call rather than after it
+    (2026-09-22 finding: both are round trips to the Nitro5, ~3.8-4.9s for
+    the router alone - serial meant paying both costs on every plain-chat
+    turn with no skill involved). None means "not checked" (no Gemini key
+    configured) - never treated as safe."""
+    if config.gemini_api_key and safe:
+        try:
+            reply = await _cloud_chat(message, history, config)
+            logger.info("chat reply: routed to cloud (%s)", config.gemini_chat_model)
+            return reply
+        except Exception:
+            logger.exception("cloud chat call failed, falling back to local")
     logger.info("chat reply: local (%s)", config.ollama_model)
     return await _local_reply(
         history + [{"role": "user", "content": message}], config, include_facts=True
@@ -254,12 +305,49 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     base = facts + history
     save_message(config.db_path, session_id, "user", message)
 
+    # Router and privacy check run concurrently, not serially (2026-09-22
+    # finding: both are round trips to the Nitro5 - the router alone
+    # measured ~3.8-4.9s - so a plain-chat turn with no skill involved was
+    # paying both costs back to back for no reason). Only actually needed
+    # when a skill DOESN'T end up getting called, but starting it now and
+    # discarding it on a skill path is cheaper than a second round trip on
+    # the far more common no-skill path.
+    privacy_task = (
+        asyncio.create_task(is_safe_for_cloud(_format_for_privacy_check(history, message), config))
+        if config.gemini_api_key
+        else None
+    )
     call = await decide_tool(message, registry, config)
 
+    if call is not None:
+        guard_skill_name, _ = call
+        guard = _SKILL_GUARDS.get(guard_skill_name)
+        if guard is not None and not guard(message):
+            logger.info(
+                "skill guard: overriding router's '%s' pick - no matching intent in message",
+                guard_skill_name,
+            )
+            call = None
+
     if call is None:
-        reply = await _chat_reply(message, history, config)
+        # Fail-closed exactly like is_safe_for_cloud's own internal catch
+        # (privacy.py): a broken/cancelled task must never read as "safe".
+        safe: bool | None = None
+        if privacy_task is not None:
+            try:
+                safe = await privacy_task
+            except Exception:
+                safe = False
+        reply = await _chat_reply(message, history, config, safe)
         save_message(config.db_path, session_id, "assistant", reply)
         return ChatResult(reply=reply)
+
+    if privacy_task is not None:
+        privacy_task.cancel()
+        try:
+            await privacy_task
+        except asyncio.CancelledError:
+            pass
 
     skill_name, params = call
     # None (not the ValueError branch's job alone) so the animation/ui_action
@@ -293,12 +381,15 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
                     "'couldn't find that' is always better than a confident wrong guess. "
                     "If the tool result gives a temperature as a bare number with a degree "
                     "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
-                    "Celsius, or any other unit; Mario already knows it's Celsius."
+                    "Celsius, or any other unit; Mario already knows it's Celsius.\n\n"
+                    "Answer in one or two short spoken sentences; then, only if it fits, "
+                    "one short bit of personality (an opinion, a suggestion)."
                 ),
             },
         ],
         config.ollama_model,
         config,
+        max_tokens=_REPLY_MAX_TOKENS,
     )
     save_message(config.db_path, session_id, "assistant", reply)
 
