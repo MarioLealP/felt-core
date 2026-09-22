@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from felt_core import metrics
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import chat, process_screen_context
+from felt_core.cloud import cloud_status
 from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
@@ -118,6 +119,12 @@ async def latency_metrics_endpoint(since_hours: int = 24, endpoint: str | None =
     config = load_config()
     rows = get_latency_rows(config.db_path, since_hours=since_hours, endpoint=endpoint)
     return metrics.compute_stats(rows)
+
+
+@app.get("/v1/metrics/cloud")
+async def cloud_metrics_endpoint() -> dict:
+    config = load_config()
+    return cloud_status(config)
 
 
 class ChatRequest(BaseModel):

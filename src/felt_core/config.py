@@ -5,6 +5,7 @@ addresses) flows through here — env vars / .env, never hardcoded in code.
 See the project README for why this matters.
 """
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -82,7 +83,31 @@ class FeltConfig(BaseSettings):
     # means this is simply unavailable, same convention as everything else
     # here.
     gemini_api_key: str | None = None
-    gemini_chat_model: str = "gemini-flash-lite-latest"
+    # Legacy field, superseded by cloud_model_conversation below (WP-05
+    # split "the one cloud model" into a purpose-routed set) - kept only
+    # as a back-compat override in case an existing deployment already
+    # has FELT_GEMINI_CHAT_MODEL set to something specific. Unset (the
+    # normal case, confirmed 2026-09-22: nothing in this deployment's
+    # env sets it) means cloud_model_conversation's own default wins.
+    gemini_chat_model: str | None = None
+
+    # WP-05: felt-core's cloud (Gemini API) calls are purpose-routed
+    # across three free-tier models, not one - see felt_core/cloud.py.
+    # Real model ids confirmed 2026-09-22 via GET /v1beta/models against
+    # the actual configured API key.
+    cloud_model_conversation: str = "gemini-3.5-flash-lite"
+    cloud_model_overflow: str = "gemini-3.1-flash-lite"
+    cloud_model_volume: str = "gemma-4-26b-a4b-it"
+    # Optional JSON override of cloud.py's built-in RPM/RPD/TPM table,
+    # e.g. '{"gemma-4-26b-a4b-it": {"rpd": 1}}' - mainly for forcing a
+    # fallback path in testing without waiting for the real daily reset.
+    cloud_limits: str = ""
+
+    @model_validator(mode="after")
+    def _apply_legacy_gemini_chat_model(self) -> "FeltConfig":
+        if self.gemini_chat_model:
+            self.cloud_model_conversation = self.gemini_chat_model
+        return self
 
     # Zabbix — clockmost's existing monitoring, reused rather than building
     # a separate health-check path. Unset means the skill reports itself

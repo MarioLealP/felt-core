@@ -33,6 +33,7 @@ import httpx
 
 from felt_core import metrics
 from felt_core.animation import resolve_animation_tag
+from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_all_facts,
@@ -206,28 +207,22 @@ def _format_for_privacy_check(history: list[dict], message: str) -> str:
 
 
 async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> str:
-    """Google's Gemini API directly (its OpenAI-compatible endpoint) - NOT
-    ninerouter/Antigravity, which contaminates every reply with its own
-    coding-agent identity no matter what system prompt is supplied (see
-    config.py's gemini_api_key comment). Carries a bounded recent-context
-    window (CLOUD_CONTEXT_MESSAGES) and the personality prompt - never
-    _facts_context (personal information Mario has explicitly asked Felt
-    to remember), regardless of what the privacy check decided, since
-    that's not what was classified."""
+    """Routes through cloud.cloud_generate's "conversation" purpose
+    (WP-05) - NOT ninerouter/Antigravity, which contaminates every reply
+    with its own coding-agent identity no matter what system prompt is
+    supplied (see config.py's gemini_api_key comment). Carries a bounded
+    recent-context window (CLOUD_CONTEXT_MESSAGES) and the personality
+    prompt - never _facts_context (personal information Mario has
+    explicitly asked Felt to remember), regardless of what the privacy
+    check decided, since that's not what was classified. Raises
+    CloudUnavailable (via cloud_generate) when the conversation/overflow
+    models are both exhausted or unconfigured - callers already catch
+    Exception broadly and fall back to local, so no new handling needed
+    at the call sites."""
     recent = history[-CLOUD_CONTEXT_MESSAGES:]
-    messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + recent + [{"role": "user", "content": message}]
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            headers={"Authorization": f"Bearer {config.gemini_api_key}"},
-            json={
-                "model": config.gemini_chat_model,
-                "messages": messages,
-                "stream": False,
-            },
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+    return await cloud_generate(
+        "conversation", _PERSONALITY_PROMPT, recent + [{"role": "user", "content": message}], config
+    )
 
 
 def _facts_context(config: FeltConfig) -> list[dict]:
@@ -266,9 +261,9 @@ async def _chat_reply(message: str, history: list[dict], config: FeltConfig, saf
     configured) - never treated as safe."""
     if config.gemini_api_key and safe:
         try:
-            async with metrics.timed("reply", route="cloud", model=config.gemini_chat_model):
+            async with metrics.timed("reply", route="cloud", model=config.cloud_model_conversation):
                 reply = await _cloud_chat(message, history, config)
-            logger.info("chat reply: routed to cloud (%s)", config.gemini_chat_model)
+            logger.info("chat reply: routed to cloud (%s)", config.cloud_model_conversation)
             return reply
         except Exception:
             logger.exception("cloud chat call failed, falling back to local")
@@ -481,12 +476,18 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
         try:
             logger.info("screen context reaction: routed to cloud")
             # No chat history at all on the cloud path (WP-02) - only
-            # personality + the observations block + the prompt, passed as
-            # history=[] so _cloud_chat's own recent-context slice is empty.
-            async with metrics.timed("screen_reaction", route="cloud", model=config.gemini_chat_model):
-                reply_raw = await _cloud_chat(
-                    f"{observations_block}\n\n{_SCREEN_REACTION_PROMPT}", [], config
-                )
+            # personality + the observations block go in `system`, and the
+            # prompt is the sole message; WP-05's cloud_generate only
+            # accepts user/assistant roles in `messages`, so what used to
+            # be a "system"-tagged history entry now lives in `system`
+            # instead. Routes through the "screen_reaction" purpose (the
+            # volume/Gemma model), not "conversation".
+            reply_raw = await cloud_generate(
+                "screen_reaction",
+                f"{_PERSONALITY_PROMPT}\n\n{observations_block}",
+                [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                config,
+            )
         except Exception:
             logger.exception("cloud screen context failed, falling back to local")
             reply_raw = await _local_attempt()

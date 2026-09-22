@@ -8,23 +8,29 @@ def _config(tmp_path, **kwargs):
 
 
 async def test_cloud_path_receives_no_chat_history(tmp_path, monkeypatch):
+    # WP-05: the screen-reaction cloud path now goes through
+    # cloud_generate("screen_reaction", ...) directly, not _cloud_chat -
+    # "no chat history" means its `messages` list holds only the prompt,
+    # no prior turns.
     config = _config(tmp_path, gemini_api_key="fake-key")
     captured = {}
 
-    async def fake_cloud_chat(message, history, cfg):
-        captured["history"] = history
+    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
+        captured["purpose"] = purpose
+        captured["messages"] = messages
         return "nice reaction"
 
     async def fake_is_safe_for_cloud(text, cfg):
         return True
 
-    monkeypatch.setattr(brain, "_cloud_chat", fake_cloud_chat)
+    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
 
     result = await brain.process_screen_context("a cat on the desk", config, session_id="wp02-test")
 
     assert result.reply == "nice reaction"
-    assert captured["history"] == []
+    assert captured["purpose"] == "screen_reaction"
+    assert captured["messages"] == [{"role": "user", "content": brain._SCREEN_REACTION_PROMPT}]
 
 
 async def test_none_reply_triggers_exactly_one_local_retry(tmp_path, monkeypatch):
