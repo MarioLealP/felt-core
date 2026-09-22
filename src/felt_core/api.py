@@ -11,6 +11,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
+import uuid
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
@@ -18,19 +20,22 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+from felt_core import metrics
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import chat, process_screen_context
 from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
     clear_checked_shopping_items,
+    delete_old_latency_rows,
     delete_shopping_item,
     get_history,
+    get_latency_rows,
     get_setting,
     get_shopping_items,
     set_setting,
@@ -55,6 +60,13 @@ async def lifespan(app: FastAPI):
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
+    # WP-04: latency rows accumulate one row per stage per request forever
+    # otherwise - a startup sweep is simpler than a second scheduled task
+    # for what's meant to be a bounded rolling window, not permanent history.
+    try:
+        delete_old_latency_rows(config.db_path, older_than_days=30)
+    except Exception:
+        logger.exception("failed to prune old latency rows")
     yield
     ntfy_task.cancel()
     email_task.cancel()
@@ -73,8 +85,39 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Transcribed-Text", "X-Reply-Text", "X-UI-Action", "X-Animation-Tag"],
+    expose_headers=["X-Transcribed-Text", "X-Reply-Text", "X-UI-Action", "X-Animation-Tag", "Server-Timing"],
 )
+
+
+@app.middleware("http")
+async def latency_middleware(request: Request, call_next):
+    """Times every /v1/* request end-to-end and stamps a standard
+    Server-Timing header on the response, built from whatever brain.py/
+    api.py stages recorded via metrics.timed() during the request (WP-04).
+    Non-/v1/ paths (static assets, /openapi.json) aren't worth the
+    request_id/SQLite overhead."""
+    if not request.url.path.startswith("/v1/"):
+        return await call_next(request)
+
+    config = load_config()
+    session_id = request.query_params.get("session_id")
+    metrics.start_request(str(uuid.uuid4()), request.url.path, config.db_path, session_id)
+
+    start = time.monotonic()
+    response = await call_next(request)
+    metrics.record("total", (time.monotonic() - start) * 1000.0)
+
+    header = metrics.server_timing_header()
+    if header:
+        response.headers["Server-Timing"] = header
+    return response
+
+
+@app.get("/v1/metrics/latency")
+async def latency_metrics_endpoint(since_hours: int = 24, endpoint: str | None = None) -> dict:
+    config = load_config()
+    rows = get_latency_rows(config.db_path, since_hours=since_hours, endpoint=endpoint)
+    return metrics.compute_stats(rows)
 
 
 class ChatRequest(BaseModel):
@@ -129,8 +172,9 @@ async def _synthesize_reply(
     or care which input mode produced it."""
     tts_text = strip_for_tts(reply)
     logger.debug("TTS input after strip_for_tts: %r", tts_text)
-    tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
-    tts_resp.raise_for_status()
+    async with metrics.timed("tts", chars=len(tts_text)):
+        tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
+        tts_resp.raise_for_status()
 
     # Percent-encoded — headers must be ASCII-safe, a non-English reply
     # (accents, etc.) would otherwise break this.
@@ -152,11 +196,12 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
 
     async with httpx.AsyncClient(timeout=60) as client:
-        stt_resp = await client.post(
-            f"{config.voice_url}/v1/stt", files={"file": (file.filename, await file.read(), file.content_type)}
-        )
-        stt_resp.raise_for_status()
-        transcribed = stt_resp.json()["text"]
+        async with metrics.timed("stt"):
+            stt_resp = await client.post(
+                f"{config.voice_url}/v1/stt", files={"file": (file.filename, await file.read(), file.content_type)}
+            )
+            stt_resp.raise_for_status()
+            transcribed = stt_resp.json()["text"]
 
         ui_action: dict[str, Any] | None = None
         animation_tag: str | None = None

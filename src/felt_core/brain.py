@@ -31,6 +31,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from felt_core import metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.config import FeltConfig
 from felt_core.db import (
@@ -265,15 +266,22 @@ async def _chat_reply(message: str, history: list[dict], config: FeltConfig, saf
     configured) - never treated as safe."""
     if config.gemini_api_key and safe:
         try:
-            reply = await _cloud_chat(message, history, config)
+            async with metrics.timed("reply", route="cloud", model=config.gemini_chat_model):
+                reply = await _cloud_chat(message, history, config)
             logger.info("chat reply: routed to cloud (%s)", config.gemini_chat_model)
             return reply
         except Exception:
             logger.exception("cloud chat call failed, falling back to local")
     logger.info("chat reply: local (%s)", config.ollama_model)
-    return await _local_reply(
-        history + [{"role": "user", "content": message}], config, include_facts=True
-    )
+    async with metrics.timed("reply", route="local", model=config.ollama_model):
+        return await _local_reply(
+            history + [{"role": "user", "content": message}], config, include_facts=True
+        )
+
+
+async def _timed_privacy_check(text: str, config: FeltConfig) -> bool:
+    async with metrics.timed("privacy"):
+        return await is_safe_for_cloud(text, config)
 
 
 async def chat(message: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
@@ -313,11 +321,12 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     # discarding it on a skill path is cheaper than a second round trip on
     # the far more common no-skill path.
     privacy_task = (
-        asyncio.create_task(is_safe_for_cloud(_format_for_privacy_check(history, message), config))
+        asyncio.create_task(_timed_privacy_check(_format_for_privacy_check(history, message), config))
         if config.gemini_api_key
         else None
     )
-    call = await decide_tool(message, registry, config)
+    async with metrics.timed("router"):
+        call = await decide_tool(message, registry, config)
 
     if call is not None:
         guard_skill_name, _ = call
@@ -358,39 +367,41 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
     result = None
     try:
         ctx = ExecutionContext(config=config, original_message=message)
-        result = await run_skill(skill_name, params, registry, ctx)
+        async with metrics.timed("skill", skill=skill_name):
+            result = await run_skill(skill_name, params, registry, ctx)
         tool_output = result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
 
-    reply = await _ollama_chat(
-        [{"role": "system", "content": _PERSONALITY_PROMPT}]
-        + base
-        + [
-            {"role": "user", "content": message},
-            {
-                "role": "user",
-                "content": (
-                    f"(Tool result: {tool_output})\n\n"
-                    "State that fact directly and naturally, as if you already knew it. "
-                    "Do not mention tools, and do not add any disclaimer about lacking "
-                    "real-time access — the tool result above IS current and accurate. "
-                    "If the tool result says something wasn't found or an error occurred, "
-                    "relay that honestly — do NOT invent an unrelated answer, platform, "
-                    "reason, or context that isn't literally in the tool result; a correct "
-                    "'couldn't find that' is always better than a confident wrong guess. "
-                    "If the tool result gives a temperature as a bare number with a degree "
-                    "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
-                    "Celsius, or any other unit; Mario already knows it's Celsius.\n\n"
-                    "Answer in one or two short spoken sentences; then, only if it fits, "
-                    "one short bit of personality (an opinion, a suggestion)."
-                ),
-            },
-        ],
-        config.ollama_model,
-        config,
-        max_tokens=_REPLY_MAX_TOKENS,
-    )
+    async with metrics.timed("reply", route="local", model=config.ollama_model):
+        reply = await _ollama_chat(
+            [{"role": "system", "content": _PERSONALITY_PROMPT}]
+            + base
+            + [
+                {"role": "user", "content": message},
+                {
+                    "role": "user",
+                    "content": (
+                        f"(Tool result: {tool_output})\n\n"
+                        "State that fact directly and naturally, as if you already knew it. "
+                        "Do not mention tools, and do not add any disclaimer about lacking "
+                        "real-time access — the tool result above IS current and accurate. "
+                        "If the tool result says something wasn't found or an error occurred, "
+                        "relay that honestly — do NOT invent an unrelated answer, platform, "
+                        "reason, or context that isn't literally in the tool result; a correct "
+                        "'couldn't find that' is always better than a confident wrong guess. "
+                        "If the tool result gives a temperature as a bare number with a degree "
+                        "sign (e.g. '15°'), relay it exactly as-is — do NOT append C, °C, "
+                        "Celsius, or any other unit; Mario already knows it's Celsius.\n\n"
+                        "Answer in one or two short spoken sentences; then, only if it fits, "
+                        "one short bit of personality (an opinion, a suggestion)."
+                    ),
+                },
+            ],
+            config.ollama_model,
+            config,
+            max_tokens=_REPLY_MAX_TOKENS,
+        )
     save_message(config.db_path, session_id, "assistant", reply)
 
     if result is None:
@@ -457,13 +468,14 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
         # Last 4 REAL chat messages, not facts - facts are personal-info
         # recall, irrelevant to reacting to what's on screen right now.
         history_tail = get_history(config.db_path, session_id)[-4:]
-        return await _local_reply(
-            [{"role": "system", "content": observations_block}]
-            + history_tail
-            + [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
-            config,
-            include_facts=False,
-        )
+        async with metrics.timed("screen_reaction", route="local", model=config.ollama_model):
+            return await _local_reply(
+                [{"role": "system", "content": observations_block}]
+                + history_tail
+                + [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                config,
+                include_facts=False,
+            )
 
     if config.gemini_api_key and await is_safe_for_cloud(description, config):
         try:
@@ -471,9 +483,10 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
             # No chat history at all on the cloud path (WP-02) - only
             # personality + the observations block + the prompt, passed as
             # history=[] so _cloud_chat's own recent-context slice is empty.
-            reply_raw = await _cloud_chat(
-                f"{observations_block}\n\n{_SCREEN_REACTION_PROMPT}", [], config
-            )
+            async with metrics.timed("screen_reaction", route="cloud", model=config.gemini_chat_model):
+                reply_raw = await _cloud_chat(
+                    f"{observations_block}\n\n{_SCREEN_REACTION_PROMPT}", [], config
+                )
         except Exception:
             logger.exception("cloud screen context failed, falling back to local")
             reply_raw = await _local_attempt()
