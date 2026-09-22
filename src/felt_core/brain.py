@@ -374,9 +374,18 @@ async def _phrase_skill_result(
                 {"role": "user", "content": _tool_result_instruction(tool_output)},
             ]
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_volume):
-                return await cloud_generate(
+                cloud_reply = await cloud_generate(
                     "skill_phrasing", _PERSONALITY_PROMPT, messages, config, max_tokens=_SKILL_PHRASING_MAX_TOKENS
                 )
+            # An empty string isn't an exception - cloud_generate returns
+            # it deliberately (cloud.py's _extract_text) when a model's
+            # response was nothing but hidden "thinking" content with no
+            # real answer. Treated as a failure here too, same as any
+            # other cloud problem: better a working local reply than a
+            # silent non-answer.
+            if cloud_reply:
+                return cloud_reply
+            logger.warning("cloud skill phrasing returned nothing usable, falling back to local")
         except Exception:
             logger.exception("cloud skill phrasing failed, falling back to local")
 
@@ -437,7 +446,7 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
     line = tool_output
     if config.gemini_api_key:
         try:
-            line = await cloud_generate(
+            cloud_line = await cloud_generate(
                 "skill_phrasing",
                 _PERSONALITY_PROMPT,
                 [
@@ -447,6 +456,13 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
                 config,
                 max_tokens=_SKILL_PHRASING_MAX_TOKENS,
             )
+            # Same "empty isn't success" rule as _phrase_skill_result -
+            # cloud_generate can return "" deliberately (all-thinking, no
+            # real answer) without raising.
+            if cloud_line:
+                line = cloud_line
+            else:
+                logger.warning("weather precompute: cloud phrasing returned nothing usable, using the raw tool output")
         except Exception:
             logger.exception("weather precompute: cloud phrasing failed, using the raw tool output")
 
