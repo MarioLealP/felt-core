@@ -73,7 +73,13 @@ async def is_safe_for_cloud(message: str, config: FeltConfig) -> bool:
                         {"role": "user", "content": message},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0},
+                    # num_gpu=0: keeps this tiny classifier off the Nitro5's
+                    # GPU so it never contends with the main chat model for
+                    # VRAM - see router.py's decide_tool for the full story
+                    # (both call sites use router_model and must agree on
+                    # this, or Ollama reloads the model every time the
+                    # num_gpu setting flips between requests).
+                    "options": {"temperature": 0, "num_gpu": 0},
                 },
             )
             response.raise_for_status()

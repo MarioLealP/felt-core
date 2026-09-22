@@ -208,7 +208,16 @@ async def decide_tool(
                 # (temperature 0) greatly reduces run-to-run flakiness on
                 # ambiguous cases (2026-09-11 finding: default sampling
                 # made the same query route correctly ~50% of the time).
-                "options": {"temperature": 0},
+                #
+                # num_gpu=0 (2026-09-22, Mario: "run the small model cpu
+                # and the big model vram?"): router_model (qwen2.5:1.5b)
+                # and the main chat model (llama3.1:8b) were fighting over
+                # the Nitro5's 6 GB card, evicting each other on every
+                # single turn (confirmed live: router+privacy latency
+                # swinging between ~200ms and ~12s call to call). Forcing
+                # this tiny classifier onto CPU frees the whole card for
+                # the chat model, which needs it far more.
+                "options": {"temperature": 0, "num_gpu": 0},
             },
         )
         response.raise_for_status()
