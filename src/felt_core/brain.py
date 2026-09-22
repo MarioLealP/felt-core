@@ -312,15 +312,21 @@ def _tool_result_instruction(tool_output: str) -> str:
 
 # NOT a tight cap - counterintuitively has to be generous. Real bug found
 # live, 2026-09-22 (WP-06's own first weather-precompute run): the volume
-# model (gemma-4-26b-a4b-it) burns 300-350 hidden "thinking" tokens before
-# its real answer (each flagged `"thought": true` - see cloud.py's
+# model (gemma-4-26b-a4b-it) burns hidden "thinking" tokens before its
+# real answer (each flagged `"thought": true` - see cloud.py's
 # _extract_text), and the WP's original 120-token cap was cutting it off
 # entirely mid-thought - the "reply" was Gemma's raw internal reasoning
-# transcript, not a spoken line at all. The actual final answer is still
-# short (~20-40 tokens, same "1-2 sentences" instruction as everywhere
-# else) - this budget just has to cover the thinking overhead on top of
-# that, not make replies any longer.
-_SKILL_PHRASING_MAX_TOKENS = 500
+# transcript, not a spoken line at all. Measured against the ACTUAL
+# production prompt shape (personality + the full tool-result
+# instruction), not a toy one: 473 thinking tokens + a real 37-token
+# answer = 510 total, comfortably over an initial 500 retry that still
+# truncated it. 1000 leaves real headroom above that measured number.
+# The final answer itself is still short (~20-40 tokens, same "1-2
+# sentences" instruction as everywhere else) - this budget only has to
+# cover the thinking overhead ahead of it, not make replies any longer,
+# and Gemma's free-tier TPM budget (16K/min) makes the extra headroom
+# essentially free.
+_SKILL_PHRASING_MAX_TOKENS = 1000
 
 
 async def _phrase_skill_result(
