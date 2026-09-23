@@ -6,8 +6,11 @@ the song"). Read-only - no device/transport control, unlike play_music
 already loaded).
 """
 
+from pathlib import Path
+
 import httpx
 
+from felt_core.lyrics_client import current_line, get_lyrics
 from felt_core.plugin import SkillResult
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
@@ -26,8 +29,33 @@ async def handle(params, ctx):
 
     async with httpx.AsyncClient(timeout=20) as client:
         now_playing = await get_currently_playing(client, config)
+        if now_playing is None or not now_playing["is_playing"]:
+            return SkillResult(text="Nothing's playing right now.")
 
-    if now_playing is None or not now_playing["is_playing"]:
-        return SkillResult(text="Nothing's playing right now.")
+        track = now_playing["track"]
+        text = f"This is {format_track_name(track)}."
 
-    return SkillResult(text=f"This is {format_track_name(now_playing['track'])}.")
+        # WP-16 Part 3: a lyric line she can quote, when one exists at
+        # the current playback position - best-effort, silently skipped
+        # (never a fetch error breaking the basic "what song is this"
+        # answer) since LRCLIB not having this particular track, or a
+        # network hiccup, isn't a reason to fail the whole skill.
+        try:
+            lyrics = await get_lyrics(
+                client,
+                Path(config.lyrics_cache_dir),
+                track.get("id", ""),
+                track.get("name", ""),
+                ", ".join(a["name"] for a in track.get("artists", [])),
+                track.get("album", {}).get("name", ""),
+                now_playing["duration_ms"] // 1000,
+            )
+        except Exception:
+            lyrics = None
+
+    if lyrics and lyrics["synced"]:
+        line = current_line(lyrics["synced"], now_playing["progress_ms"])
+        if line:
+            text += f' The lyric right now is "{line}".'
+
+    return SkillResult(text=text)

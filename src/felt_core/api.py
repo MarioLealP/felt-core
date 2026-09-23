@@ -45,8 +45,9 @@ from felt_core.db import (
 from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
+from felt_core.lyrics_client import current_line, find_chorus, get_lyrics
 from felt_core.speech import strip_for_tts
-from felt_core.spotify_client import get_currently_playing, format_track_name
+from felt_core.spotify_client import format_track_name, get_currently_playing
 
 logger = logging.getLogger(__name__)
 
@@ -403,6 +404,46 @@ async def music_now_endpoint() -> dict:
         "display_name": format_track_name(track),
         "progress_ms": now_playing["progress_ms"],
         "duration_ms": now_playing["duration_ms"],
+    }
+
+
+@app.get("/v1/music/lyrics")
+async def music_lyrics_endpoint() -> dict:
+    """WP-16 Part 3: lyrics for whatever's currently playing, from LRCLIB
+    (Spotify's own API has no lyrics endpoint). `current_line`/`chorus`
+    are only populated when LRCLIB returned synced (LRC) lyrics - plenty
+    of tracks only have plain text, which is still usable for a quoted
+    remark but has no per-line timing to build them from."""
+    config = load_config()
+    if not config.spotify_refresh_token:
+        return {"found": False}
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        now_playing = await get_currently_playing(client, config)
+        if now_playing is None:
+            return {"found": False}
+
+        track = now_playing["track"]
+        lyrics = await get_lyrics(
+            client,
+            Path(config.lyrics_cache_dir),
+            track.get("id", ""),
+            track.get("name", ""),
+            ", ".join(a["name"] for a in track.get("artists", [])),
+            track.get("album", {}).get("name", ""),
+            now_playing["duration_ms"] // 1000,
+        )
+
+    if lyrics is None:
+        return {"found": False}
+
+    synced = lyrics["synced"]
+    return {
+        "found": True,
+        "has_synced": bool(synced),
+        "current_line": current_line(synced, now_playing["progress_ms"]) if synced else None,
+        "chorus": find_chorus(synced) if synced else None,
+        "plain_excerpt": (lyrics["plain"][:200] if lyrics["plain"] else None),
     }
 
 

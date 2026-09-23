@@ -184,6 +184,12 @@ class FeltConfig(BaseSettings):
     spotify_client_secret: str | None = None
     spotify_refresh_token: str | None = None
 
+    # WP-16 Part 3: LRCLIB lyrics, one JSON file per track id
+    # (lyrics_client.py) - lyrics never change for a given track, so this
+    # is a permanent cache (including negative results), unlike
+    # currently-playing state's short in-process TTL.
+    lyrics_cache_dir: str = "./data/lyrics"
+
     # Path of Exile 2 trade-API reference-data cache (poe_trade_cache.py)
     # — the item name -> base-type index + league list, refreshed weekly.
     # Lives next to the sqlite db by default, on the same persistent volume.

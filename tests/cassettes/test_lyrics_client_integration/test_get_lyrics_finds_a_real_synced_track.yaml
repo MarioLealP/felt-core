@@ -1,0 +1,99 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - lrclib.net
+      user-agent:
+      - 'felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)'
+    method: GET
+    uri: https://lrclib.net/api/get?track_name=Bohemian+Rhapsody&artist_name=Queen&album_name=A+Night+at+the+Opera&duration=355
+  response:
+    body:
+      string: !!binary |
+        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
+        NsFkH3n+iX6ynRcfsz//F4MKaFBJLQAA
+    headers:
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - retry-after
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      cf-ray:
+      - a3fc66206e24cbf2-MAD
+      connection:
+      - keep-alive
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      date:
+      - Wed, 23 Sep 2026 20:46:27 GMT
+      nel:
+      - '{"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}'
+      report-to:
+      - '{"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=FEnOlB6GHhMmBzWdFMhKLFmRC%2F9ZzxbZcFFpOtNiei%2F8gzud24E3jaL0lOIVeaRSZXX6xEmyV5hfKFUXu%2FDwLDHVUU4lTYhi3FrCuPPdUeMhTRvoHTTpUbWr%2FOf802BPGaYzjbolalAS"}]}'
+      server:
+      - cloudflare
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      - origin, access-control-request-method, access-control-request-headers
+    status:
+      code: 200
+      message: OK
+version: 1
