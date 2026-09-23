@@ -154,6 +154,26 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "fast path before the message ever reaches you - see "
         "brain.py's _PRESENCE_FAST_PATH_RE - but route it here too on the "
         "off chance it's phrased differently than the fast path expects.)\n\n"
+        'User: "Go away for a bit."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "hide"}}\n\n'
+        'User: "Give me five minutes."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "brb"}}\n'
+        'Wrong: {"skill": "set_timer", "params": {"minutes": 5}} — wrong '
+        "because Mario is telling FELT to go away, not asking for a "
+        "kitchen-timer style alarm; \"give me N minutes\" directed at her "
+        "presence is always felt_presence, never set_timer.\n\n"
+        'User: "Come back."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "come_back"}}\n\n'
+        'User: "Come here."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "come"}}\n'
+        'Wrong: {"skill": "felt_presence", "params": {"intent": "come_back"}} — '
+        "wrong because she's already visible and on screen; \"come back\" is only "
+        "for summoning her from hidden/away, \"come here\"/\"move over\" moves her "
+        "somewhere on screen while she's already present.\n\n"
+        'User: "Look at this."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "look"}}\n\n'
+        'User: "What did you just say?"\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "repeat"}}\n\n'
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "
