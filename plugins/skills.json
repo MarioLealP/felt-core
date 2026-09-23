@@ -26,5 +26,6 @@
   "search_documents": "local",
   "remember_fact": "local",
   "find_phone": "local",
-  "change_shirt": "public"
+  "change_shirt": "public",
+  "felt_presence": "public"
 }

@@ -160,6 +160,25 @@ _SKILL_GUARDS: dict[str, Callable[[str], bool]] = {
     "generate_image": _guard_generate_image,
 }
 
+# WP-09: "shut up" cuts her off mid-sentence - the whole point is that it's
+# immediate and never gets second-guessed by a router model's own judgment
+# call (or delayed by the round trip to it). Matched as a deterministic
+# regex fast path, same shape as _looks_affirmative above, checked before
+# decide_tool ever runs (see chat()) rather than left to the router's own
+# worked example, which is only a fallback for phrasing this doesn't catch.
+_HUSH_RE = re.compile(
+    r"^\s*(shut up|shh+|be quiet|quiet please|stop talking)[.!]?\s*$", re.IGNORECASE
+)
+_UNHUSH_RE = re.compile(r"^\s*(you can talk again|ok(ay)? talk)[.!]?\s*$", re.IGNORECASE)
+
+
+def _presence_fast_path(message: str) -> tuple[str, dict] | None:
+    if _HUSH_RE.match(message):
+        return "felt_presence", {"intent": "shut_up"}
+    if _UNHUSH_RE.match(message):
+        return "felt_presence", {"intent": "unhush"}
+    return None
+
 
 async def _summarize_pending_email(config: FeltConfig, session_id: str, message: str) -> str:
     pending = get_unresolved_pending_email(config.db_path)
@@ -540,7 +559,11 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         else None
     )
     async with metrics.timed("router"):
-        call = await decide_tool(message, registry, config)
+        # WP-09: a "shut up"/"you can talk again" match skips the router
+        # LLM call entirely, not just its own decision - the whole point of
+        # this fast path is Mario never has to wait out a model round trip
+        # (or risk a misroute) to get her to stop talking.
+        call = _presence_fast_path(message) or await decide_tool(message, registry, config)
 
     if call is not None:
         guard_skill_name, _ = call

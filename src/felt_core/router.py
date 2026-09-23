@@ -148,6 +148,12 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "appointment to remember, not an alarm to ring; set_alarm is ONLY for "
         "a literal alarm/reminder ring, create_calendar_event is for actual "
         "calendar events.\n\n"
+        'User: "Shut up for a bit."\n'
+        'Correct: {"skill": "felt_presence", "params": {"intent": "shut_up"}}\n'
+        "(In practice this exact family of phrases is caught by a regex "
+        "fast path before the message ever reaches you - see "
+        "brain.py's _PRESENCE_FAST_PATH_RE - but route it here too on the "
+        "off chance it's phrased differently than the fast path expects.)\n\n"
         'If a tool clearly applies, output exactly: {"skill": "<name>", "params": {...}}\n'
         'If no tool is needed, output exactly: {"skill": null}\n'
         "Output ONLY that JSON object. No explanation, no apology, "
