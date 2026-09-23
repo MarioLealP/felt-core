@@ -1,0 +1,9 @@
+{
+  "name": "change_shirt",
+  "description": "Change into a different t-shirt immediately. Call this when the user explicitly asks you to change your shirt, put on a new shirt, or change your outfit.",
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}
