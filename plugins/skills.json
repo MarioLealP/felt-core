@@ -16,6 +16,7 @@
   "shopping_list": "google_ok",
   "play_music": "google_ok",
   "media_control": "google_ok",
+  "now_playing": "google_ok",
   "smart_home_control": "gated",
   "get_phone_battery": "gated",
   "get_container_status": "gated",

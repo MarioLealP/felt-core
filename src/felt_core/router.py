@@ -130,6 +130,11 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Correct: {"skill": "media_control", "params": {"action": "play_pause"}}\n'
         'Wrong: {"skill": "play_music", "params": {}} — wrong because no song/artist was '
         "named; a bare pause/skip/volume request is always media_control.\n\n"
+        'User: "What song is this?"\n'
+        'Correct: {"skill": "now_playing", "params": {}}\n'
+        'Wrong: {"skill": "play_music", "params": {}} — wrong because Mario is asking '
+        "what's ALREADY playing, not asking to start something; now_playing is read-only "
+        "and never starts or changes playback, unlike play_music/media_control.\n\n"
         'User: "Find that PDF about the car insurance renewal."\n'
         'Correct: {"skill": "search_documents", "params": {"question": "car insurance renewal"}}\n'
         'Wrong: {"skill": "web_search", "params": {"query": "car insurance renewal"}} — '

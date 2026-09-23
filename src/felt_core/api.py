@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 from felt_core import metrics, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
-from felt_core.brain import chat, process_screen_context, react_to_screen, weather_precompute_loop
+from felt_core.brain import chat, music_taste_loop, process_screen_context, react_to_screen, weather_precompute_loop
 from felt_core.cloud import CloudUnavailable, cloud_status
 from felt_core.config import load_config
 from felt_core.db import (
@@ -46,6 +46,7 @@ from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 from felt_core.speech import strip_for_tts
+from felt_core.spotify_client import get_currently_playing, format_track_name
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ async def lifespan(app: FastAPI):
     # (text + pre-rendered TTS) warm at all times, refreshed every 15 min -
     # see brain.py's weather_precompute_loop/refresh_weather_precompute.
     weather_task = asyncio.create_task(weather_precompute_loop(config))
+    # WP-16 Part 2: builds the skip/full-play listening history that
+    # music_taste.summarize_taste folds back into the chat prompt.
+    music_taste_task = asyncio.create_task(music_taste_loop(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -77,6 +81,7 @@ async def lifespan(app: FastAPI):
     email_task.cancel()
     poe_cache_task.cancel()
     weather_task.cancel()
+    music_taste_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
@@ -369,6 +374,36 @@ async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
 async def get_temperature_unit() -> dict:
     config = load_config()
     return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}
+
+
+@app.get("/v1/music/now")
+async def music_now_endpoint() -> dict:
+    """WP-16 Part 2: what's currently playing on Spotify - polled by
+    felt-tray every ~15s to drive unprompted "oh, this one again" remarks
+    on a track change, and answerable directly via the now_playing skill.
+    `{"is_playing": false}` covers both "nothing loaded" and "Spotify not
+    connected" - callers don't need to distinguish those."""
+    config = load_config()
+    if not config.spotify_refresh_token:
+        return {"is_playing": False}
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        now_playing = await get_currently_playing(client, config)
+
+    if now_playing is None:
+        return {"is_playing": False}
+
+    track = now_playing["track"]
+    return {
+        "is_playing": now_playing["is_playing"],
+        "track": track.get("name", ""),
+        "artists": [a["name"] for a in track.get("artists", [])],
+        "album": track.get("album", {}).get("name", ""),
+        "track_id": track.get("id", ""),
+        "display_name": format_track_name(track),
+        "progress_ms": now_playing["progress_ms"],
+        "duration_ms": now_playing["duration_ms"],
+    }
 
 
 class ShoppingItemRequest(BaseModel):

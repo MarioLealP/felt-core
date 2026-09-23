@@ -41,20 +41,24 @@ from felt_core.db import (
     get_all_facts,
     get_current_screen_description,
     get_history,
+    get_music_taste_stats,
     get_recent_observations,
     get_unresolved_pending_email,
     mark_email_resolved,
+    record_music_play,
     save_message,
     save_observation,
     seconds_since_last_spoken_reaction,
     set_observation_reply,
 )
 from felt_core.email_watcher import fetch_email_body
+from felt_core.music_taste import is_skip, summarize_taste
 from felt_core.plugin import ExecutionContext, UIAction
 from felt_core.plugin_loader import load_plugins
 from felt_core.privacy import is_safe_for_cloud
 from felt_core.router import decide_tool
 from felt_core.speech import strip_for_tts
+from felt_core.spotify_client import get_currently_playing
 from felt_core.tools import run_skill
 
 logger = logging.getLogger(__name__)
@@ -267,7 +271,10 @@ async def _cloud_chat(message: str, history: list[dict], config: FeltConfig, ton
     at the call sites."""
     recent = history[-CLOUD_CONTEXT_MESSAGES:]
     return await cloud_generate(
-        "conversation", _personality_prompt(tone), recent + [{"role": "user", "content": message}], config
+        "conversation",
+        _personality_prompt(tone),
+        _music_taste_context(config) + recent + [{"role": "user", "content": message}],
+        config,
     )
 
 
@@ -279,6 +286,18 @@ def _facts_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
 
 
+def _music_taste_context(config: FeltConfig) -> list[dict]:
+    """WP-16 Part 2 - unlike _facts_context, this is fine on the cloud
+    path too (Mario, 2026-09-22: music is explicitly cloud-ok, same as
+    email/calendar), so both _local_reply and _cloud_chat include it
+    unconditionally. Empty until enough listening history exists to say
+    anything (see music_taste.summarize_taste)."""
+    note = summarize_taste(get_music_taste_stats(config.db_path))
+    if not note:
+        return []
+    return [{"role": "system", "content": note}]
+
+
 async def _local_reply(
     messages_tail: list[dict], config: FeltConfig, *, include_facts: bool, tone: str | None = None
 ) -> str:
@@ -288,8 +307,14 @@ async def _local_reply(
     prompt; facts (Mario's remembered personal info) are opt-in per
     caller, since screen-reaction replies don't need them (WP-02: "Facts
     are not needed; don't include them")."""
+    # include_facts also gates music taste: both are "personal context a
+    # plain-chat reply wants but a screen-reaction body-language line
+    # doesn't" (WP-02's original reasoning for facts applies just the
+    # same here), even though music taste - unlike facts - is allowed on
+    # the cloud path too (see _music_taste_context).
     facts = _facts_context(config) if include_facts else []
-    messages = [{"role": "system", "content": _personality_prompt(tone)}] + facts + messages_tail
+    taste = _music_taste_context(config) if include_facts else []
+    messages = [{"role": "system", "content": _personality_prompt(tone)}] + facts + taste + messages_tail
     return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
 
@@ -533,6 +558,57 @@ async def weather_precompute_loop(config: FeltConfig) -> None:
         except Exception:
             logger.exception("weather precompute loop iteration failed")
         await asyncio.sleep(_WEATHER_PRECOMPUTE_INTERVAL_S)
+
+
+_MUSIC_TASTE_POLL_INTERVAL_S = 15.0
+
+
+def _finished_play_from_transition(previous: dict | None, current: dict | None) -> dict | None:
+    """Pure: `previous`/`current` are get_currently_playing snapshots (or
+    None) from two consecutive polls. A listen "finishes" - and gets
+    returned as a record ready for db.record_music_play(**record) - when
+    the track id changed or playback stopped since `previous`; returns
+    None when the same track is still playing, or there was nothing
+    playing before to finish. `played_ms` is `previous`'s last-seen
+    progress, not a precise stop time - it can undercount actual listen
+    time by up to one poll interval, an accepted approximation."""
+    if previous is None:
+        return None
+    prev_track = previous["track"]
+    current_track = current["track"] if current else None
+    if current_track is not None and current_track["id"] == prev_track["id"]:
+        return None
+    return {
+        "track_id": prev_track["id"],
+        "track_name": prev_track.get("name", ""),
+        "artists": ", ".join(a["name"] for a in prev_track.get("artists", [])),
+        "played_ms": previous["progress_ms"],
+        "duration_ms": previous["duration_ms"],
+        "skipped": is_skip(previous["progress_ms"], previous["duration_ms"]),
+    }
+
+
+async def music_taste_loop(config: FeltConfig) -> None:
+    """WP-16 Part 2: polls Spotify's currently-playing endpoint to build a
+    skip/full-play history per track (see music_taste.summarize_taste for
+    how it's surfaced back into the prompt). Runs independently of
+    felt-tray's own /v1/music/now polling (that one drives unprompted
+    "oh, this one again" remarks, not taste tracking) - both happen to
+    poll at a similar cadence for different reasons, and neither depends
+    on the other."""
+    previous: dict | None = None
+    async with httpx.AsyncClient(timeout=20) as client:
+        while True:
+            try:
+                if config.spotify_refresh_token:
+                    current = await get_currently_playing(client, config)
+                    finished = _finished_play_from_transition(previous, current)
+                    if finished:
+                        record_music_play(config.db_path, **finished)
+                    previous = current
+            except Exception:
+                logger.exception("music taste loop iteration failed")
+            await asyncio.sleep(_MUSIC_TASTE_POLL_INTERVAL_S)
 
 
 async def chat(

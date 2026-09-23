@@ -22,6 +22,13 @@ _API_BASE = "https://api.spotify.com/v1"
 
 _token_cache: dict = {"access_token": None, "expires_at": 0.0}
 
+# WP-16: currently-playing is polled a lot (the now_playing skill, the
+# /v1/music/now endpoint felt-tray hits every ~15s, and music_taste_loop's
+# own poll) - a short cache keeps that from turning into a Spotify API call
+# per request. Same module-level pattern as _token_cache above.
+_now_playing_cache: dict = {"data": "unset", "cached_at": 0.0}
+_NOW_PLAYING_CACHE_TTL_S = 10.0
+
 
 async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
     if _token_cache["access_token"] and time.monotonic() < _token_cache["expires_at"] - 60:
@@ -52,6 +59,43 @@ async def search_track(client: httpx.AsyncClient, config: FeltConfig, query: str
     response.raise_for_status()
     items = response.json().get("tracks", {}).get("items", [])
     return items[0] if items else None
+
+
+async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+    """WP-16 Part 2: `{track, progress_ms, duration_ms, is_playing}` or
+    None when nothing's loaded (204 No Content, or no `item` in the body -
+    both happen, e.g. an empty queue after the last track ends). `track`
+    is the raw Spotify track object (same shape search_track returns), so
+    callers can reuse format_track_name directly instead of re-flattening
+    it themselves."""
+    now = time.monotonic()
+    if _now_playing_cache["data"] != "unset" and now < _now_playing_cache["cached_at"] + _NOW_PLAYING_CACHE_TTL_S:
+        return _now_playing_cache["data"]
+
+    token = await _get_access_token(client, config)
+    response = await client.get(
+        f"{_API_BASE}/me/player/currently-playing", headers={"Authorization": f"Bearer {token}"}
+    )
+    if response.status_code == 204:
+        result = None
+    else:
+        response.raise_for_status()
+        body = response.json()
+        item = body.get("item")
+        result = (
+            None
+            if item is None
+            else {
+                "track": item,
+                "progress_ms": body.get("progress_ms") or 0,
+                "duration_ms": item.get("duration_ms") or 0,
+                "is_playing": bool(body.get("is_playing")),
+            }
+        )
+
+    _now_playing_cache["data"] = result
+    _now_playing_cache["cached_at"] = now
+    return result
 
 
 async def list_devices(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:
