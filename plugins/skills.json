@@ -25,5 +25,6 @@
   "delegate_research": "gated",
   "search_documents": "local",
   "remember_fact": "local",
-  "find_phone": "local"
+  "find_phone": "local",
+  "change_shirt": "public"
 }

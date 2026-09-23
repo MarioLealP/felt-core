@@ -20,15 +20,15 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from felt_core import metrics, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
-from felt_core.brain import chat, process_screen_context, weather_precompute_loop
-from felt_core.cloud import cloud_status
+from felt_core.brain import chat, process_screen_context, react_to_screen, weather_precompute_loop
+from felt_core.cloud import CloudUnavailable, cloud_status
 from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
@@ -91,7 +91,14 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Transcribed-Text", "X-Reply-Text", "X-UI-Action", "X-Animation-Tag", "Server-Timing"],
+    expose_headers=[
+        "X-Transcribed-Text",
+        "X-Reply-Text",
+        "X-UI-Action",
+        "X-Animation-Tag",
+        "Server-Timing",
+        "X-Emotion",
+    ],
 )
 
 
@@ -294,6 +301,46 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
             result.animation_tag,
             config,
             client,
+        )
+
+
+@app.post("/v1/react/screen")
+async def react_screen_endpoint(
+    image: UploadFile = File(...),
+    app_name: str = Form(..., alias="app"),
+    title: str = Form(""),
+    trigger: str = Form("focus"),
+    session_id: str = "dashboard",
+) -> Response:
+    """WP-07: felt-tray's new per-window capture path - the JPEG has
+    already cleared the blocklist client-side before this is ever called.
+    A single multimodal cloud_generate call, no local-Ollama fallback
+    (there's no local VLM on this server) - CloudUnavailable maps to a
+    503, and felt-tray's watcher falls back to the old felt-vision +
+    /v1/context/screen path itself when it sees that."""
+    config = load_config()
+    jpeg_bytes = await image.read()
+    try:
+        result = await react_to_screen(jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger)
+    except CloudUnavailable:
+        return JSONResponse(status_code=503, content={"detail": "cloud_unavailable"})
+
+    emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}
+
+    if not result.reply.strip():
+        headers = dict(emotion_headers)
+        if result.animation_tag is not None:
+            headers["X-Animation-Tag"] = quote(result.animation_tag)
+        return Response(content=b"", media_type="audio/wav", headers=headers)
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        return await _synthesize_reply(
+            result.reply,
+            asdict(result.ui_action) if result.ui_action else None,
+            result.animation_tag,
+            config,
+            client,
+            extra_headers=emotion_headers or None,
         )
 
 

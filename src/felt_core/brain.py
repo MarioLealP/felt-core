@@ -24,6 +24,7 @@ allowed to reach the cloud.
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -111,6 +112,10 @@ class ChatResult:
     reply: str
     ui_action: UIAction | None = None
     animation_tag: str | None = None
+    # WP-07's screen_reaction JSON contract only - one of a fixed set
+    # (happy/excited/amused/sad/annoyed/surprised/thinking/sleepy/neutral),
+    # None everywhere else.
+    emotion: str | None = None
 
 # Deliberately a plain keyword set, not another router call: a bare "yes"
 # has no content for a tool-vs-chat classifier to work with (the router
@@ -722,3 +727,120 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
     set_observation_reply(config.db_path, obs_id, reply_raw)
     save_message(config.db_path, session_id, "assistant", reply_raw)
     return ChatResult(reply=reply_raw, animation_tag=None)
+
+
+# WP-07's fixed emotion set - anything else that comes back gets folded to
+# "neutral" rather than passed through as an arbitrary string (X-Emotion
+# is meant to drive a small fixed set of expressions client-side, not an
+# open vocabulary).
+_EMOTION_VALUES = frozenset(
+    {"happy", "excited", "amused", "sad", "annoyed", "surprised", "thinking", "sleepy", "neutral"}
+)
+
+_SCREEN_REACT_INSTRUCTION = (
+    "Look at the screenshot. Respond with ONLY a JSON object, no other text, "
+    "no markdown code fences, with exactly these three fields:\n"
+    '{"seen": "<one short neutral sentence describing what is actually on '
+    'screen>", "line": "<your spoken reaction, max ~15 words, in character, '
+    "never mention screens or screenshots>\", "
+    '"emotion": "<one of: happy, excited, amused, sad, annoyed, surprised, '
+    'thinking, sleepy, neutral>"}'
+)
+
+
+def _parse_screen_react_json(raw: str) -> dict | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return data if isinstance(data, dict) else None
+
+
+async def react_to_screen(
+    jpeg_bytes: bytes,
+    app: str,
+    title: str,
+    config: FeltConfig,
+    session_id: str = "default",
+    trigger: str = "focus",
+) -> ChatResult:
+    """WP-07's new per-window, image-based screen reaction path. The
+    ONLY model call is a single multimodal cloud_generate("screen_reaction",
+    ..., images=[jpeg_bytes], json_mode=True) - images never reach the
+    local Ollama here, since there's no local VLM on the server. Unlike
+    process_screen_context there is deliberately no local fallback: a
+    cloud failure (CloudUnavailable) propagates straight up to the caller
+    (api.py maps it to a 503 cloud_unavailable), and felt-tray's watcher
+    falls back to the OLD felt-vision + process_screen_context() path
+    itself when it sees that.
+
+    `trigger="manual"` (WP-10's future "look at this" key) bypasses the
+    cooldown - every other trigger respects it, checked BEFORE any model
+    call, same as process_screen_context."""
+    if trigger != "manual":
+        seconds_since = seconds_since_last_spoken_reaction(config.db_path, session_id)
+        if seconds_since is not None and seconds_since < config.screen_reaction_cooldown_s:
+            logger.info(
+                "screen reaction: on cooldown (%.0fs since last spoken reaction, need %ds) - no model call",
+                seconds_since,
+                config.screen_reaction_cooldown_s,
+            )
+            return ChatResult(reply="", animation_tag=None)
+
+    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
+    system = f"{_PERSONALITY_PROMPT}\n\n{observations_block}"
+    context_line = f'App: {app} — "{title}"'
+
+    raw = await cloud_generate(
+        "screen_reaction",
+        system,
+        [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}"}],
+        config,
+        images=[jpeg_bytes],
+        json_mode=True,
+    )
+    parsed = _parse_screen_react_json(raw)
+
+    if parsed is None:
+        logger.warning("screen reaction: JSON parse failed on the first attempt, retrying once")
+        retry_raw = await cloud_generate(
+            "screen_reaction",
+            system,
+            [
+                {
+                    "role": "user",
+                    "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}\n\n"
+                    "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
+                }
+            ],
+            config,
+            images=[jpeg_bytes],
+        )
+        parsed = _parse_screen_react_json(retry_raw)
+
+    if parsed is None:
+        logger.warning("screen reaction: JSON parse failed twice - giving up, no reaction")
+        return ChatResult(reply="", animation_tag=None)
+
+    seen = str(parsed.get("seen") or "").strip()
+    line = str(parsed.get("line") or "").strip()
+    emotion = parsed.get("emotion")
+    emotion = emotion if emotion in _EMOTION_VALUES else "neutral"
+
+    obs_id = save_observation(config.db_path, session_id, seen or f"(on screen: {app})")
+
+    if not line:
+        logger.warning("screen reaction: JSON parsed but 'line' was empty - no reaction")
+        return ChatResult(reply="", animation_tag=None)
+
+    set_observation_reply(config.db_path, obs_id, line)
+    save_message(config.db_path, session_id, "assistant", line)
+    return ChatResult(reply=line, animation_tag=None, emotion=emotion)
