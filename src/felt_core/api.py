@@ -142,6 +142,10 @@ async def cloud_metrics_endpoint() -> dict:
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+    # WP-15: felt-animation's GET /tone line (mood x time-of-day + streak
+    # awareness), fetched and attached by felt-tray/felt-dashboard. Optional
+    # so an older client (or one with no felt-animation running) is unaffected.
+    tone: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -159,7 +163,7 @@ class ChatResponse(BaseModel):
 @app.post("/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     config = load_config()
-    result = await chat(req.message, config, req.session_id)
+    result = await chat(req.message, config, req.session_id, req.tone)
     return ChatResponse(
         reply=result.reply,
         ui_action=asdict(result.ui_action) if result.ui_action else None,
@@ -215,7 +219,9 @@ async def _synthesize_reply(
 
 
 @app.post("/v1/voice-chat")
-async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "default") -> Response:
+async def voice_chat_endpoint(
+    file: UploadFile = File(...), session_id: str = "default", tone: str | None = Form(None)
+) -> Response:
     """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
     the brain -> felt-voice (TTS), so a client doesn't have to."""
     config = load_config()
@@ -233,7 +239,7 @@ async def voice_chat_endpoint(file: UploadFile = File(...), session_id: str = "d
         ui_action: dict[str, Any] | None = None
         animation_tag: str | None = None
         if transcribed.strip():
-            result = await chat(transcribed, config, session_id)
+            result = await chat(transcribed, config, session_id, tone)
             reply = result.reply
             ui_action = asdict(result.ui_action) if result.ui_action else None
             animation_tag = result.animation_tag
@@ -264,7 +270,7 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
     if not config.voice_url:
         raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
 
-    result = await chat(req.message, config, req.session_id)
+    result = await chat(req.message, config, req.session_id, req.tone)
     async with httpx.AsyncClient(timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
@@ -277,6 +283,7 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
 
 class ScreenContextRequest(BaseModel):
     description: str
+    tone: str | None = None
 
 
 @app.post("/v1/context/screen")
@@ -285,7 +292,7 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
     Returns audio+animation headers just like chat, but handles pure-silent
     reactions by skipping TTS entirely."""
     config = load_config()
-    result = await process_screen_context(req.description, config, session_id)
+    result = await process_screen_context(req.description, config, session_id, req.tone)
 
     if not result.reply.strip():
         # Pure silent body-language reaction
@@ -311,6 +318,7 @@ async def react_screen_endpoint(
     title: str = Form(""),
     trigger: str = Form("focus"),
     session_id: str = "dashboard",
+    tone: str | None = Form(None),
 ) -> Response:
     """WP-07: felt-tray's new per-window capture path - the JPEG has
     already cleared the blocklist client-side before this is ever called.
@@ -321,7 +329,9 @@ async def react_screen_endpoint(
     config = load_config()
     jpeg_bytes = await image.read()
     try:
-        result = await react_to_screen(jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger)
+        result = await react_to_screen(
+            jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger, tone=tone
+        )
     except CloudUnavailable:
         return JSONResponse(status_code=503, content={"detail": "cloud_unavailable"})
 

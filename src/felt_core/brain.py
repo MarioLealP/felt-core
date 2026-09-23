@@ -85,6 +85,19 @@ _PERSONALITY_PROMPT = (
     "way a person would out loud; lead with the answer."
 )
 
+
+def _personality_prompt(tone: str | None = None) -> str:
+    """WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day
+    + streak awareness - felt-tray/felt-dashboard fetch it and attach it to
+    /v1/react/screen, /v1/voice-chat, /v1/text-chat). None on an older
+    client, felt-animation unreachable, or a call site that doesn't carry
+    one (the pending-email summary, the weather precompute) - the base
+    personality prompt alone is always a safe, complete system prompt on
+    its own, this is purely additive."""
+    if not tone:
+        return _PERSONALITY_PROMPT
+    return f"{_PERSONALITY_PROMPT}\n\nRight now: {tone}"
+
 # How much recent conversation rides along with a cloud-routed reply
 # (2026-09-21, Mario: "we need some context window based on previous
 # messages"). Bounded, not the full session - re-verified SAFE as a whole
@@ -239,7 +252,7 @@ def _format_for_privacy_check(history: list[dict], message: str) -> str:
     return "\n".join(lines)
 
 
-async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> str:
+async def _cloud_chat(message: str, history: list[dict], config: FeltConfig, tone: str | None = None) -> str:
     """Routes through cloud.cloud_generate's "conversation" purpose
     (WP-05) - NOT ninerouter/Antigravity, which contaminates every reply
     with its own coding-agent identity no matter what system prompt is
@@ -254,7 +267,7 @@ async def _cloud_chat(message: str, history: list[dict], config: FeltConfig) -> 
     at the call sites."""
     recent = history[-CLOUD_CONTEXT_MESSAGES:]
     return await cloud_generate(
-        "conversation", _PERSONALITY_PROMPT, recent + [{"role": "user", "content": message}], config
+        "conversation", _personality_prompt(tone), recent + [{"role": "user", "content": message}], config
     )
 
 
@@ -266,7 +279,9 @@ def _facts_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
 
 
-async def _local_reply(messages_tail: list[dict], config: FeltConfig, *, include_facts: bool) -> str:
+async def _local_reply(
+    messages_tail: list[dict], config: FeltConfig, *, include_facts: bool, tone: str | None = None
+) -> str:
     """The local (Ollama) reply path, factored out of three near-identical
     call sites (2026-09-22, WP-02) - plain chat's fallback, and both of
     screen-context's local branches. Always carries the personality
@@ -274,11 +289,13 @@ async def _local_reply(messages_tail: list[dict], config: FeltConfig, *, include
     caller, since screen-reaction replies don't need them (WP-02: "Facts
     are not needed; don't include them")."""
     facts = _facts_context(config) if include_facts else []
-    messages = [{"role": "system", "content": _PERSONALITY_PROMPT}] + facts + messages_tail
+    messages = [{"role": "system", "content": _personality_prompt(tone)}] + facts + messages_tail
     return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
 
-async def _chat_reply(message: str, history: list[dict], config: FeltConfig, safe: bool | None) -> str:
+async def _chat_reply(
+    message: str, history: list[dict], config: FeltConfig, safe: bool | None, tone: str | None = None
+) -> str:
     """The actual reply-generation step for plain conversation (no skill
     involved) - routes to the cloud only when a Gemini API key is
     configured AND `safe` (the privacy classifier's verdict on the recent
@@ -295,7 +312,7 @@ async def _chat_reply(message: str, history: list[dict], config: FeltConfig, saf
     if config.gemini_api_key and safe:
         try:
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_conversation):
-                reply = await _cloud_chat(message, history, config)
+                reply = await _cloud_chat(message, history, config, tone)
             logger.info("chat reply: routed to cloud (%s)", config.cloud_model_conversation)
             return reply
         except Exception:
@@ -303,7 +320,7 @@ async def _chat_reply(message: str, history: list[dict], config: FeltConfig, saf
     logger.info("chat reply: local (%s)", config.ollama_model)
     async with metrics.timed("reply", route="local", model=config.ollama_model):
         return await _local_reply(
-            history + [{"role": "user", "content": message}], config, include_facts=True
+            history + [{"role": "user", "content": message}], config, include_facts=True, tone=tone
         )
 
 
@@ -360,6 +377,7 @@ async def _phrase_skill_result(
     base: list[dict],
     skill_privacy: str,
     config: FeltConfig,
+    tone: str | None = None,
 ) -> str:
     """Routes a skill's result to cloud or local phrasing by its privacy
     class (plugins/skills.json, WP-06, Mario 2026-09-22: "fetching data
@@ -399,7 +417,7 @@ async def _phrase_skill_result(
             ]
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_volume):
                 cloud_reply = await cloud_generate(
-                    "skill_phrasing", _PERSONALITY_PROMPT, messages, config, max_tokens=_SKILL_PHRASING_MAX_TOKENS
+                    "skill_phrasing", _personality_prompt(tone), messages, config, max_tokens=_SKILL_PHRASING_MAX_TOKENS
                 )
             # An empty string isn't an exception - cloud_generate returns
             # it deliberately (cloud.py's _extract_text) when a model's
@@ -415,7 +433,7 @@ async def _phrase_skill_result(
 
     async with metrics.timed("reply", route="local", model=config.ollama_model):
         return await _ollama_chat(
-            [{"role": "system", "content": _PERSONALITY_PROMPT}]
+            [{"role": "system", "content": _personality_prompt(tone)}]
             + base
             + [
                 {"role": "user", "content": message},
@@ -517,7 +535,9 @@ async def weather_precompute_loop(config: FeltConfig) -> None:
         await asyncio.sleep(_WEATHER_PRECOMPUTE_INTERVAL_S)
 
 
-async def chat(message: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
+async def chat(
+    message: str, config: FeltConfig, session_id: str = "default", tone: str | None = None
+) -> ChatResult:
     # Checked before anything else, including history/facts loading — a
     # bare "yes" answering the proactive "want me to summarize it?" ping
     # (email_watcher.py) has to be caught here or it falls through to the
@@ -605,7 +625,7 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
                 safe = await privacy_task
             except Exception:
                 safe = False
-        reply = await _chat_reply(message, history, config, safe)
+        reply = await _chat_reply(message, history, config, safe, tone)
         save_message(config.db_path, session_id, "assistant", reply)
         return ChatResult(reply=reply)
 
@@ -635,7 +655,7 @@ async def chat(message: str, config: FeltConfig, session_id: str = "default") ->
         tool_output = f"Error: {e}"
 
     skill_privacy = registry[skill_name].privacy if skill_name in registry else "local"
-    reply = await _phrase_skill_result(message, tool_output, history, base, skill_privacy, config)
+    reply = await _phrase_skill_result(message, tool_output, history, base, skill_privacy, config, tone)
     save_message(config.db_path, session_id, "assistant", reply)
 
     if result is None:
@@ -663,7 +683,9 @@ def _observations_block(observations: list[dict]) -> str:
     return f"Recently on screen (oldest first):\n{lines}"
 
 
-async def process_screen_context(description: str, config: FeltConfig, session_id: str = "default") -> ChatResult:
+async def process_screen_context(
+    description: str, config: FeltConfig, session_id: str = "default", tone: str | None = None
+) -> ChatResult:
     """Handles passive screen context from felt-vision - always produces a
     spoken reaction (Mario's rule), rate-limited by a deterministic
     cooldown rather than the model deciding to stay silent.
@@ -709,6 +731,7 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
                 + [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
                 config,
                 include_facts=False,
+                tone=tone,
             )
 
     if config.gemini_api_key and await is_safe_for_cloud(description, config):
@@ -723,7 +746,7 @@ async def process_screen_context(description: str, config: FeltConfig, session_i
             # volume/Gemma model), not "conversation".
             reply_raw = await cloud_generate(
                 "screen_reaction",
-                f"{_PERSONALITY_PROMPT}\n\n{observations_block}",
+                f"{_personality_prompt(tone)}\n\n{observations_block}",
                 [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
                 config,
             )
@@ -794,6 +817,7 @@ async def react_to_screen(
     config: FeltConfig,
     session_id: str = "default",
     trigger: str = "focus",
+    tone: str | None = None,
 ) -> ChatResult:
     """WP-07's new per-window, image-based screen reaction path. The
     ONLY model call is a single multimodal cloud_generate("screen_reaction",
@@ -819,7 +843,7 @@ async def react_to_screen(
             return ChatResult(reply="", animation_tag=None)
 
     observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
-    system = f"{_PERSONALITY_PROMPT}\n\n{observations_block}"
+    system = f"{_personality_prompt(tone)}\n\n{observations_block}"
     context_line = f'App: {app} — "{title}"'
 
     raw = await cloud_generate(

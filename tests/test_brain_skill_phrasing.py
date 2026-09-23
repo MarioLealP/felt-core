@@ -159,7 +159,7 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
 
     captured = {}
 
-    async def fake_phrase_skill_result(message, tool_output, history, base, skill_privacy, cfg):
+    async def fake_phrase_skill_result(message, tool_output, history, base, skill_privacy, cfg, tone=None):
         captured["tool_output"] = tool_output
         return "phrased reply"
 
