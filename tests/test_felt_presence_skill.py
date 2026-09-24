@@ -27,9 +27,18 @@ async def test_unhush_intent_returns_an_unhush_ui_action():
     assert result.ui_action.payload == {"action": "unhush"}
 
 
-async def test_missing_intent_defaults_to_hush():
+async def test_missing_intent_takes_no_action():
+    # An LLM misroute must never hush her (never-truly-quiet rule).
     result = await skill.handle({}, ctx=None)
-    assert result.ui_action.payload["action"] == "hush"
+    assert result.ui_action is None
+
+
+async def test_unknown_intent_takes_no_action_and_logs(caplog):
+    with caplog.at_level("WARNING"):
+        result = await skill.handle({"intent": "tell_me_a_joke"}, ctx=None)
+    assert result.ui_action is None
+    assert result.text
+    assert "tell_me_a_joke" in caplog.text
 
 
 async def test_talk_again_phrasing_maps_to_unhush():

@@ -13,6 +13,8 @@ here go through the normal router (see router.py's worked example) - none
 of them are as time-critical as being told to shut up mid-sentence.
 """
 
+import logging
+
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult, UIAction
 
@@ -97,7 +99,15 @@ _FALLBACK_SUBSTRINGS = [
 ]
 
 
-def _canonical_intent(raw: str) -> str:
+logger = logging.getLogger(__name__)
+
+# What she says when the router sent something here that isn't a presence
+# control at all - nothing changes, and the phrasing step turns it into a
+# natural "huh?" rather than silence.
+_UNKNOWN_INTENT_TEXT = "That didn't match any of my presence controls, so nothing changed."
+
+
+def _canonical_intent(raw: str) -> str | None:
     key = raw.strip().lower().replace(" ", "_")
     if key in _INTENT_REPLIES:
         return key
@@ -107,11 +117,17 @@ def _canonical_intent(raw: str) -> str:
     for phrase, canonical in _FALLBACK_SUBSTRINGS:
         if phrase in spaced:
             return canonical
-    return "shut_up"  # WP-09's own original fail-safe default
+    # No match: None, never a guess. This used to default to shut_up,
+    # which let an LLM misroute hush her - against the "never truly
+    # quiet" rule (only Mario may hush her; audit 2026-09-24).
+    return None
 
 
 async def handle(params, ctx):
-    raw_intent = str(get_single_param(params, "intent") or "shut_up")
-    intent = _canonical_intent(raw_intent)
+    raw_intent = str(get_single_param(params, "intent") or "")
+    intent = _canonical_intent(raw_intent) if raw_intent.strip() else None
+    if intent is None:
+        logger.warning("felt_presence: unknown/missing intent %r - taking no action", raw_intent)
+        return SkillResult(text=_UNKNOWN_INTENT_TEXT)
     text, payload = _INTENT_REPLIES[intent]
     return SkillResult(text=text, ui_action=UIAction(kind="presence", payload=payload))
