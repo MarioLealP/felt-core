@@ -270,10 +270,16 @@ async def _cloud_chat(message: str, history: list[dict], config: FeltConfig, ton
     Exception broadly and fall back to local, so no new handling needed
     at the call sites."""
     recent = history[-CLOUD_CONTEXT_MESSAGES:]
+    # Music taste goes into the system instruction, not `messages` - the
+    # Gemini API has no system role there, so a "system" entry would be
+    # sent as a user turn (audit 2026-09-24).
+    system = _personality_prompt(tone)
+    for note in _music_taste_context(config):
+        system = f"{system}\n\n{note['content']}"
     return await cloud_generate(
         "conversation",
-        _personality_prompt(tone),
-        _music_taste_context(config) + recent + [{"role": "user", "content": message}],
+        system,
+        recent + [{"role": "user", "content": message}],
         config,
     )
 

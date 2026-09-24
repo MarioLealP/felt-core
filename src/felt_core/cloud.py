@@ -33,7 +33,7 @@ from felt_core.config import FeltConfig
 
 logger = logging.getLogger(__name__)
 
-Purpose = Literal["conversation", "screen_reaction", "routing", "skill_phrasing", "summary"]
+Purpose = Literal["conversation", "screen_reaction", "routing", "skill_phrasing", "summary", "event_reaction"]
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 _REST_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -54,7 +54,10 @@ _DEFAULT_LIMITS: dict[str, dict[str, int]] = {
 # capped to 60% of ITS OWN model's RPD so a burst of screen reactions
 # can't starve the other two purposes for the rest of the day (Mario's
 # rule is "always spoken," but that can't come at routing/phrasing's
-# expense).
+# expense). Applied on EVERY model screen_reaction can land on, overflow
+# included - otherwise, once the volume model's share is used up, screen
+# traffic drains the overflow model (conversation's only fallback) with
+# no cap at all (audit 2026-09-24).
 _SCREEN_REACTION_RPD_SHARE = 0.6
 # Stay this far under the real limit before it's actually hit - a
 # request mid-flight when a counter ticks over shouldn't be the one that
@@ -94,7 +97,7 @@ _exhausted_until: dict[str, tuple[float, str]] = {}
 
 
 def _purpose_models(purpose: Purpose, config: FeltConfig) -> list[str]:
-    if purpose in ("screen_reaction", "routing", "skill_phrasing"):
+    if purpose in ("screen_reaction", "routing", "skill_phrasing", "event_reaction"):
         return [m for m in (config.cloud_model_volume, config.cloud_model_overflow) if m]
     return [m for m in (config.cloud_model_conversation, config.cloud_model_overflow) if m]
 
@@ -163,7 +166,7 @@ def _has_rpd_budget(config: FeltConfig, model: str, purpose: Purpose, pt_day: st
         used = get_model_usage_today(config.db_path, model, pt_day)
         if used >= rpd * _SAFETY_MARGIN:
             return False
-        if purpose == "screen_reaction" and model == config.cloud_model_volume:
+        if purpose == "screen_reaction":
             screen_used = get_purpose_usage_today(config.db_path, model, "screen_reaction", pt_day)
             if screen_used >= rpd * _SCREEN_REACTION_RPD_SHARE:
                 return False
@@ -353,6 +356,15 @@ async def cloud_generate(
     if not config.gemini_api_key:
         raise CloudUnavailable("no Gemini API key configured")
 
+    # The Gemini API only has user/model turns - a "system"-role entry in
+    # `messages` would be sent as if Mario had said it. Any such entry (a
+    # context note a caller mixed into its history) is folded into the
+    # real system instruction instead.
+    system_notes = [m.get("content", "") for m in messages if m.get("role") == "system"]
+    if system_notes:
+        system = "\n\n".join([system, *system_notes])
+        messages = [m for m in messages if m.get("role") != "system"]
+
     candidates = _purpose_models(purpose, config)
     if not candidates:
         raise CloudUnavailable(f"no cloud model configured for purpose {purpose!r}")
@@ -393,7 +405,17 @@ async def cloud_generate(
                     purpose,
                 )
                 continue
-            raise
+            # Any other API error (400/500/503...): try the purpose's next
+            # model, and if none is left surface it as CloudUnavailable like
+            # every other cloud failure - so every caller's fallback (the
+            # local path, felt-tray's felt-vision path on a 503) actually
+            # runs instead of the request 500ing (audit 2026-09-24).
+            logger.warning("cloud model %r failed for purpose %r (%s) - trying next candidate", model, purpose, e)
+            continue
+        except httpx.HTTPError as e:
+            last_error = e
+            logger.warning("cloud model %r unreachable for purpose %r (%r) - trying next candidate", model, purpose, e)
+            continue
 
     raise CloudUnavailable(f"no available cloud model for purpose {purpose!r}") from last_error
 
