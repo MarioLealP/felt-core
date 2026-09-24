@@ -865,12 +865,13 @@ async def process_screen_context(
             # be a "system"-tagged history entry now lives in `system`
             # instead. Routes through the "screen_reaction" purpose (the
             # volume/Gemma model), not "conversation".
-            reply_raw = await cloud_generate(
-                "screen_reaction",
-                f"{_personality_prompt(tone)}\n\n{observations_block}",
-                [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
-                config,
-            )
+            async with metrics.timed("screen_reaction", route="cloud", model=config.cloud_model_volume):
+                reply_raw = await cloud_generate(
+                    "screen_reaction",
+                    f"{_personality_prompt(tone)}\n\n{observations_block}",
+                    [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                    config,
+                )
         except Exception:
             logger.exception("cloud screen context failed, falling back to local")
             reply_raw = await _local_attempt()
@@ -967,32 +968,35 @@ async def react_to_screen(
     system = f"{_personality_prompt(tone)}\n\n{observations_block}"
     context_line = f'App: {app} — "{title}"'
 
-    raw = await cloud_generate(
-        "screen_reaction",
-        system,
-        [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}"}],
-        config,
-        images=[jpeg_bytes],
-        json_mode=True,
-    )
-    parsed = _parse_screen_react_json(raw)
-
-    if parsed is None:
-        logger.warning("screen reaction: JSON parse failed on the first attempt, retrying once")
-        retry_raw = await cloud_generate(
+    # WP-04's screen_reaction stage (the model call(s), cloud route) -
+    # WP-05 had left only the generic `cloud` stage here (audit 2026-09-24).
+    async with metrics.timed("screen_reaction", route="cloud", model=config.cloud_model_volume):
+        raw = await cloud_generate(
             "screen_reaction",
             system,
-            [
-                {
-                    "role": "user",
-                    "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}\n\n"
-                    "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
-                }
-            ],
+            [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}"}],
             config,
             images=[jpeg_bytes],
+            json_mode=True,
         )
-        parsed = _parse_screen_react_json(retry_raw)
+        parsed = _parse_screen_react_json(raw)
+
+        if parsed is None:
+            logger.warning("screen reaction: JSON parse failed on the first attempt, retrying once")
+            retry_raw = await cloud_generate(
+                "screen_reaction",
+                system,
+                [
+                    {
+                        "role": "user",
+                        "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}\n\n"
+                        "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
+                    }
+                ],
+                config,
+                images=[jpeg_bytes],
+            )
+            parsed = _parse_screen_react_json(retry_raw)
 
     if parsed is None:
         logger.warning("screen reaction: JSON parse failed twice - giving up, no reaction")

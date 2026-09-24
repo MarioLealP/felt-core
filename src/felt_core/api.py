@@ -108,14 +108,25 @@ app.add_middleware(
 )
 
 
+# Polling / status / metrics reads - not user-facing turns, never timed.
+_UNTIMED_PATHS = ("/v1/metrics/", "/v1/music/now", "/v1/music/lyrics", "/v1/history", "/v1/health", "/v1/status")
+
+
+def _is_untimed(path: str) -> bool:
+    return any(path.startswith(p) for p in _UNTIMED_PATHS)
+
+
 @app.middleware("http")
 async def latency_middleware(request: Request, call_next):
     """Times every /v1/* request end-to-end and stamps a standard
     Server-Timing header on the response, built from whatever brain.py/
     api.py stages recorded via metrics.timed() during the request (WP-04).
     Non-/v1/ paths (static assets, /openapi.json) aren't worth the
-    request_id/SQLite overhead."""
-    if not request.url.path.startswith("/v1/"):
+    request_id/SQLite overhead - and neither are the polling/status reads
+    (_UNTIMED_PATHS): felt-tray polls /v1/music/now every 15 s, and those
+    near-instant rows swamped the `total` stage's percentiles, hiding the
+    real turn latency (audit 2026-09-24)."""
+    if not request.url.path.startswith("/v1/") or _is_untimed(request.url.path):
         return await call_next(request)
 
     config = load_config()

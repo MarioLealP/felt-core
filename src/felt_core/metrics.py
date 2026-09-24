@@ -13,6 +13,7 @@ wrapped in try/except + log, never allowed to propagate.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -61,11 +62,20 @@ def record(stage: str, ms: float, **tags) -> None:
 
 @asynccontextmanager
 async def timed(stage: str, **tags):
+    """Records the stage when it finishes - normally or by raising - but
+    NOT when it was cancelled: a cancelled stage (e.g. chat()'s concurrent
+    privacy check, cancelled once a skill is picked) never ran to
+    completion, so its duration isn't a timing of that stage at all and
+    would drag the percentiles down (audit 2026-09-24)."""
     start = time.monotonic()
     try:
         yield
-    finally:
+    except asyncio.CancelledError:
+        raise
+    except BaseException:
         record(stage, (time.monotonic() - start) * 1000.0, **tags)
+        raise
+    record(stage, (time.monotonic() - start) * 1000.0, **tags)
 
 
 def _save_stage(metrics: _RequestMetrics, stage: str, ms: float, tags: dict) -> None:
