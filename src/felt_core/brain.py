@@ -563,6 +563,18 @@ async def weather_precompute_loop(config: FeltConfig) -> None:
 _MUSIC_TASTE_POLL_INTERVAL_S = 15.0
 
 
+def _track_key(track: dict | None) -> str | None:
+    """A stable identity for a Spotify item. Local files (and some other
+    non-catalogue items) come back with `id: null` but still carry a
+    `uri` ("spotify:local:..."), so that's the fallback key. None means
+    the item can't be keyed at all and is simply not tracked - the
+    music_taste table's track_id is NOT NULL, and a null id there wedged
+    music_taste_loop on one item every 15 s (audit 2026-09-24)."""
+    if not track:
+        return None
+    return track.get("id") or track.get("uri") or None
+
+
 def _finished_play_from_transition(previous: dict | None, current: dict | None) -> dict | None:
     """Pure: `previous`/`current` are get_currently_playing snapshots (or
     None) from two consecutive polls. A listen "finishes" - and gets
@@ -575,11 +587,15 @@ def _finished_play_from_transition(previous: dict | None, current: dict | None) 
     if previous is None:
         return None
     prev_track = previous["track"]
+    prev_key = _track_key(prev_track)
+    if prev_key is None:
+        # Nothing to key the listen on (no id, no uri) - not recordable.
+        return None
     current_track = current["track"] if current else None
-    if current_track is not None and current_track["id"] == prev_track["id"]:
+    if current_track is not None and _track_key(current_track) == prev_key:
         return None
     return {
-        "track_id": prev_track["id"],
+        "track_id": prev_key,
         "track_name": prev_track.get("name", ""),
         "artists": ", ".join(a["name"] for a in prev_track.get("artists", [])),
         "played_ms": previous["progress_ms"],
@@ -603,9 +619,15 @@ async def music_taste_loop(config: FeltConfig) -> None:
                 if config.spotify_refresh_token:
                     current = await get_currently_playing(client, config)
                     finished = _finished_play_from_transition(previous, current)
-                    if finished:
-                        record_music_play(config.db_path, **finished)
+                    # Advance BEFORE recording: a record that fails must
+                    # never leave `previous` pointing at the same item, or
+                    # every later poll retries (and fails on) it forever.
                     previous = current
+                    if finished:
+                        try:
+                            record_music_play(config.db_path, **finished)
+                        except Exception:
+                            logger.exception("music taste: couldn't record %r, skipping it", finished.get("track_name"))
             except Exception:
                 logger.exception("music taste loop iteration failed")
             await asyncio.sleep(_MUSIC_TASTE_POLL_INTERVAL_S)
