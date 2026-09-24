@@ -27,6 +27,13 @@ class FeltConfig(BaseSettings):
     # often she reacts). See brain.py's process_screen_context.
     screen_reaction_cooldown_s: int = 90
 
+    # /v1/react/event (events.py): minimum seconds between any two of her
+    # unprompted remarks (event lines and spoken screen reactions), plus an
+    # optional JSON override of the per-event policy table, e.g.
+    # '{"music_new_track": {"cooldown_s": 600}, "afk_end": {"min_duration_s": 1200}}'.
+    event_reaction_min_gap_s: int = 30
+    event_policies: str = ""
+
     # felt-voice — STT/TTS service. Unset means voice-chat simply isn't
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None

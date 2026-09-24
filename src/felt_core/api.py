@@ -43,6 +43,7 @@ from felt_core.db import (
     set_shopping_item_checked,
 )
 from felt_core.email_watcher import watch as email_watch
+from felt_core.events import react_to_event
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
@@ -104,6 +105,7 @@ app.add_middleware(
         "X-Animation-Tag",
         "Server-Timing",
         "X-Emotion",
+        "X-Reaction-Skipped",
     ],
 )
 
@@ -369,6 +371,44 @@ async def react_screen_endpoint(
             client,
             extra_headers=emotion_headers or None,
         )
+
+
+class EventReactionRequest(BaseModel):
+    event: str
+    details: dict[str, Any] = {}
+    # WP-15 tone line, same optional field the screen endpoints take.
+    tone: str | None = None
+
+
+@app.post("/v1/react/event")
+async def react_event_endpoint(req: EventReactionRequest, session_id: str = "dashboard") -> Response:
+    """A short spoken reaction to a desktop event (events.py) - e.g.
+    {"event": "music_new_track", "details": {"title", "artist", "album"}}.
+
+    Same response contract as /v1/react/screen, so clients reuse their
+    handling: 200 audio/wav with X-Reply-Text (percent-encoded) and
+    X-Emotion when she speaks; 200 with an EMPTY body (and no
+    X-Reply-Text) when she doesn't - cooldown, dedupe, unknown event, too
+    short an absence - plus an additive X-Reaction-Skipped: <reason>
+    header saying why. 503 {"detail": "voice_unavailable"} only if TTS
+    isn't configured/reachable. Never stored as a screen observation."""
+    config = load_config()
+    if not config.voice_url:
+        return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
+
+    result = await react_to_event(req.event, req.details, config, session_id=session_id, tone=req.tone)
+    if not result.line:
+        return Response(
+            content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": quote(result.skipped or "none")}
+        )
+
+    emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            return await _synthesize_reply(result.line, None, None, config, client, extra_headers=emotion_headers or None)
+    except httpx.HTTPError:
+        logger.exception("event reaction: TTS failed for %r", result.line)
+        return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
 
 
 class TemperatureUnitRequest(BaseModel):

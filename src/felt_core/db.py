@@ -174,6 +174,22 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # /v1/react/event's spoken lines (events.py) - deliberately NOT
+    # screen_observations: an event isn't something seen on screen, and
+    # must never feed the screen-reaction cooldown/observations block. The
+    # rows are also the deterministic per-event cooldown/dedupe state.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS event_reactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            event TEXT NOT NULL,
+            dedupe_key TEXT,
+            line TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS latency (
@@ -255,12 +271,13 @@ def save_message(db_path: str, session_id: str, role: str, content: str) -> None
     conn.close()
 
 
-# Her own unprompted remarks (spoken screen reactions) are saved as
-# `assistant` messages so the chat window shows them, but they aren't
-# conversation - see get_history's exclude_remarks.
+# Her own unprompted remarks (spoken screen reactions, and /v1/react/event
+# lines) are saved as `assistant` messages so the chat window shows them,
+# but they aren't conversation - see get_history's exclude_remarks.
 _REMARK_EXCLUSION_SQL = (
-    " AND NOT (role = 'assistant' AND content IN ("
-    "SELECT spoken_reply FROM screen_observations WHERE session_id = ? AND spoken_reply IS NOT NULL))"
+    " AND NOT (role = 'assistant' AND ("
+    "content IN (SELECT spoken_reply FROM screen_observations WHERE session_id = ? AND spoken_reply IS NOT NULL)"
+    " OR content IN (SELECT line FROM event_reactions WHERE session_id = ?)))"
 )
 
 
@@ -282,7 +299,7 @@ def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks:
     # them from both the brain's own context and /v1/history without
     # deleting anything.
     exclusion = _REMARK_EXCLUSION_SQL if exclude_remarks else ""
-    params = (session_id, session_id, limit) if exclude_remarks else (session_id, limit)
+    params = (session_id, session_id, session_id, limit) if exclude_remarks else (session_id, limit)
     rows = conn.execute(
         "SELECT role, content FROM messages "
         "WHERE session_id = ? AND content NOT LIKE '[System Observation%'" + exclusion + " "
@@ -626,3 +643,34 @@ def get_music_taste_stats(db_path: str, limit: int = 200) -> list[dict]:
         {"track_id": track_id, "track_name": track_name, "artists": artists, "plays": plays, "skips": skips}
         for track_id, track_name, artists, plays, skips in rows
     ]
+
+
+def save_event_reaction(db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute(
+            "INSERT INTO event_reactions (session_id, event, dedupe_key, line) VALUES (?, ?, ?, ?)",
+            (session_id, event, dedupe_key, line),
+        )
+    conn.close()
+
+
+def seconds_since_last_event_reaction(
+    db_path: str, event: str | None = None, dedupe_key: str | None = None
+) -> float | None:
+    """Age of the most recent spoken event line - any event (event=None),
+    one event type, or one event+dedupe_key (e.g. the same track). None if
+    there's never been one. Global across sessions on purpose: there's one
+    Felt, and cooldowns are about how often SHE talks."""
+    query = "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
+    params: list = []
+    if event is not None:
+        query += " AND event = ?"
+        params.append(event)
+    if dedupe_key is not None:
+        query += " AND dedupe_key = ?"
+        params.append(dedupe_key)
+    conn = _connect(db_path)
+    row = conn.execute(query + " ORDER BY id DESC LIMIT 1", params).fetchone()
+    conn.close()
+    return row[0] if row else None
