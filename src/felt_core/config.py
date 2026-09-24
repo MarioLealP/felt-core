@@ -189,6 +189,10 @@ class FeltConfig(BaseSettings):
     # is a permanent cache (including negative results), unlike
     # currently-playing state's short in-process TTL.
     lyrics_cache_dir: str = "./data/lyrics"
+    # LRCLIB asks clients to identify themselves with a descriptive
+    # User-Agent. Neutral by default; set a contact address here per
+    # deployment if wanted - never hardcoded in code.
+    lyrics_user_agent: str = "felt-core/0.1 (personal assistant)"
 
     # Path of Exile 2 trade-API reference-data cache (poe_trade_cache.py)
     # — the item name -> base-type index + league list, refreshed weekly.

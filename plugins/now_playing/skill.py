@@ -49,6 +49,7 @@ async def handle(params, ctx):
                 ", ".join(a["name"] for a in track.get("artists", [])),
                 track.get("album", {}).get("name", ""),
                 now_playing["duration_ms"] // 1000,
+                user_agent=config.lyrics_user_agent,
             )
         except Exception:
             lyrics = None

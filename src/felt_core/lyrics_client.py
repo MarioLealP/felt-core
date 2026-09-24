@@ -7,6 +7,7 @@ synced form carries the per-line timestamps mouth-along/current-line
 lookups need.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -18,8 +19,15 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://lrclib.net/api"
 # LRCLIB asks integrators to identify themselves; unauthenticated but
-# still polite, same posture as poe_trade_cache.py's own User-Agent.
-_USER_AGENT = "felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)"
+# still polite. The real value comes from config (FELT_LYRICS_USER_AGENT)
+# so no contact address is hardcoded here - this neutral one is only the
+# fallback for a caller that doesn't pass one.
+DEFAULT_USER_AGENT = "felt-core/0.1 (personal assistant)"
+# Chorus lines: the most-repeated line, plus any other line repeated
+# nearly as often (a chorus is usually several lines that all repeat
+# together, not one).
+_CHORUS_COUNT_SLACK = 1
+_TRACK_ID_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 _LRC_LINE_RE = re.compile(r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$")
 # A chorus needs to actually repeat, not just coincide with a bridge/
@@ -48,13 +56,34 @@ def parse_lrc(text: str) -> list[dict]:
     return lines
 
 
-def find_chorus(lines: list[dict]) -> dict | None:
-    """Pure: the most-repeated non-empty line (>= _MIN_CHORUS_REPEATS
-    occurrences) - returns its first occurrence as
-    {"text", "start_ms", "end_ms"}, the window a mouth-along cue timeline
-    would be built over. `end_ms` is the next line's start time, or
-    `start_ms + _FINAL_LINE_WINDOW_MS` if it's the song's last line.
-    None if nothing repeats often enough to call a chorus."""
+def with_end_times(lines: list[dict]) -> list[dict]:
+    """Pure: parse_lrc's [{"time_ms", "text"}] -> [{"start_ms", "end_ms",
+    "text"}], each line ending where the next one starts (the last one
+    gets _FINAL_LINE_WINDOW_MS). The real per-line timings a desktop
+    client needs to build a mouth-along viseme timeline."""
+    out = []
+    for i, line in enumerate(lines):
+        end_ms = lines[i + 1]["time_ms"] if i + 1 < len(lines) else line["time_ms"] + _FINAL_LINE_WINDOW_MS
+        out.append({"start_ms": line["time_ms"], "end_ms": end_ms, "text": line["text"]})
+    return out
+
+
+def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | None:
+    """Pure: the chorus of a synced lyric - the most-repeated non-empty
+    line (>= _MIN_CHORUS_REPEATS occurrences), plus any other line
+    repeated nearly as often (within _CHORUS_COUNT_SLACK), since a chorus
+    is usually several lines. Returns
+
+        {"text", "start_ms", "end_ms", "windows": [...]}
+
+    `windows` lists EVERY occurrence of the chorus, adjacent chorus lines
+    merged into one window: {"start_ms", "end_ms", "lines": [{"start_ms",
+    "end_ms", "text"}, ...]}. The top-level start_ms/end_ms (kept for
+    older clients that only read those) are the window containing
+    `position_ms`, else the next one after it, else the first - so a
+    client that only checks "am I inside [start_ms, end_ms]?" is right
+    for every chorus, not just the first. `text` is the most-repeated
+    line. None if nothing repeats often enough to call a chorus."""
     counts: dict[str, int] = {}
     for line in lines:
         if line["text"]:
@@ -62,15 +91,30 @@ def find_chorus(lines: list[dict]) -> dict | None:
     if not counts:
         return None
 
-    chorus_text, count = max(counts.items(), key=lambda item: item[1])
-    if count < _MIN_CHORUS_REPEATS:
+    chorus_text, top = max(counts.items(), key=lambda item: item[1])
+    if top < _MIN_CHORUS_REPEATS:
         return None
+    chorus_lines = {
+        text for text, count in counts.items() if count >= max(_MIN_CHORUS_REPEATS, top - _CHORUS_COUNT_SLACK)
+    }
 
-    for i, line in enumerate(lines):
-        if line["text"] == chorus_text:
-            end_ms = lines[i + 1]["time_ms"] if i + 1 < len(lines) else line["time_ms"] + _FINAL_LINE_WINDOW_MS
-            return {"text": chorus_text, "start_ms": line["time_ms"], "end_ms": end_ms}
-    return None  # unreachable - chorus_text always comes from `lines` itself
+    windows: list[dict] = []
+    for timed_line in with_end_times(lines):
+        if timed_line["text"] not in chorus_lines:
+            continue
+        if windows and windows[-1]["end_ms"] == timed_line["start_ms"]:
+            windows[-1]["end_ms"] = timed_line["end_ms"]
+            windows[-1]["lines"].append(timed_line)
+        else:
+            windows.append({"start_ms": timed_line["start_ms"], "end_ms": timed_line["end_ms"], "lines": [timed_line]})
+
+    pick = windows[0]
+    if position_ms is not None:
+        pick = next(
+            (w for w in windows if position_ms <= w["end_ms"]),
+            windows[0],
+        )
+    return {"text": chorus_text, "start_ms": pick["start_ms"], "end_ms": pick["end_ms"], "windows": windows}
 
 
 def current_line(lines: list[dict], position_ms: int) -> str | None:
@@ -86,19 +130,31 @@ def current_line(lines: list[dict], position_ms: int) -> str | None:
     return active["text"] if active and active["text"] else None
 
 
-def _cache_path(cache_dir: Path, track_id: str) -> Path:
-    # track_id is a Spotify id (base62, filesystem-safe as-is).
-    return cache_dir / f"{track_id}.json"
+def _cache_key(track_id: str | None, track_name: str, artist_name: str, album_name: str, duration_s: int) -> str:
+    """A Spotify catalogue id (base62) is used as-is. Anything else - a
+    local file's null id, a uri with colons - would either collide
+    ("None.json" shared by every local file) or not be filesystem-safe,
+    so it's keyed by a hash of what was actually looked up instead."""
+    if track_id and _TRACK_ID_RE.match(track_id):
+        return track_id
+    digest = hashlib.sha1(f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode("utf-8")).hexdigest()
+    return f"k_{digest[:24]}"
+
+
+def _cache_path(cache_dir: Path, key: str) -> Path:
+    return cache_dir / f"{key}.json"
 
 
 async def get_lyrics(
     client: httpx.AsyncClient,
     cache_dir: Path,
-    track_id: str,
+    track_id: str | None,
     track_name: str,
     artist_name: str,
     album_name: str,
     duration_s: int,
+    *,
+    user_agent: str = DEFAULT_USER_AGENT,
 ) -> dict | None:
     """`{"synced": [...], "plain": str | None}`, or None if LRCLIB has
     nothing for this track. Cached permanently on disk, one JSON file per
@@ -106,10 +162,12 @@ async def get_lyrics(
     given track, so this survives a felt-core restart, unlike
     get_currently_playing's short in-process TTL. A genuine "not found"
     IS cached (so a track LRCLIB has nothing for isn't re-requested every
-    time it plays); a transient network failure is deliberately NOT
-    cached, since that's not the same fact as "no lyrics exist"."""
+    time it plays). Only a real answer is cacheable: a 200 (with or
+    without lyrics in it) or a 404. A network failure, a 429 rate limit
+    or a 5xx is deliberately NOT cached - none of those mean "no lyrics
+    exist", and caching them would hide the track's lyrics forever."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    path = _cache_path(cache_dir, track_id)
+    path = _cache_path(cache_dir, _cache_key(track_id, track_name, artist_name, album_name, duration_s))
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))["result"]
 
@@ -123,7 +181,7 @@ async def get_lyrics(
                 "album_name": album_name,
                 "duration": duration_s,
             },
-            headers={"User-Agent": _USER_AGENT},
+            headers={"User-Agent": user_agent or DEFAULT_USER_AGENT},
         )
         if response.status_code == 200:
             body = response.json()
@@ -133,9 +191,11 @@ async def get_lyrics(
                 result = {"synced": parse_lrc(synced_raw), "plain": plain}
             elif plain:
                 result = {"synced": [], "plain": plain}
-        # Any other status (404 "not found" is LRCLIB's normal response
-        # for a genuine miss, per its docs) falls through with result
-        # still None, and gets cached as a real miss below.
+        elif response.status_code != 404:
+            # 404 is LRCLIB's normal "not found" (cached as a real miss
+            # below). Anything else - 429, 5xx - is transient.
+            logger.warning("LRCLIB returned %s for track_id=%s - not caching", response.status_code, track_id)
+            return None
     except httpx.HTTPError:
         logger.warning("LRCLIB request failed for track_id=%s", track_id, exc_info=True)
         return None

@@ -45,7 +45,7 @@ from felt_core.db import (
 from felt_core.email_watcher import watch as email_watch
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
-from felt_core.lyrics_client import current_line, find_chorus, get_lyrics
+from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.speech import strip_for_tts
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
@@ -400,7 +400,8 @@ async def music_now_endpoint() -> dict:
         "track": track.get("name", ""),
         "artists": [a["name"] for a in track.get("artists", [])],
         "album": track.get("album", {}).get("name", ""),
-        "track_id": track.get("id", ""),
+        # A local file has id: null - its uri still identifies it.
+        "track_id": track.get("id") or track.get("uri") or "",
         "display_name": format_track_name(track),
         "progress_ms": now_playing["progress_ms"],
         "duration_ms": now_playing["duration_ms"],
@@ -432,17 +433,27 @@ async def music_lyrics_endpoint() -> dict:
             ", ".join(a["name"] for a in track.get("artists", [])),
             track.get("album", {}).get("name", ""),
             now_playing["duration_ms"] // 1000,
+            user_agent=config.lyrics_user_agent,
         )
 
     if lyrics is None:
         return {"found": False}
 
     synced = lyrics["synced"]
+    progress_ms = now_playing["progress_ms"]
+    # `chorus` keeps its original start_ms/end_ms/text fields (now pointing
+    # at the current-or-next chorus occurrence rather than always the
+    # first) and adds `windows` (every occurrence, with per-line timings).
+    # `lines` is the whole synced lyric with real start/end times, and
+    # `progress_ms` the position they were computed against, so the
+    # desktop can build a mouth-along timeline from real timings.
     return {
         "found": True,
         "has_synced": bool(synced),
-        "current_line": current_line(synced, now_playing["progress_ms"]) if synced else None,
-        "chorus": find_chorus(synced) if synced else None,
+        "current_line": current_line(synced, progress_ms) if synced else None,
+        "chorus": find_chorus(synced, progress_ms) if synced else None,
+        "lines": with_end_times(synced) if synced else [],
+        "progress_ms": progress_ms,
         "plain_excerpt": (lyrics["plain"][:200] if lyrics["plain"] else None),
     }
 
