@@ -85,6 +85,21 @@ class _CloudHttpError(Exception):
 # systemInstruction support doesn't change without a felt-core restart
 # anyway (a new deploy would pick a possibly-different model id).
 _no_system_instruction: set[str] = set()
+# Same idea for thinkingConfig.thinkingLevel (see _THINKING_LEVELS).
+_no_thinking_config: set[str] = set()
+
+# Short spoken lines don't need the model to reason first. Found live
+# 2026-09-24 (WP-06 audit, 71/84 weather precomputes fell back to raw
+# tool output): gemma-4-26b-a4b-it spent all 997 of its 1000
+# maxOutputTokens on hidden thinking (finishReason MAX_TOKENS, one
+# `thought: true` part, no answer part). With thinkingLevel "minimal" the
+# same prompt answers in ~22 tokens with finishReason STOP. Verified
+# accepted by gemma-4-26b-a4b-it, gemini-3.1-flash-lite and
+# gemini-3.5-flash-lite; `thinkingBudget: 0` is rejected by Gemma.
+_THINKING_LEVELS: dict[str, str] = {
+    "skill_phrasing": "minimal",
+    "event_reaction": "minimal",
+}
 
 # In-memory only, by design: RPM/TPM windows are 60s wide, so losing them
 # on a restart costs at most one minute of undercounting, not worth a
@@ -296,16 +311,26 @@ async def _generate(
     json_mode: bool,
     max_tokens: int | None,
     config: FeltConfig,
+    thinking_level: str | None = None,
 ) -> str:
     generation_config: dict = {}
     if max_tokens is not None:
         generation_config["maxOutputTokens"] = max_tokens
     if json_mode:
         generation_config["responseMimeType"] = "application/json"
+    if thinking_level and model not in _no_thinking_config:
+        generation_config["thinkingConfig"] = {"thinkingLevel": thinking_level}
 
     use_system_field = model not in _no_system_instruction
     payload = _build_payload(system, contents, generation_config, use_system_field)
     status, body = await _post_generate_content(model, payload, config)
+
+    if status == 400 and "thinkingConfig" in generation_config and "thinking" in str(body).lower():
+        logger.info("model %r rejected thinkingConfig - retrying without it", model)
+        _no_thinking_config.add(model)
+        generation_config = {k: v for k, v in generation_config.items() if k != "thinkingConfig"}
+        payload = _build_payload(system, contents, generation_config, use_system_field)
+        status, body = await _post_generate_content(model, payload, config)
 
     # Gemma models on the Gemini API have historically rejected
     # systemInstruction ("developer instruction not enabled") - retry
@@ -392,7 +417,9 @@ async def cloud_generate(
 
         try:
             async with metrics.timed("cloud", model=model, purpose=purpose):
-                text = await _generate(model, system, contents, json_mode, max_tokens, config)
+                text = await _generate(
+                    model, system, contents, json_mode, max_tokens, config, _THINKING_LEVELS.get(purpose)
+                )
             _record_call(config, model, purpose, pt_day, now, est_tokens)
             return text
         except _CloudHttpError as e:

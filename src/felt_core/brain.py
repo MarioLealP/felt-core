@@ -398,6 +398,11 @@ def _tool_result_instruction(tool_output: str) -> str:
 # cover the thinking overhead ahead of it, not make replies any longer,
 # and Gemma's free-tier TPM budget (16K/min) makes the extra headroom
 # essentially free.
+# 2026-09-24 (audit): 1000 still wasn't enough - 71 of 84 weather
+# precomputes came back all-thinking (997 thought tokens, MAX_TOKENS).
+# The real fix is cloud.py asking for thinkingLevel "minimal" on
+# skill_phrasing (~22 output tokens, no truncation); this budget stays as
+# headroom for a model that rejects thinkingConfig.
 _SKILL_PHRASING_MAX_TOKENS = 1000
 
 
@@ -539,13 +544,22 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
         except Exception:
             logger.exception("weather precompute: cloud phrasing failed, using the raw tool output")
 
-    if config.voice_url:
+    tts_text = strip_for_tts(line)
+    # Same line as last time (the weather didn't change) - already cached,
+    # no need to re-render it.
+    if config.voice_url and tts_cache.get(tts_text) is None:
         try:
-            tts_text = strip_for_tts(line)
             async with httpx.AsyncClient(timeout=30) as client:
                 tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
                 tts_resp.raise_for_status()
             tts_cache.put(tts_text, tts_resp.content)
+        except httpx.HTTPError as e:
+            # The 2026-09-24 audit's ~76 failures/24h were all
+            # httpcore.ConnectError: felt-voice on the Nitro5 was down
+            # (09-23 22:30 -> 09-24 17:45), not a felt-core bug. One line,
+            # not a full traceback every 15 minutes; a live request just
+            # renders TTS itself on a cache miss.
+            logger.warning("weather precompute: TTS pre-render skipped, felt-voice unavailable (%r)", e)
         except Exception:
             logger.exception("weather precompute: TTS pre-render failed")
 

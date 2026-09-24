@@ -17,7 +17,7 @@ Mario as "not right" for exactly that reason).
 """
 
 import time
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -31,11 +31,16 @@ from felt_core.plugin import SkillResult
 # the 15-minute precompute background task and a real user's "what's the
 # weather" request within the same window share one Open-Meteo call
 # instead of two. 20 min covers "current conditions" well; the daily
-# forecast half of the same response is fine far longer than that (Mario
-# suggested 12h), but one shared TTL for the whole response is simpler
-# and the precompute loop (every 15 min) already keeps it fresher than
-# 20 min in practice.
-_CACHE_TTL_S = 20 * 60
+# forecast half of the same response is fine far longer than that.
+# Split per the WP-06 spec (audit 2026-09-24): an answer that uses
+# current conditions ("now", or today's forecast, which leads with the
+# current temperature) needs data <= 20 min old; a pure daily-forecast
+# answer (tomorrow, the weekend, a date) accepts data up to 3 h old. One
+# Open-Meteo response carries both, so it's one cache entry with two
+# freshness bars, not two caches.
+_CURRENT_TTL_S = 20 * 60
+_DAILY_TTL_S = 3 * 60 * 60
+_NOW_PHRASES = ("now", "right now", "currently", "current")
 _cache: dict[tuple, tuple[dict, float]] = {}
 
 name = "get_weather"
@@ -130,12 +135,26 @@ def _describe_day(daily: dict, index: int) -> str:
     )
 
 
-async def _fetch(lat: float, lon: float, unit: str) -> dict:
+def _location_today(data: dict) -> date | None:
+    """Today's date at the forecast location, from the response's own
+    utc_offset_seconds (timezone=auto) - None if the response doesn't say."""
+    offset = data.get("utc_offset_seconds")
+    if offset is None:
+        return None
+    return (datetime.now(timezone.utc) + timedelta(seconds=offset)).date()
+
+
+async def _fetch(lat: float, lon: float, unit: str, max_age_s: float = _CURRENT_TTL_S) -> dict:
     key = (lat, lon, unit)
     cached = _cache.get(key)
     now = time.monotonic()
-    if cached is not None and now - cached[1] < _CACHE_TTL_S:
-        return cached[0]
+    if cached is not None and now - cached[1] < max_age_s:
+        data = cached[0]
+        # A 3 h-old response fetched before local midnight has
+        # yesterday as daily[0] - "tomorrow" would resolve to today.
+        location_today = _location_today(data)
+        if location_today is None or data["daily"]["time"][0] == location_today.isoformat():
+            return data
 
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(
@@ -165,7 +184,16 @@ async def handle(params, ctx):
     day = str(get_single_param(params, "day", "when", "date") or "now").lower()
     unit = get_setting(config.db_path, "temperature_unit", "celsius")
 
-    data = await _fetch(config.home_latitude, config.home_longitude, unit)
+    wants_current = day in _NOW_PHRASES
+    data = await _fetch(
+        config.home_latitude, config.home_longitude, unit, _CURRENT_TTL_S if wants_current else _DAILY_TTL_S
+    )
+    if not wants_current and "weekend" not in day:
+        today = date.fromisoformat(data["daily"]["time"][0])
+        if (resolve_date(day, today) or today) == today:
+            # Today's forecast leads with the current temperature, so it
+            # needs current-conditions freshness (refetches only if stale).
+            data = await _fetch(config.home_latitude, config.home_longitude, unit, _CURRENT_TTL_S)
 
     current = data["current"]
     daily = data["daily"]
@@ -179,7 +207,7 @@ async def handle(params, ctx):
     # felt_core.animation.resolve_animation_tag.
     tag = _condition_tag(current["weather_code"])
 
-    if day in ("now", "right now", "currently", "current"):
+    if wants_current:
         condition = _WMO_CODES.get(current["weather_code"], f"code {current['weather_code']}")
         return SkillResult(
             text=f"Right now: {current['temperature_2m']}°, {condition}, wind {current['wind_speed_10m']} km/h",

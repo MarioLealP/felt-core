@@ -68,7 +68,7 @@ async def test_fetch_after_ttl_expiry_refetches(monkeypatch):
     monkeypatch.setattr(skill.time, "monotonic", lambda: clock[0])
 
     await skill._fetch(38.7, -9.1, "celsius")
-    clock[0] += skill._CACHE_TTL_S + 1
+    clock[0] += skill._CURRENT_TTL_S + 1
     await skill._fetch(38.7, -9.1, "celsius")
 
     assert len(calls) == 2
