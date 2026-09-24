@@ -255,7 +255,20 @@ def save_message(db_path: str, session_id: str, role: str, content: str) -> None
     conn.close()
 
 
-def get_history(db_path: str, session_id: str, limit: int = 20) -> list[dict]:
+# Her own unprompted remarks (spoken screen reactions) are saved as
+# `assistant` messages so the chat window shows them, but they aren't
+# conversation - see get_history's exclude_remarks.
+_REMARK_EXCLUSION_SQL = (
+    " AND NOT (role = 'assistant' AND content IN ("
+    "SELECT spoken_reply FROM screen_observations WHERE session_id = ? AND spoken_reply IS NOT NULL))"
+)
+
+
+def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False) -> list[dict]:
+    """`exclude_remarks=True` drops her own unprompted remarks (spoken
+    screen reactions), leaving only the real back-and-forth - what the
+    local screen-reaction path wants as "recent conversation" (audit
+    2026-09-24: it was feeding her earlier screen remarks back to her)."""
     conn = _connect(db_path)
     # ORDER BY id DESC so LIMIT keeps the MOST RECENT messages (once a
     # session passes the limit, ASC would keep returning the oldest ones
@@ -268,11 +281,13 @@ def get_history(db_path: str, session_id: str, limit: int = 20) -> list[dict]:
     # is a non-destructive fix for rows already in the prod DB - it hides
     # them from both the brain's own context and /v1/history without
     # deleting anything.
+    exclusion = _REMARK_EXCLUSION_SQL if exclude_remarks else ""
+    params = (session_id, session_id, limit) if exclude_remarks else (session_id, limit)
     rows = conn.execute(
         "SELECT role, content FROM messages "
-        "WHERE session_id = ? AND content NOT LIKE '[System Observation%' "
+        "WHERE session_id = ? AND content NOT LIKE '[System Observation%'" + exclusion + " "
         "ORDER BY id DESC LIMIT ?",
-        (session_id, limit),
+        params,
     ).fetchall()
     conn.close()
     return [{"role": role, "content": content} for role, content in reversed(rows)]

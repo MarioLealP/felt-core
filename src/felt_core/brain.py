@@ -410,7 +410,6 @@ async def _phrase_skill_result(
     message: str,
     tool_output: str,
     history: list[dict],
-    base: list[dict],
     skill_privacy: str,
     config: FeltConfig,
     tone: str | None = None,
@@ -467,17 +466,18 @@ async def _phrase_skill_result(
         except Exception:
             logger.exception("cloud skill phrasing failed, falling back to local")
 
+    # WP-02: the shared local helper (personality + facts + music taste +
+    # the length cap), not a hand-built copy of it.
     async with metrics.timed("reply", route="local", model=config.ollama_model):
-        return await _ollama_chat(
-            [{"role": "system", "content": _personality_prompt(tone)}]
-            + base
+        return await _local_reply(
+            history
             + [
                 {"role": "user", "content": message},
                 {"role": "user", "content": _tool_result_instruction(tool_output)},
             ],
-            config.ollama_model,
             config,
-            max_tokens=_REPLY_MAX_TOKENS,
+            include_facts=True,
+            tone=tone,
         )
 
 
@@ -666,7 +666,6 @@ async def chat(
         return ChatResult(reply=summary)
 
     registry = load_plugins(config.plugins_dir)
-    facts = _facts_context(config)
     history = get_history(config.db_path, session_id)
 
     # WP-02: "what do you think of this?" needs something to refer to.
@@ -681,7 +680,6 @@ async def chat(
             {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}
         ]
 
-    base = facts + history
     save_message(config.db_path, session_id, "user", message)
 
     # Router and privacy check run concurrently, not serially (2026-09-22
@@ -773,7 +771,7 @@ async def chat(
         tool_output = f"Error: {e}"
 
     skill_privacy = registry[skill_name].privacy if skill_name in registry else "local"
-    reply = await _phrase_skill_result(message, tool_output, history, base, skill_privacy, config, tone)
+    reply = await _phrase_skill_result(message, tool_output, history, skill_privacy, config, tone)
     save_message(config.db_path, session_id, "assistant", reply)
 
     if result is None:
@@ -841,7 +839,9 @@ async def process_screen_context(
     async def _local_attempt() -> str:
         # Last 4 REAL chat messages, not facts - facts are personal-info
         # recall, irrelevant to reacting to what's on screen right now.
-        history_tail = get_history(config.db_path, session_id)[-4:]
+        # "Real" excludes her own earlier screen remarks (audit
+        # 2026-09-24) - those are saved as assistant messages too.
+        history_tail = get_history(config.db_path, session_id, exclude_remarks=True)[-4:]
         async with metrics.timed("screen_reaction", route="local", model=config.ollama_model):
             return await _local_reply(
                 [{"role": "system", "content": observations_block}]

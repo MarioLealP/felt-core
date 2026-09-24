@@ -25,7 +25,7 @@ async def test_public_skill_routes_straight_to_cloud_no_privacy_check(tmp_path, 
     monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    reply = await brain._phrase_skill_result("weather?", "sunny 20C", [], [], "public", config)
+    reply = await brain._phrase_skill_result("weather?", "sunny 20C", [], "public", config)
 
     assert reply == "cloud reply"
     assert privacy_calls == []  # public never gates the tool output itself
@@ -40,7 +40,7 @@ async def test_google_ok_skill_routes_straight_to_cloud(tmp_path, monkeypatch):
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    reply = await brain._phrase_skill_result("cal?", "dentist tuesday 3pm", [], [], "google_ok", config)
+    reply = await brain._phrase_skill_result("cal?", "dentist tuesday 3pm", [], "google_ok", config)
 
     assert reply == "cloud reply"
 
@@ -58,7 +58,7 @@ async def test_gated_skill_goes_to_cloud_when_the_result_passes_privacy(tmp_path
     monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], [], "gated", config)
+    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], "gated", config)
 
     assert reply == "cloud reply"
 
@@ -79,7 +79,7 @@ async def test_gated_skill_stays_local_when_the_result_fails_privacy(tmp_path, m
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], [], "gated", config)
+    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], "gated", config)
 
     assert reply == "local reply"
 
@@ -100,7 +100,7 @@ async def test_local_skill_never_calls_cloud_even_if_everything_would_say_safe(t
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    reply = await brain._phrase_skill_result("find my notes", "found 3 notes", [], [], "local", config)
+    reply = await brain._phrase_skill_result("find my notes", "found 3 notes", [], "local", config)
 
     assert reply == "local reply"
 
@@ -116,8 +116,10 @@ async def test_facts_never_appear_in_cloud_phrasing_messages(tmp_path, monkeypat
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    base = [{"role": "system", "content": "Known facts about the user:\n- likes pizza"}]
-    await brain._phrase_skill_result("weather?", "sunny", [], base, "public", config)
+    from felt_core.db import save_fact
+
+    save_fact(config.db_path, "likes pizza")
+    await brain._phrase_skill_result("weather?", "sunny", [], "public", config)
 
     all_text = captured["system"] + " ".join(m["content"] for m in captured["messages"])
     assert "likes pizza" not in all_text
@@ -135,7 +137,7 @@ async def test_cloud_error_falls_back_to_local(tmp_path, monkeypatch):
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    reply = await brain._phrase_skill_result("weather?", "sunny", [], [], "public", config)
+    reply = await brain._phrase_skill_result("weather?", "sunny", [], "public", config)
 
     assert reply == "local fallback"
 
@@ -159,7 +161,7 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
 
     captured = {}
 
-    async def fake_phrase_skill_result(message, tool_output, history, base, skill_privacy, cfg, tone=None):
+    async def fake_phrase_skill_result(message, tool_output, history, skill_privacy, cfg, tone=None):
         captured["tool_output"] = tool_output
         return "phrased reply"
 
