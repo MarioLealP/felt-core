@@ -219,8 +219,11 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
         except Exception:
             logger.exception("cloud email summary failed, falling back to local")
     if summary is None:
+        # Same shape as every other local reply (personality prompt + the
+        # spoken-length cap) - it used to be a bare, uncapped prompt (audit
+        # 2026-09-24). No facts: the email body is all the context needed.
         async with metrics.timed("reply", route="local", model=config.ollama_model):
-            summary = await _ollama_chat([{"role": "user", "content": prompt}], config.ollama_model, config)
+            summary = await _local_reply([{"role": "user", "content": prompt}], config, include_facts=False)
 
     mark_email_resolved(config.db_path, pending["id"])
     save_message(config.db_path, session_id, "user", message)

@@ -66,3 +66,27 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     contents = [m["content"] for m in captured["messages"]]
     assert "real question" in contents and "real answer" in contents
     assert "old screen remark" not in contents
+
+
+async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, monkeypatch):
+    from felt_core.db import get_unresolved_pending_email, save_pending_email
+
+    config = _config(tmp_path)  # no Gemini key -> local path
+    save_pending_email(config.db_path, "uid-1", "Ana", "Dinner")
+    captured = {}
+
+    async def fake_ollama_chat(messages, model, cfg, **kwargs):
+        captured["messages"] = messages
+        captured["kwargs"] = kwargs
+        return "Ana wants dinner Friday."
+
+    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(brain, "fetch_email_body", lambda cfg, uid: "Dinner on Friday?")
+
+    summary = await brain._summarize_pending_email(config, "s", "yes")
+
+    assert summary == "Ana wants dinner Friday."
+    assert captured["messages"][0]["role"] == "system"
+    assert brain._PERSONALITY_PROMPT in captured["messages"][0]["content"]
+    assert captured["kwargs"]["max_tokens"] == brain._REPLY_MAX_TOKENS
+    assert get_unresolved_pending_email(config.db_path) is None
