@@ -1,4 +1,4 @@
-from felt_core.brain import _guard_generate_image, _presence_fast_path
+from felt_core.brain import _guard_generate_image, _presence_fast_path, _router_presence_allowed
 
 
 def test_octopus_message_is_rejected():
@@ -69,3 +69,26 @@ def test_shut_up_embedded_in_a_longer_sentence_does_not_match():
     # intent as a bare "shut up", and shouldn't hush her for 10 minutes on
     # a false positive.
     assert _presence_fast_path("can you shut up about the weather and just tell me") is None
+
+
+# Never-truly-quiet: a router-picked felt_presence call may only silence her
+# or send her away when Mario's own words ask for it (live misroute
+# 2026-09-25: "keep me company" came back as a hush).
+def test_router_presence_blocks_guessed_hush():
+    assert not _router_presence_allowed("keep me company", {"intent": "shut_up"})
+    assert not _router_presence_allowed("keep me company", {"intent": "keep_quiet_company"})
+    assert not _router_presence_allowed("what are you up to?", {"intent": "hide"})
+    assert not _router_presence_allowed("hang out with me", {"intent": "brb"})
+    assert not _router_presence_allowed("keep me company", {})
+
+
+def test_router_presence_allows_explicit_requests():
+    assert _router_presence_allowed("Shut up for a bit.", {"intent": "shut_up"})
+    assert _router_presence_allowed("Go away for a bit.", {"intent": "hide"})
+    assert _router_presence_allowed("Give me five minutes.", {"intent": "brb"})
+    assert _router_presence_allowed("can you be quiet", {"intent": "quiet"})
+
+
+def test_router_presence_allows_harmless_intents():
+    for intent in ("come", "come_back", "move", "look", "repeat", "unhush", "come here"):
+        assert _router_presence_allowed("whatever the wording", {"intent": intent})

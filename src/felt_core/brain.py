@@ -197,6 +197,34 @@ def _presence_fast_path(message: str) -> tuple[str, dict] | None:
     return None
 
 
+# Never-truly-quiet: the router LLM must not be able to hush her or send her
+# away on a guess. Live 2026-09-25, "keep me company" was routed to
+# felt_presence and came back as a hush (the skill's substring fallback maps
+# any invented intent containing "quiet" to shut_up). A router-picked
+# felt_presence call therefore only stands if its intent is one of the
+# harmless ones below, or if Mario's own words explicitly ask for silence or
+# distance. The hotkeys (Ctrl+Alt+S/H/B) remain the reliable path.
+_ROUTER_SAFE_PRESENCE_INTENTS = {
+    "unhush", "ok_talk", "you_can_talk_again",
+    "come_back", "come", "come_here",
+    "move", "move_over", "shoo",
+    "look", "look_at_this",
+    "repeat", "what_did_you_say", "say_that_again",
+}
+_EXPLICIT_SILENCE_REQUEST_RE = re.compile(
+    r"\b(shut up|shh+|be quiet|quiet (please|down)|stop talking|zip it|go away|"
+    r"hide|leave me alone|be right back|brb|give me (a |\w+ )?(minute|minutes|sec|second|moment))\b",
+    re.IGNORECASE,
+)
+
+
+def _router_presence_allowed(message: str, params: dict) -> bool:
+    intent = str(params.get("intent") or "").strip().lower().replace(" ", "_")
+    if intent in _ROUTER_SAFE_PRESENCE_INTENTS:
+        return True
+    return bool(_EXPLICIT_SILENCE_REQUEST_RE.search(message))
+
+
 async def _summarize_pending_email(config: FeltConfig, session_id: str, message: str) -> str:
     pending = get_unresolved_pending_email(config.db_path)
     assert pending is not None  # only called when the caller already confirmed this
@@ -705,7 +733,20 @@ async def chat(
         # LLM call entirely, not just its own decision - the whole point of
         # this fast path is Mario never has to wait out a model round trip
         # (or risk a misroute) to get her to stop talking.
-        call = _presence_fast_path(message) or await decide_tool(message, registry, config)
+        fast_call = _presence_fast_path(message)
+        call = fast_call or await decide_tool(message, registry, config)
+
+    if (
+        fast_call is None
+        and call is not None
+        and call[0] == "felt_presence"
+        and not _router_presence_allowed(message, call[1])
+    ):
+        logger.info(
+            "presence guard: dropping router's felt_presence %r - no explicit request in message",
+            call[1].get("intent"),
+        )
+        call = None
 
     if call is not None:
         guard_skill_name, _ = call
