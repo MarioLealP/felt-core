@@ -14,7 +14,13 @@ class FeltConfig(BaseSettings):
 
     # Local model backend (default brain — see decoupling principle in the README)
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1:8b"
+    # qwen2.5:3b since 2026-09-25: it shares the Nitro5's 6 GB card with
+    # felt-voice's Chatterbox-Turbo + GPU RVC (llama3.1:8b doesn't fit
+    # beside them). num_ctx is sent explicitly on every local chat call so
+    # the context (and so the KV-cache VRAM) never depends on Ollama's
+    # server-side default.
+    ollama_model: str = "qwen2.5:3b"
+    ollama_num_ctx: int = 4096
 
     # Small, dedicated router model for tool-vs-chat decisions (2026-09-11
     # finding: the chat model itself is unreliable at this under a mixed

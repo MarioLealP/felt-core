@@ -234,14 +234,17 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
 async def _ollama_chat(
     messages: list[dict], model: str, config: FeltConfig, *, max_tokens: int | None = None
 ) -> str:
-    payload: dict = {"model": model, "messages": messages, "stream": False}
+    # num_ctx always explicit: the context size sets the KV-cache VRAM, and
+    # the chat model shares the Nitro5's card with felt-voice (see config).
+    options: dict = {"num_ctx": config.ollama_num_ctx}
+    payload: dict = {"model": model, "messages": messages, "stream": False, "options": options}
     if max_tokens is not None:
         # Replies are spoken aloud, not read - a long, rambly reply means
         # a long, rambly TTS clip (2026-09-22 finding: a weather reply's
         # ~0.8 MB WAV, 12s of TTS alone out of a 33s turn). num_predict is
         # Ollama's own generation-length cap, not a client-side truncation
         # that could cut a sentence in half mid-word.
-        payload["options"] = {"num_predict": max_tokens}
+        options["num_predict"] = max_tokens
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(f"{config.ollama_url}/api/chat", json=payload)
         response.raise_for_status()
