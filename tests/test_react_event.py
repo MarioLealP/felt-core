@@ -237,3 +237,15 @@ def test_endpoint_no_reaction_shape(tmp_path, monkeypatch):
     assert response.content == b""
     assert "X-Reply-Text" not in response.headers
     assert response.headers["X-Reaction-Skipped"] == "unknown_event"
+
+
+def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monkeypatch):
+    calls = _fake_cloud(monkeypatch)
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/v1/react/event", json={"event": "gpu_hot", "details": {"temp_c": 86}, "tone": "sleepy and a bit grumpy"}
+    )
+
+    assert response.status_code == 200
+    assert "Right now: sleepy and a bit grumpy" in calls[0]["system"]
