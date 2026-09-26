@@ -1,4 +1,4 @@
-from felt_core.brain import _looks_affirmative
+from felt_core.brain.orchestrator import _looks_affirmative
 
 
 def test_recognizes_common_affirmatives():

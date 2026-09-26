@@ -4,7 +4,8 @@ import time
 
 from fastapi.testclient import TestClient
 
-from felt_core import api, brain
+from felt_core import api
+from felt_core.brain import background as brain
 
 
 def test_weather_now_reports_the_cached_condition(monkeypatch) -> None:

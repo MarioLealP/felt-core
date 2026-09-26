@@ -69,7 +69,12 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 # SIM105 (try/except/pass -> contextlib.suppress): behavior-equivalent
 # but a semantic rewrite of an asyncio.CancelledError shutdown path;
 # deferred rather than risk it in a tooling-only WP.
-"src/felt_core/brain.py" = ["E501", "SIM105"]
+# WP-40: these three used to be one entry ("src/felt_core/brain.py") before
+# the brain/ package split - same pre-existing findings, just spread across
+# the files they landed in.
+"src/felt_core/brain/orchestrator.py" = ["E501", "SIM105"]
+"src/felt_core/brain/background.py" = ["E501"]
+"src/felt_core/brain/screen_reactions.py" = ["E501"]
 "tests/test_metrics_audit.py" = ["SIM105"]
 "tests/test_music_taste_loop.py" = ["SIM105"]
 # SIM117 (nested with -> single with): same reasoning as SIM105.

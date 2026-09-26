@@ -1,7 +1,7 @@
 """brain._finished_play_from_transition (WP-16 Part 2): the pure
 track-change classification music_taste_loop's polling wraps around."""
 
-import felt_core.brain as brain
+import felt_core.brain.background as brain
 
 _SONG_A = {"id": "a1", "name": "Song A", "artists": [{"name": "Artist A"}]}
 _SONG_B = {"id": "b2", "name": "Song B", "artists": [{"name": "Artist B"}]}

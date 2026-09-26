@@ -6,7 +6,7 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
-import felt_core.brain as brain
+import felt_core.brain.screen_reactions as brain
 import felt_core.metrics as metrics
 from felt_core.api import app
 from felt_core.config import FeltConfig

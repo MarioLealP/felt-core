@@ -2,7 +2,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-import felt_core.brain as brain
+import felt_core.brain.screen_reactions as brain
 from felt_core.api import app
 from felt_core.config import FeltConfig
 from felt_core.db import (

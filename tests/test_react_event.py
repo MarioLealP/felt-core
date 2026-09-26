@@ -167,7 +167,7 @@ async def test_unknown_event_makes_no_model_call(tmp_path, monkeypatch):
 
 
 async def test_game_events_go_through_the_privacy_check(tmp_path, monkeypatch):
-    import felt_core.brain as brain
+    import felt_core.brain.replies as brain
     import felt_core.privacy as privacy
 
     config = _config(tmp_path)
@@ -192,7 +192,7 @@ async def test_game_events_go_through_the_privacy_check(tmp_path, monkeypatch):
 
 
 async def test_cloud_failure_falls_back_to_local(tmp_path, monkeypatch):
-    import felt_core.brain as brain
+    import felt_core.brain.replies as brain
     from felt_core.cloud import CloudUnavailable
 
     config = _config(tmp_path)

@@ -1,7 +1,8 @@
 import asyncio
 import time
 
-import felt_core.brain as brain
+import felt_core.brain.orchestrator as orchestrator
+import felt_core.brain.replies as brain
 from felt_core.config import FeltConfig
 
 
@@ -27,12 +28,12 @@ async def test_no_skill_chat_runs_router_and_privacy_concurrently(tmp_path, monk
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "a local reply"
 
-    monkeypatch.setattr(brain, "decide_tool", slow_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", slow_decide_tool)
     monkeypatch.setattr(brain, "is_safe_for_cloud", slow_is_safe_for_cloud)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
     start = time.monotonic()
-    result = await brain.chat("hello", config, session_id="wp03-test")
+    result = await orchestrator.chat("hello", config, session_id="wp03-test")
     elapsed = time.monotonic() - start
 
     assert result.reply == "a local reply"
@@ -65,11 +66,11 @@ async def test_skill_path_cancels_the_privacy_task(tmp_path, monkeypatch):
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "tool reply"
 
-    monkeypatch.setattr(brain, "decide_tool", fast_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", fast_decide_tool)
     monkeypatch.setattr(brain, "is_safe_for_cloud", slow_is_safe_for_cloud)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    result = await brain.chat("do a thing", config, session_id="wp03-test")
+    result = await orchestrator.chat("do a thing", config, session_id="wp03-test")
 
     assert result.reply == "tool reply"
     assert cancelled == [True]
@@ -90,11 +91,11 @@ async def test_privacy_exception_still_means_local(tmp_path, monkeypatch):
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "local fallback reply"
 
-    monkeypatch.setattr(brain, "decide_tool", instant_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", instant_decide_tool)
     monkeypatch.setattr(brain, "is_safe_for_cloud", broken_is_safe_for_cloud)
     monkeypatch.setattr(brain, "_cloud_chat", fake_cloud_chat)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    result = await brain.chat("hello", config, session_id="wp03-test")
+    result = await orchestrator.chat("hello", config, session_id="wp03-test")
 
     assert result.reply == "local fallback reply"

@@ -152,7 +152,7 @@ async def test_system_role_messages_are_folded_into_the_system_instruction(tmp_p
 
 
 async def test_cloud_chat_puts_music_taste_in_the_system_instruction(tmp_path, monkeypatch):
-    import felt_core.brain as brain
+    import felt_core.brain.replies as brain
 
     config = _config(tmp_path)
     seen = {}
@@ -165,7 +165,7 @@ async def test_cloud_chat_puts_music_taste_in_the_system_instruction(tmp_path, m
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(
         brain,
-        "_music_taste_context",
+        "music_taste_context",
         lambda cfg: [{"role": "system", "content": "Mario often skips X."}],
     )
 

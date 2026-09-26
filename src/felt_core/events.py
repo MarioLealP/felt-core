@@ -333,15 +333,17 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
 async def _generate_line(
     event: str, prompt: str, policy: EventPolicy, config: FeltConfig, tone: str | None
 ) -> str:
-    # Imported here, not at module level: brain imports half of felt_core,
-    # and events only needs these three helpers.
-    from felt_core.brain import _local_reply, _music_taste_context, _personality_prompt
+    # WP-40: brain.replies is felt-core's small public surface for reply
+    # generation - this used to reach straight into brain.py's
+    # underscore-prefixed (private-by-convention) internals instead.
+    from felt_core.brain.personality import personality_prompt
+    from felt_core.brain.replies import local_reply, music_taste_context
     from felt_core.privacy import is_safe_for_cloud
 
-    # Music taste is cloud-ok (see brain._music_taste_context) and keeps
-    # her opinions of a track consistent ("oh, this one again?").
-    taste = _music_taste_context(config) if event == "music_new_track" else []
-    system = _personality_prompt(tone)
+    # Music taste is cloud-ok (see brain.replies.music_taste_context) and
+    # keeps her opinions of a track consistent ("oh, this one again?").
+    taste = music_taste_context(config) if event == "music_new_track" else []
+    system = personality_prompt(tone)
     for note in taste:
         system = f"{system}\n\n{note['content']}"
 
@@ -376,9 +378,9 @@ async def _generate_line(
             logger.exception("event reaction %s: cloud failed, falling back to local", event)
 
     async with metrics.timed("event_reaction", route="local", model=config.ollama_model):
-        # No facts (an event remark doesn't need them); _local_reply adds
+        # No facts (an event remark doesn't need them); local_reply adds
         # the personality prompt and the length cap.
-        line = await _local_reply(
+        line = await local_reply(
             taste + [{"role": "user", "content": prompt}], config, include_facts=False, tone=tone
         )
     return line.strip(" \n\"'")

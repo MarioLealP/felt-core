@@ -1,27 +1,28 @@
 """WP-15: `tone` (felt-animation's GET /tone line) threaded into the
 system prompt for chat and screen reactions, cloud and local. Checks that
-_personality_prompt actually appends it, and that it reaches the real
+personality_prompt actually appends it, and that it reaches the real
 model-call sites (not just accepted as a parameter and dropped)."""
 
-import felt_core.brain as brain
+import felt_core.brain.orchestrator as orchestrator
+import felt_core.brain.replies as brain
+import felt_core.brain.screen_reactions as screen_reactions
 from felt_core.config import FeltConfig
+
+# -- personality_prompt ----------------------------------------------------
+
+
+def test_personality_prompt_with_no_tone_is_unchanged():
+    assert brain.personality_prompt(None) == brain.PERSONALITY_PROMPT
+
+
+def test_personality_prompt_appends_tone():
+    prompt = brain.personality_prompt("Hype-friend energy.")
+    assert brain.PERSONALITY_PROMPT in prompt
+    assert "Hype-friend energy." in prompt
 
 
 def _config(tmp_path, **kwargs):
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
-
-
-# -- _personality_prompt ----------------------------------------------------
-
-
-def test_personality_prompt_with_no_tone_is_unchanged():
-    assert brain._personality_prompt(None) == brain._PERSONALITY_PROMPT
-
-
-def test_personality_prompt_appends_tone():
-    prompt = brain._personality_prompt("Hype-friend energy.")
-    assert brain._PERSONALITY_PROMPT in prompt
-    assert "Hype-friend energy." in prompt
 
 
 # -- chat(): local path -------------------------------------------------
@@ -39,9 +40,9 @@ async def test_chat_local_reply_carries_tone_in_the_system_message(tmp_path, mon
         return None
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
 
-    await brain.chat("hello", config, session_id="wp15-test", tone="She's bored.")
+    await orchestrator.chat("hello", config, session_id="wp15-test", tone="She's bored.")
 
     assert captured["messages"][0]["role"] == "system"
     assert "She's bored." in captured["messages"][0]["content"]
@@ -59,11 +60,11 @@ async def test_chat_local_reply_with_no_tone_carries_only_the_base_prompt(tmp_pa
         return None
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
 
-    await brain.chat("hello", config, session_id="wp15-test")
+    await orchestrator.chat("hello", config, session_id="wp15-test")
 
-    assert captured["messages"][0]["content"] == brain._PERSONALITY_PROMPT
+    assert captured["messages"][0]["content"] == brain.PERSONALITY_PROMPT
 
 
 # -- chat(): cloud path ---------------------------------------------------
@@ -85,9 +86,11 @@ async def test_chat_cloud_reply_carries_tone(tmp_path, monkeypatch):
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
 
-    result = await brain.chat("hello", config, session_id="wp15-test", tone="A 2nd win in a row.")
+    result = await orchestrator.chat(
+        "hello", config, session_id="wp15-test", tone="A 2nd win in a row."
+    )
 
     assert result.reply == "cloud reply"
     assert "A 2nd win in a row." in captured["system"]
@@ -104,9 +107,9 @@ async def test_react_to_screen_carries_tone_in_system(tmp_path, monkeypatch):
         captured["system"] = system
         return '{"seen": "a game", "line": "nice!", "emotion": "happy"}'
 
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
+    monkeypatch.setattr(screen_reactions, "cloud_generate", fake_cloud_generate)
 
-    result = await brain.react_to_screen(
+    result = await screen_reactions.react_to_screen(
         b"jpeg", "game.exe", "Game", config, session_id="wp15-test", tone="She's a little annoyed."
     )
 
@@ -127,11 +130,11 @@ async def test_process_screen_context_local_path_carries_tone(tmp_path, monkeypa
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    await brain.process_screen_context(
+    await screen_reactions.process_screen_context(
         "a cat", config, session_id="wp15-test", tone="Cozy, relaxed."
     )
 
     system_messages = [m["content"] for m in captured["messages"] if m["role"] == "system"]
-    # _local_reply prepends its own system message ahead of the caller's
+    # local_reply prepends its own system message ahead of the caller's
     # observations_block one - tone rides in that first system message.
     assert any("Cozy, relaxed." in content for content in system_messages)

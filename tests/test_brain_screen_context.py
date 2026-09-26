@@ -1,4 +1,5 @@
-import felt_core.brain as brain
+import felt_core.brain.replies as brain_replies
+import felt_core.brain.screen_reactions as brain
 from felt_core.config import FeltConfig
 from felt_core.db import get_history
 
@@ -41,7 +42,7 @@ async def test_none_reply_triggers_exactly_one_local_retry(tmp_path, monkeypatch
         calls.append(messages)
         return "NONE" if len(calls) == 1 else "okay something real"
 
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
 
     result = await brain.process_screen_context("something", config, session_id="wp02-test")
 
@@ -57,7 +58,7 @@ async def test_still_empty_after_retry_returns_silent_and_stops(tmp_path, monkey
         calls.append(messages)
         return "NONE"
 
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
 
     result = await brain.process_screen_context("something", config, session_id="wp02-test")
 
@@ -73,7 +74,7 @@ async def test_second_call_inside_cooldown_makes_zero_model_calls(tmp_path, monk
         calls.append(messages)
         return "reacted!"
 
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
 
     first = await brain.process_screen_context("first thing", config, session_id="wp02-test")
     assert first.reply == "reacted!"
@@ -90,7 +91,7 @@ async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_p
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "look at that"
 
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
 
     result = await brain.process_screen_context(
         "something interesting", config, session_id="wp02-test"

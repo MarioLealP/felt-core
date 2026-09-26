@@ -1,4 +1,8 @@
-import felt_core.brain as brain
+import time
+
+import felt_core.brain.background as background
+import felt_core.brain.orchestrator as orchestrator
+import felt_core.brain.replies as brain
 from felt_core.config import FeltConfig
 from felt_core.plugin import SkillResult
 from felt_core.plugin_loader import LoadedSkill
@@ -173,12 +177,12 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
         captured["tool_output"] = tool_output
         return "phrased reply"
 
-    monkeypatch.setattr(brain, "load_plugins", lambda plugins_dir: fake_registry)
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
-    monkeypatch.setattr(brain, "run_skill", fake_run_skill)
-    monkeypatch.setattr(brain, "_phrase_skill_result", fake_phrase_skill_result)
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda plugins_dir: fake_registry)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
+    monkeypatch.setattr(orchestrator, "_phrase_skill_result", fake_phrase_skill_result)
 
-    result = await brain.chat("do the thing", config, session_id="wp06-test")
+    result = await orchestrator.chat("do the thing", config, session_id="wp06-test")
 
     assert captured["tool_output"] == "short spoken form"
     assert result.reply == "phrased reply"
@@ -196,21 +200,23 @@ async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monk
     async def explode(*args, **kwargs):
         raise AssertionError("must not be called on the weather fast path")
 
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
-    monkeypatch.setattr(brain, "run_skill", explode)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "run_skill", explode)
     monkeypatch.setattr(brain, "cloud_generate", explode)
     monkeypatch.setattr(brain, "_ollama_chat", explode)
     monkeypatch.setattr(brain, "is_safe_for_cloud", explode)
 
-    brain._weather_precompute = {
+    background._weather_precompute = {
         "line": "It's sunny, 20 degrees.",
         "animation_tag": "reaction/weather/sun",
-        "computed_at": brain.time.monotonic(),
+        "computed_at": time.monotonic(),
     }
     try:
-        result = await brain.chat("what's the weather right now", config, session_id="wp06-test")
+        result = await orchestrator.chat(
+            "what's the weather right now", config, session_id="wp06-test"
+        )
     finally:
-        brain._weather_precompute = None
+        background._weather_precompute = None
 
     assert result.reply == "It's sunny, 20 degrees."
     assert result.animation_tag == "reaction/weather/sun"
@@ -231,19 +237,21 @@ async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatc
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "fresh phrased reply"
 
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
-    monkeypatch.setattr(brain, "run_skill", fake_run_skill)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    brain._weather_precompute = {
+    background._weather_precompute = {
         "line": "stale line",
         "animation_tag": None,
-        "computed_at": brain.time.monotonic() - brain._WEATHER_PRECOMPUTE_MAX_AGE_S - 1,
+        "computed_at": time.monotonic() - background._WEATHER_PRECOMPUTE_MAX_AGE_S - 1,
     }
     try:
-        result = await brain.chat("what's the weather right now", config, session_id="wp06-test")
+        result = await orchestrator.chat(
+            "what's the weather right now", config, session_id="wp06-test"
+        )
     finally:
-        brain._weather_precompute = None
+        background._weather_precompute = None
 
     assert called == ["get_weather"]
     assert result.reply == "fresh phrased reply"

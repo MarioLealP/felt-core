@@ -4,7 +4,7 @@ and with it the KV-cache VRAM, must not depend on Ollama's default)."""
 
 import httpx
 
-from felt_core import brain
+from felt_core.brain import replies as brain
 from felt_core.config import FeltConfig
 
 

@@ -38,7 +38,8 @@ def test_server_timing_header_present_on_chat_request(tmp_path, monkeypatch):
     db_path = str(tmp_path / "felt.db")
     monkeypatch.setenv("FELT_DB_PATH", db_path)
 
-    import felt_core.brain as brain
+    import felt_core.brain.orchestrator as orchestrator
+    import felt_core.brain.replies as replies
 
     async def fake_decide_tool(message, registry, cfg):
         return None
@@ -46,8 +47,8 @@ def test_server_timing_header_present_on_chat_request(tmp_path, monkeypatch):
     async def fake_ollama_chat(messages, model, cfg, **kwargs):
         return "a reply"
 
-    monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
+    monkeypatch.setattr(replies, "_ollama_chat", fake_ollama_chat)
 
     with TestClient(app) as client:
         response = client.post("/v1/chat", json={"message": "hi", "session_id": "wp04-test"})

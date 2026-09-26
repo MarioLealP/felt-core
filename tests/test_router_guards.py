@@ -1,4 +1,8 @@
-from felt_core.brain import _guard_generate_image, _presence_fast_path, _router_presence_allowed
+from felt_core.brain.orchestrator import (
+    _guard_generate_image,
+    _presence_fast_path,
+    _router_presence_allowed,
+)
 
 
 def test_octopus_message_is_rejected():

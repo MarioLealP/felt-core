@@ -1,9 +1,11 @@
 """2026-09-24 audit fixes to the local (Ollama) reply paths: every local
-call goes through brain._local_reply (personality prompt + length cap),
-and the local screen path's "recent conversation" excludes her own
+call goes through brain.replies.local_reply (personality prompt + length
+cap), and the local screen path's "recent conversation" excludes her own
 earlier screen remarks."""
 
-import felt_core.brain as brain
+import felt_core.brain.orchestrator as orchestrator
+import felt_core.brain.replies as brain
+import felt_core.brain.screen_reactions as screen_reactions
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_history,
@@ -36,7 +38,7 @@ async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, monke
 
     assert reply == "local reply"
     assert captured["messages"][0]["role"] == "system"
-    assert brain._PERSONALITY_PROMPT in captured["messages"][0]["content"]
+    assert brain.PERSONALITY_PROMPT in captured["messages"][0]["content"]
     assert "tired" in captured["messages"][0]["content"]
     assert any(
         "likes pizza" in m["content"] for m in captured["messages"]
@@ -78,7 +80,7 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    await brain.process_screen_context("new thing", config, session_id="s")
+    await screen_reactions.process_screen_context("new thing", config, session_id="s")
 
     contents = [m["content"] for m in captured["messages"]]
     assert "real question" in contents and "real answer" in contents
@@ -98,12 +100,12 @@ async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, mon
         return "Ana wants dinner Friday."
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-    monkeypatch.setattr(brain, "fetch_email_body", lambda cfg, uid: "Dinner on Friday?")
+    monkeypatch.setattr(orchestrator, "fetch_email_body", lambda cfg, uid: "Dinner on Friday?")
 
-    summary = await brain._summarize_pending_email(config, "s", "yes")
+    summary = await orchestrator._summarize_pending_email(config, "s", "yes")
 
     assert summary == "Ana wants dinner Friday."
     assert captured["messages"][0]["role"] == "system"
-    assert brain._PERSONALITY_PROMPT in captured["messages"][0]["content"]
+    assert brain.PERSONALITY_PROMPT in captured["messages"][0]["content"]
     assert captured["kwargs"]["max_tokens"] == brain._REPLY_MAX_TOKENS
     assert get_unresolved_pending_email(config.db_path) is None
