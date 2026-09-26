@@ -27,7 +27,14 @@ from pydantic import BaseModel
 
 from felt_core import metrics, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
-from felt_core.brain import chat, music_taste_loop, process_screen_context, react_to_screen, weather_precompute_loop
+from felt_core.brain import (
+    chat,
+    current_weather,
+    music_taste_loop,
+    process_screen_context,
+    react_to_screen,
+    weather_precompute_loop,
+)
 from felt_core.cloud import CloudUnavailable, cloud_status
 from felt_core.config import load_config
 from felt_core.db import (
@@ -426,6 +433,14 @@ async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
 async def get_temperature_unit() -> dict:
     config = load_config()
     return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}
+
+
+@app.get("/v1/weather/now")
+async def weather_now_endpoint() -> dict:
+    """WP-21: the current weather condition from the WP-06 precompute cache
+    (refreshed every 15 min, stale after 20) - felt-animation polls it for
+    weather props. `condition` is "rain" / "sun" / "snow" / "storm" or None."""
+    return current_weather()
 
 
 @app.get("/v1/music/now")

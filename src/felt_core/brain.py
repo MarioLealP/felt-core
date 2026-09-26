@@ -605,6 +605,24 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
     logger.info("weather precompute refreshed: %r", line)
 
 
+def current_weather() -> dict:
+    """WP-21: the precompute's current condition for the desktop (props:
+    umbrella when it rains, sunglasses when it's sunny) - "rain" / "sun" /
+    "snow" / "storm" from the get_weather condition tag, None when the
+    code has no mapping or nothing fresh is cached. No text, just the
+    condition."""
+    fresh = _weather_precompute_fresh()
+    if fresh is None:
+        return {"condition": None, "animation_tag": None, "age_s": None}
+    tag = fresh.get("animation_tag")
+    condition = tag.rsplit("/", 1)[-1] if isinstance(tag, str) and tag.startswith("reaction/weather/") else None
+    return {
+        "condition": condition,
+        "animation_tag": tag,
+        "age_s": round(time.monotonic() - fresh["computed_at"]),
+    }
+
+
 async def weather_precompute_loop(config: FeltConfig) -> None:
     while True:
         try:
