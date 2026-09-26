@@ -190,9 +190,10 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
     planned = _number(details, "planned_s") or 0
     early = details.get("early") is True
     if early and planned:
+        lasted = "a few seconds" if hushed_for < 60 else _spoken_duration(hushed_for)
         situation = (
             f"Mario hushed you for {_spoken_duration(planned)} but let you talk again after only "
-            f"{_spoken_duration(hushed_for)}. Tease him that he couldn't last without you."
+            f"{lasted}. Tease him that he couldn't last without you."
         )
     elif planned:
         situation = (

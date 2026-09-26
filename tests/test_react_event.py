@@ -271,6 +271,11 @@ def test_unhushed_prompt_early_vs_full():
     assert "max 12 words" in early and "max 12 words" in full
 
 
+def test_unhushed_prompt_after_a_few_seconds():
+    prompt = events.build_prompt("unhushed", {"hushed_for_s": 5, "planned_s": 600, "early": True})
+    assert "after only a few seconds" in prompt and "1 minutes" not in prompt
+
+
 def test_unhushed_prompt_names_the_last_line_to_avoid():
     prompt = events.build_prompt("unhushed", _EARLY, previous="Missed me already?")
     assert '"Missed me already?"' in prompt and "something different" in prompt
