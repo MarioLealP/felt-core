@@ -15,10 +15,11 @@ central.
 
 Access tokens are refreshed on demand and cached in-process (module-
 level, single account — no need for anything fancier for a personal
-assistant with one Google account) rather than on every call.
+assistant with one Google account) via the shared oauth_token.
+refresh_access_token helper (WP-40) - same pattern spotify_client.py
+uses.
 """
 
-import time
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -26,6 +27,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from felt_core.config import FeltConfig
+from felt_core.oauth_token import refresh_access_token
 
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _API_BASE = "https://www.googleapis.com/calendar/v3"
@@ -44,12 +46,9 @@ def events_url(calendar_id: str) -> str:
 
 
 async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
-    # 60s safety margin so a token that's about to expire mid-request
-    # isn't handed out as if it were still good.
-    if _token_cache["access_token"] and time.monotonic() < _token_cache["expires_at"] - 60:
-        return _token_cache["access_token"]
-
-    response = await client.post(
+    return await refresh_access_token(
+        client,
+        _token_cache,
         _TOKEN_URL,
         data={
             "client_id": config.google_calendar_client_id,
@@ -58,11 +57,6 @@ async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> st
             "grant_type": "refresh_token",
         },
     )
-    response.raise_for_status()
-    body = response.json()
-    _token_cache["access_token"] = body["access_token"]
-    _token_cache["expires_at"] = time.monotonic() + body.get("expires_in", 3600)
-    return _token_cache["access_token"]
 
 
 async def list_calendars(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:

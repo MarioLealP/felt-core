@@ -7,7 +7,8 @@ whatever's already loaded via local MPRIS on the desktop — this is the
 Spotify Web API is public internet, not a local-network call.
 
 Access tokens are refreshed on demand and cached in-process (module-level,
-single account), same pattern as google_calendar.py.
+single account) via the shared oauth_token.refresh_access_token helper
+(WP-40) - same pattern google_calendar.py uses.
 """
 
 import base64
@@ -16,6 +17,7 @@ import time
 import httpx
 
 from felt_core.config import FeltConfig
+from felt_core.oauth_token import refresh_access_token
 
 _TOKEN_URL = "https://accounts.spotify.com/api/token"
 _API_BASE = "https://api.spotify.com/v1"
@@ -31,22 +33,16 @@ _NOW_PLAYING_CACHE_TTL_S = 10.0
 
 
 async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
-    if _token_cache["access_token"] and time.monotonic() < _token_cache["expires_at"] - 60:
-        return _token_cache["access_token"]
-
     basic = base64.b64encode(
         f"{config.spotify_client_id}:{config.spotify_client_secret}".encode()
     ).decode()
-    response = await client.post(
+    return await refresh_access_token(
+        client,
+        _token_cache,
         _TOKEN_URL,
         data={"grant_type": "refresh_token", "refresh_token": config.spotify_refresh_token},
         headers={"Authorization": f"Basic {basic}"},
     )
-    response.raise_for_status()
-    body = response.json()
-    _token_cache["access_token"] = body["access_token"]
-    _token_cache["expires_at"] = time.monotonic() + body.get("expires_in", 3600)
-    return _token_cache["access_token"]
 
 
 async def search_track(client: httpx.AsyncClient, config: FeltConfig, query: str) -> dict | None:
