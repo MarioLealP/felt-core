@@ -1,5 +1,4 @@
 {
   "_comment": "Skill -> default animation tag manifest, read by plugin_loader.py. Deliberately decoupled from each skill's own code (Mario, 2026-09-20: 'make a skill manifest with the actual tags... so when X skill gets invoked we fetch the manifest and do the animation based off that') - a skill needs zero code changes to get a default reaction tag, just an entry here. A skill can still override this per-call with something more specific via SkillResult.animation_tag when its own OUTPUT (not just having run) warrants it - see plugins/get_weather/skill.py for the real example (defaults to 'reaction/weather' here, escalates to 'reaction/weather/sun'/'rain'/'storm'/'snow' based on the actual forecast condition). Skills not listed here get no default tag (None) - per 'we map every single needed one after the fact,' most skills intentionally have no entry yet.",
-  "get_weather": "reaction/weather",
-  "change_shirt": "ambient/show_off"
+  "get_weather": "reaction/weather"
 }
