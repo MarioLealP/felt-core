@@ -17,7 +17,8 @@ has already been decided on - it never chooses silence.
 Privacy (review doc's cloud line): the prompt is composed here from a
 whitelist of typed detail fields, never by dumping `details`. Music is
 cloud-ok (Mario, 2026-09-22). afk_end/gpu_hot/call_join_guess prompts
-carry only numbers felt-core formats itself. Game names aren't on the
+carry only numbers felt-core formats itself, and so does unhushed (Mario
+lifting a hush: how long it lasted vs. was planned). Game names aren't on the
 cloud-ok list, so game_start/game_stop prompts go through the local
 privacy classifier first. Any cloud failure falls back to local Ollama.
 """
@@ -35,6 +36,7 @@ from felt_core import metrics
 from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
 from felt_core.db import (
+    last_event_reaction_line,
     save_event_reaction,
     save_message,
     seconds_since_last_event_reaction,
@@ -57,6 +59,9 @@ class EventPolicy:
     emotion: str = "neutral"
     # "cloud" = straight to cloud; "gated" = local privacy check first.
     privacy: str = "cloud"
+    # Mario-triggered events (unhushed) speak even if she just said
+    # something: the global min gap is for her unprompted chatter.
+    bypass_min_gap: bool = False
 
 
 # WP-17's table: game_stop -> "finally done?", afk_end -> a greeting,
@@ -71,6 +76,11 @@ DEFAULT_POLICIES: dict[str, EventPolicy] = {
     "afk_end": EventPolicy(cooldown_s=30 * 60, min_duration_s=30 * 60, emotion="happy"),
     "gpu_hot": EventPolicy(cooldown_s=60 * 60, emotion="surprised"),
     "call_join_guess": EventPolicy(cooldown_s=20 * 60, emotion="happy"),
+    # Mario lifting a hush (felt-animation /unhush?announce=1, 2026-09-26:
+    # "give her some snappy comments about being unmuted"). He triggered
+    # it, so only a small anti-double-press cooldown and no min gap. The
+    # details are numbers felt-core formats itself: cloud-ok.
+    "unhushed": EventPolicy(cooldown_s=20, emotion="amused", bypass_min_gap=True),
 }
 
 _MAX_FIELD_CHARS = 120
@@ -163,7 +173,7 @@ def decide(
         duration = _number(details, "duration_s")
         if duration is None or duration < policy.min_duration_s:
             return "too_short"
-    if since_any_remark is not None and since_any_remark < min_gap_s:
+    if not policy.bypass_min_gap and since_any_remark is not None and since_any_remark < min_gap_s:
         return "min_gap"
     if since_event is not None and since_event < policy.cooldown_s:
         return "cooldown"
@@ -172,9 +182,60 @@ def decide(
     return None
 
 
-def build_prompt(event: str, details: dict, lyric: str | None = None) -> str | None:
+UNHUSHED_MAX_WORDS = 12
+
+
+def _unhushed_prompt(details: dict, previous: str | None) -> str:
+    hushed_for = _number(details, "hushed_for_s") or 0
+    planned = _number(details, "planned_s") or 0
+    early = details.get("early") is True
+    if early and planned:
+        situation = (
+            f"Mario hushed you for {_spoken_duration(planned)} but let you talk again after only "
+            f"{_spoken_duration(hushed_for)}. Tease him that he couldn't last without you."
+        )
+    elif planned:
+        situation = (
+            f"Mario hushed you and you stayed quiet the whole {_spoken_duration(planned)}. "
+            "Be dramatic about how hard it was to stay quiet that long."
+        )
+    else:
+        situation = "Mario just let you talk again after hushing you. Tease him about it."
+    avoid = f' Your last line when unhushed was "{previous}" - say something different.' if previous else ""
+    return (
+        f"{situation}{avoid} Say ONE short, snappy, teasing line (max {UNHUSHED_MAX_WORDS} words), "
+        "in character. No questions that need an answer."
+    )
+
+
+def cap_words(line: str, max_words: int) -> str:
+    """Pure: keep a line within max_words - its first sentence if that
+    fits, otherwise the first max_words words."""
+    words = line.split()
+    if len(words) <= max_words:
+        return line
+    cut = min((i for i in (line.find(c) for c in ".!?") if i >= 0), default=-1)
+    if cut >= 0 and len(line[: cut + 1].split()) <= max_words:
+        return line[: cut + 1].strip()
+    return " ".join(words[:max_words]).rstrip(",;:-") + "."
+
+
+def same_line(a: str | None, b: str | None) -> bool:
+    """Pure: the same line, ignoring case and punctuation."""
+
+    def norm(text: str | None) -> str:
+        return " ".join("".join(c for c in (text or "").lower() if c.isalnum() or c.isspace()).split())
+
+    return bool(norm(a)) and norm(a) == norm(b)
+
+
+def build_prompt(event: str, details: dict, lyric: str | None = None, previous: str | None = None) -> str | None:
     """Pure: the user-turn text for an event, from whitelisted fields
-    only. None if the details are too thin to say anything real about."""
+    only. None if the details are too thin to say anything real about.
+    `previous` is this event's last spoken line (unhushed uses it so the
+    same line never plays twice in a row)."""
+    if event == "unhushed":
+        return _unhushed_prompt(details, previous)
     if event == "music_new_track":
         title, artist, album = _text(details, "title"), _text(details, "artist"), _text(details, "album")
         if not title:
@@ -310,17 +371,23 @@ async def react_to_event(
     lyric = _text(details, "lyric") or None
     if event == "music_new_track" and lyric is None:
         lyric = await _lyric_for(details, config)
-    prompt = build_prompt(event, details, lyric)
+    previous = last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
+    prompt = build_prompt(event, details, lyric, previous)
     if prompt is None:
         logger.info("event reaction %s: details too thin to say anything (%s)", event, sorted(details))
         return EventReaction(skipped="missing_details")
 
     try:
         line = await _generate_line(event, prompt, policy, config, tone)
+        if event == "unhushed":
+            line = cap_words(line, UNHUSHED_MAX_WORDS)
+            if same_line(line, previous):
+                logger.info("event reaction %s: repeated the last line, asking once more", event)
+                line = cap_words(await _generate_line(event, prompt, policy, config, tone), UNHUSHED_MAX_WORDS)
     except Exception:
         logger.exception("event reaction %s: line generation failed", event)
         return EventReaction(skipped="generation_failed")
-    if not line or line.upper() == "NONE":
+    if not line or line.upper() == "NONE" or (event == "unhushed" and same_line(line, previous)):
         return EventReaction(skipped="generation_failed")
 
     # Cooldown state + chat history (her line shows in the chat window,

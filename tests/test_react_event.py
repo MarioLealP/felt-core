@@ -249,3 +249,108 @@ def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monke
 
     assert response.status_code == 200
     assert "Right now: sleepy and a bit grumpy" in calls[0]["system"]
+
+
+# -- unhushed: Mario lifting a hush (2026-09-26) -----------------------------
+
+_EARLY = {"hushed_for_s": 95, "planned_s": 600, "early": True}
+_FULL = {"hushed_for_s": 590, "planned_s": 600, "early": False}
+
+
+def test_unhushed_has_a_small_cooldown_and_ignores_the_min_gap():
+    assert _decide("unhushed", _EARLY, since_any_remark=2) is None
+    assert _decide("unhushed", _EARLY, since_event=5) == "cooldown"
+    assert _decide("unhushed", _EARLY, since_event=25) is None
+
+
+def test_unhushed_prompt_early_vs_full():
+    early = events.build_prompt("unhushed", _EARLY)
+    full = events.build_prompt("unhushed", _FULL)
+    assert "couldn't last without you" in early and "about 2 minutes" in early and "about 10 minutes" in early
+    assert "the whole about 10 minutes" in full and "stay quiet" in full
+    assert "max 12 words" in early and "max 12 words" in full
+
+
+def test_unhushed_prompt_names_the_last_line_to_avoid():
+    prompt = events.build_prompt("unhushed", _EARLY, previous="Missed me already?")
+    assert '"Missed me already?"' in prompt and "something different" in prompt
+
+
+def test_cap_words():
+    assert events.cap_words("Short and sweet.", 12) == "Short and sweet."
+    assert events.cap_words("Finally free! I have so many things to tell you right now, honestly.", 12) == "Finally free!"
+    assert events.cap_words(" ".join(["word"] * 20), 12) == " ".join(["word"] * 12) + "."
+
+
+def test_same_line_ignores_case_and_punctuation():
+    assert events.same_line("Missed me already?", "missed me already!")
+    assert not events.same_line("Missed me already?", "Finally!")
+    assert not events.same_line("", None)
+
+
+async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    calls = _fake_cloud(monkeypatch, line="Couldn't last without me, huh?")
+    obs = save_observation(config.db_path, "s", "a game")
+    set_observation_reply(config.db_path, obs, "nice")
+
+    result = await events.react_to_event("unhushed", _EARLY, config, session_id="s", tone="smug")
+
+    assert result.line == "Couldn't last without me, huh?" and result.emotion == "amused"
+    assert calls[0]["purpose"] == "event_reaction"
+    assert "Right now: smug" in calls[0]["system"]
+    assert len(get_recent_observations(config.db_path, "s", limit=10)) == 1  # only the one saved above
+
+
+async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, monkeypatch):
+    import felt_core.db as db
+
+    config = _config(tmp_path)
+    replies = iter(["Missed me already?", "missed me already!", "Freedom! Finally!"])
+    calls = []
+
+    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
+        calls.append(messages[0]["content"])
+        return next(replies)
+
+    monkeypatch.setattr(events, "cloud_generate", fake_cloud_generate)
+
+    first = await events.react_to_event("unhushed", _EARLY, config)
+    # Past the 20 s cooldown without sleeping: age the first row.
+    conn = db._connect(config.db_path)
+    with conn:
+        conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")
+    conn.close()
+    second = await events.react_to_event("unhushed", _FULL, config)
+
+    assert first.line == "Missed me already?"
+    assert second.line == "Freedom! Finally!"  # the repeat was rejected and re-asked
+    assert '"Missed me already?"' in calls[1]
+
+
+async def test_unhushed_gives_up_rather_than_repeat(tmp_path, monkeypatch):
+    import felt_core.db as db
+
+    config = _config(tmp_path)
+    db.save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")
+    conn = db._connect(config.db_path)
+    with conn:
+        conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")
+    conn.close()
+    _fake_cloud(monkeypatch, line="Missed me?")
+
+    result = await events.react_to_event("unhushed", _EARLY, config)
+
+    assert result.skipped == "generation_failed"  # felt-animation plays a fallback clip
+
+
+def test_endpoint_unhushed_returns_audio_and_text(tmp_path, monkeypatch):
+    _fake_cloud(monkeypatch, line="Oh, I'm allowed to talk now?")
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post("/v1/react/event", json={"event": "unhushed", "details": _EARLY, "tone": "playful"})
+
+    assert response.status_code == 200
+    assert response.content == b"RIFF-fake-wav"
+    assert unquote(response.headers["X-Reply-Text"]) == "Oh, I'm allowed to talk now?"
+    assert response.headers["X-Emotion"] == "amused"
