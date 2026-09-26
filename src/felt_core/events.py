@@ -205,7 +205,8 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
     avoid = f' Your last line when unhushed was "{previous}" - say something different.' if previous else ""
     return (
         f"{situation}{avoid} Say ONE short, snappy, teasing line (max {UNHUSHED_MAX_WORDS} words), "
-        "in character. No questions that need an answer."
+        "in character. No questions that need an answer. Plain spoken words only: no *actions*, "
+        "stage directions, sound words like *yawn*, or emoji."
     )
 
 

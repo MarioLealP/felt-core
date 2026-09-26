@@ -19,6 +19,13 @@ _LIST_MARKER_RE = re.compile(r"^[ \t]*(?:[-*+][ \t]+|\d+\.[ \t]+)", re.MULTILINE
 # wasn't asked to write) is left alone rather than eaten wholesale.
 _EMPHASIS_RE = re.compile(r"(\*\*|__)(.+?)\1|(\*|_)(.+?)\3")
 _BACKTICK_RE = re.compile(r"`+")
+# Roleplay stage directions ("*yawn* Ugh...", "Fine. *sighs*"): a short
+# single-asterisk span at the start, after a sentence end, or at the end of
+# the text. They must be dropped, not unwrapped, or she'd say "yawn" out
+# loud (seen live 2026-09-26). Mid-sentence emphasis ("that was *really*
+# bad") isn't matched here and still gets unwrapped by _EMPHASIS_RE.
+_ACTION_LEAD_RE = re.compile(r"(^|[.!?…]\s+)\*[^*\n]{1,40}\*[.!?…,]*\s*")
+_ACTION_TAIL_RE = re.compile(r"\s*\*[^*\n]{1,40}\*[.!?…]*\s*$")
 _EMOJI_RE = re.compile(
     "["
     "\U0001F300-\U0001FAFF"  # misc symbols/pictographs through supplemental symbols
@@ -40,6 +47,8 @@ def strip_for_tts(text: str) -> str:
     text = _URL_RE.sub("a link", text)
     text = _HEADING_RE.sub("", text)
     text = _LIST_MARKER_RE.sub("", text)
+    text = _ACTION_LEAD_RE.sub(lambda m: m.group(1), text)
+    text = _ACTION_TAIL_RE.sub("", text)
     text = _EMPHASIS_RE.sub(_unwrap_emphasis, text)
     text = _BACKTICK_RE.sub("", text)
     text = _EMOJI_RE.sub("", text)
