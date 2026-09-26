@@ -24,11 +24,59 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-recording>=0.13.4",
+    "ruff>=0.16.9",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+# WP-39 baseline: pre-existing findings not fixed this WP are per-file
+# ignored below (see docs/plans/impl/WP-39-tooling.md for the full list
+# and why each one is deferred rather than fixed, not a blanket pass).
+
+[tool.ruff.lint.per-file-ignores]
+# E501 (line-too-long): pre-existing long comment/string lines, mostly
+# 1-22 chars over the 100 limit. Cosmetic-only; deferred to a WP-40+
+# chore rather than reflowing ~23 lines across 13 files in a tooling WP.
+"plugins/create_calendar_event/skill.py" = ["E501"]
+"plugins/felt_presence/skill.py" = ["E501"]
+"plugins/generate_image/skill.py" = ["E501"]
+"plugins/get_container_status/skill.py" = ["E501"]
+"plugins/get_weather/skill.py" = ["E501"]
+"plugins/media_control/skill.py" = ["E501"]
+"plugins/set_alarm/skill.py" = ["E501"]
+"src/felt_core/cloud.py" = ["E501"]
+"src/felt_core/db.py" = ["E501"]
+"src/felt_core/events.py" = ["E501"]
+"src/felt_core/music_taste.py" = ["E501"]
+"src/felt_core/router.py" = ["E501"]
+# B008 (function-call-in-default-argument): FastAPI's own File()/Form()
+# dependency-injection idiom - the "fix" ruff suggests would break the
+# framework contract, this is a documented false positive for FastAPI.
+"src/felt_core/api.py" = ["E501", "B008"]
+# SIM105 (try/except/pass -> contextlib.suppress): behavior-equivalent
+# but a semantic rewrite of an asyncio.CancelledError shutdown path;
+# deferred rather than risk it in a tooling-only WP.
+"src/felt_core/brain.py" = ["E501", "SIM105"]
+"tests/test_metrics_audit.py" = ["SIM105"]
+"tests/test_music_taste_loop.py" = ["SIM105"]
+# SIM117 (nested with -> single with): same reasoning as SIM105.
+"src/felt_core/ntfy_listener.py" = ["SIM117"]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__"]
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
