@@ -39,7 +39,9 @@ description = (
 )
 parameters_schema = {
     "type": "object",
-    "properties": {"item_name": {"type": "string", "description": "The item or currency name to check"}},
+    "properties": {
+        "item_name": {"type": "string", "description": "The item or currency name to check"}
+    },
     "required": ["item_name"],
 }
 
@@ -101,7 +103,8 @@ def _format_divine(value: float) -> str:
 async def _search_currency(client: httpx.AsyncClient, league: str, item_name: str):
     for currency_type in _CURRENCY_TYPES:
         response = await client.get(
-            f"{_NINJA_BASE}/exchange/current/overview", params={"league": league, "type": currency_type}
+            f"{_NINJA_BASE}/exchange/current/overview",
+            params={"league": league, "type": currency_type},
         )
         if response.status_code != 200:
             continue
@@ -110,14 +113,17 @@ async def _search_currency(client: httpx.AsyncClient, league: str, item_name: st
         for line in data.get("lines", []):
             display_name = names.get(line["id"], line["id"])
             if item_name.lower() in display_name.lower():
-                return f"{display_name}: {_format_value(data.get('core', {}), line['primaryValue'])}"
+                return (
+                    f"{display_name}: {_format_value(data.get('core', {}), line['primaryValue'])}"
+                )
     return None
 
 
 async def _search_uniques(client: httpx.AsyncClient, league: str, item_name: str):
     for unique_type in _UNIQUE_TYPES:
         response = await client.get(
-            f"{_NINJA_BASE}/stash/current/item/overview", params={"league": league, "type": unique_type}
+            f"{_NINJA_BASE}/stash/current/item/overview",
+            params={"league": league, "type": unique_type},
         )
         if response.status_code != 200:
             continue
@@ -154,7 +160,9 @@ def _build_search_query(display_name: str, base_type: str, status_option: str) -
     }
 
 
-async def _post_trade_search(client: httpx.AsyncClient, league: str, query_body: dict) -> dict | None:
+async def _post_trade_search(
+    client: httpx.AsyncClient, league: str, query_body: dict
+) -> dict | None:
     response = await client.post(
         f"{_TRADE_BASE}/search/{quote(league)}", json=query_body, headers=_TRADE_HEADERS
     )
@@ -163,7 +171,9 @@ async def _post_trade_search(client: httpx.AsyncClient, league: str, query_body:
     return response.json()
 
 
-async def _fetch_trade_listings(client: httpx.AsyncClient, ids: list[str], search_id: str) -> list[dict]:
+async def _fetch_trade_listings(
+    client: httpx.AsyncClient, ids: list[str], search_id: str
+) -> list[dict]:
     response = await client.get(
         f"{_TRADE_BASE}/fetch/{','.join(ids)}", params={"query": search_id}, headers=_TRADE_HEADERS
     )
@@ -276,5 +286,7 @@ async def handle(params, ctx):
         fallback = await _search_uniques(client, league, item_name)
 
     if fallback is None:
-        return SkillResult(text=f"Couldn't find a current price for '{item_name}' in league {league}.")
+        return SkillResult(
+            text=f"Couldn't find a current price for '{item_name}' in league {league}."
+        )
     return SkillResult(text=f"{fallback} (league: {league})")

@@ -19,7 +19,9 @@ async def handle(params, ctx):
 
     lines = []
     for alarm in pending:
-        formatted = datetime.fromisoformat(alarm["fire_at"]).strftime("%A %I:%M %p").replace(" 0", " ")
+        formatted = (
+            datetime.fromisoformat(alarm["fire_at"]).strftime("%A %I:%M %p").replace(" 0", " ")
+        )
         suffix = f" ({alarm['label']})" if alarm["label"] else ""
         lines.append(f"{formatted}{suffix}")
     return SkillResult(text="Alarms set: " + "; ".join(lines))

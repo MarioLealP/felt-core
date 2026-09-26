@@ -51,9 +51,9 @@ from felt_core.db import (
 )
 from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
+from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
-from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.speech import strip_for_tts
 from felt_core.spotify_client import format_track_name, get_currently_playing
 

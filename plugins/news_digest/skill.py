@@ -23,7 +23,9 @@ description = (
 )
 parameters_schema = {
     "type": "object",
-    "properties": {"feed_url": {"type": "string", "description": "A specific feed URL to check (optional)"}},
+    "properties": {
+        "feed_url": {"type": "string", "description": "A specific feed URL to check (optional)"}
+    },
 }
 
 _ENTRIES_PER_FEED = 5

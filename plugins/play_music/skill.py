@@ -51,7 +51,9 @@ async def handle(params, ctx):
         devices = await list_devices(client, config)
         device = pick_device(devices)
         if device is None:
-            return SkillResult(text="No Spotify device is open right now — open Spotify somewhere first.")
+            return SkillResult(
+                text="No Spotify device is open right now — open Spotify somewhere first."
+            )
 
         await play_track(client, config, track["uri"], device["id"])
 

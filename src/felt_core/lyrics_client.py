@@ -157,7 +157,7 @@ def _cache_key(
     if track_id and _TRACK_ID_RE.match(track_id):
         return track_id
     digest = hashlib.sha1(
-        f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode("utf-8")
+        f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode()
     ).hexdigest()
     return f"k_{digest[:24]}"
 

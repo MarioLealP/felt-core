@@ -165,7 +165,7 @@ async def test_all_models_exhausted_raises_cloud_unavailable(tmp_path, monkeypat
         await cloud.cloud_generate(
             "conversation", "sys", [{"role": "user", "content": "hey"}], config
         )
-        assert False, "expected CloudUnavailable"
+        raise AssertionError("expected CloudUnavailable")
     except cloud.CloudUnavailable:
         pass
 

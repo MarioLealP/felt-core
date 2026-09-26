@@ -28,7 +28,9 @@ async def handle(params, ctx):
     # a missing action to "list" then silently ignored the item and just
     # read the list back. An item being present at all is a much stronger
     # signal than an unset action string, so that's checked first.
-    action = str(get_single_param(params, "action", "command", ignore_keys=("item", "text", "name")) or "").lower()
+    action = str(
+        get_single_param(params, "action", "command", ignore_keys=("item", "text", "name")) or ""
+    ).lower()
     item = get_single_param(params, "item", "text", "name", ignore_keys=("action", "command"))
     db_path = ctx.config.db_path
 

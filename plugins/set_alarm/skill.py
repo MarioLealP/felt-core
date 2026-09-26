@@ -80,7 +80,9 @@ async def handle(params, ctx):
                     json={"hour": fire_at.hour, "minute": fire_at.minute, "label": label},
                 )
                 if response.status_code == 200:
-                    return SkillResult(text=f"Alarm set on your phone for {_format(fire_at, label)}.")
+                    return SkillResult(
+                        text=f"Alarm set on your phone for {_format(fire_at, label)}."
+                    )
             except httpx.HTTPError:
                 pass  # phone unreachable — fall through to felt's own scheduling
 

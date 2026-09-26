@@ -7,7 +7,12 @@ import httpx
 
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
-from felt_core.zabbix_client import health_label, matching_containers, parse_container_items, unhealthy_containers
+from felt_core.zabbix_client import (
+    health_label,
+    matching_containers,
+    parse_container_items,
+    unhealthy_containers,
+)
 
 name = "get_container_status"
 description = (
@@ -42,12 +47,17 @@ async def _zabbix_call(client: httpx.AsyncClient, config, method: str, params: d
 async def handle(params, ctx):
     config = ctx.config
     if not config.zabbix_url or not config.zabbix_api_token:
-        return SkillResult(text="Container status check isn't configured (no Zabbix URL/token set).")
+        return SkillResult(
+            text="Container status check isn't configured (no Zabbix URL/token set)."
+        )
 
     async with httpx.AsyncClient(timeout=20) as client:
         try:
             hosts = await _zabbix_call(
-                client, config, "host.get", {"output": ["hostid"], "filter": {"host": [config.zabbix_host]}}
+                client,
+                config,
+                "host.get",
+                {"output": ["hostid"], "filter": {"host": [config.zabbix_host]}},
             )
             if not hosts:
                 return SkillResult(text=f"No Zabbix host named '{config.zabbix_host}' found.")
@@ -68,7 +78,9 @@ async def handle(params, ctx):
         if not matches:
             return SkillResult(text=f"I don't see a container matching '{query}'.")
         if len(matches) > 1:
-            return SkillResult(text=f"Multiple containers match '{query}': {', '.join(matches)}. Which one?")
+            return SkillResult(
+                text=f"Multiple containers match '{query}': {', '.join(matches)}. Which one?"
+            )
         matched = matches[0]
         info = containers[matched]
         running = info.get("running") == "1"

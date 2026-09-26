@@ -7,8 +7,6 @@ from felt_core.api import app
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_recent_observations,
-    seconds_since_last_spoken_reaction,
-    set_observation_reply,
 )
 
 
@@ -202,7 +200,7 @@ async def test_cloud_unavailable_propagates_uncaught(tmp_path, monkeypatch):
         await brain.react_to_screen(
             b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable"
         )
-        assert False, "expected CloudUnavailable to propagate"
+        raise AssertionError("expected CloudUnavailable to propagate")
     except CloudUnavailable:
         pass
 

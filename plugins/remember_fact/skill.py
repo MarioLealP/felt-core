@@ -17,7 +17,9 @@ description = (
 )
 parameters_schema = {
     "type": "object",
-    "properties": {"content": {"type": "string", "description": "The fact to remember, in plain words"}},
+    "properties": {
+        "content": {"type": "string", "description": "The fact to remember, in plain words"}
+    },
     "required": ["content"],
 }
 

@@ -17,7 +17,7 @@ Mario as "not right" for exactly that reason).
 """
 
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
@@ -141,7 +141,7 @@ def _location_today(data: dict) -> date | None:
     offset = data.get("utc_offset_seconds")
     if offset is None:
         return None
-    return (datetime.now(timezone.utc) + timedelta(seconds=offset)).date()
+    return (datetime.now(UTC) + timedelta(seconds=offset)).date()
 
 
 async def _fetch(lat: float, lon: float, unit: str, max_age_s: float = _CURRENT_TTL_S) -> dict:
@@ -186,7 +186,10 @@ async def handle(params, ctx):
 
     wants_current = day in _NOW_PHRASES
     data = await _fetch(
-        config.home_latitude, config.home_longitude, unit, _CURRENT_TTL_S if wants_current else _DAILY_TTL_S
+        config.home_latitude,
+        config.home_longitude,
+        unit,
+        _CURRENT_TTL_S if wants_current else _DAILY_TTL_S,
     )
     if not wants_current and "weekend" not in day:
         today = date.fromisoformat(data["daily"]["time"][0])
@@ -223,7 +226,8 @@ async def handle(params, ctx):
         ]
         if not lines:
             return SkillResult(
-                text="The upcoming weekend is outside the forecast window I have data for.", animation_tag=tag
+                text="The upcoming weekend is outside the forecast window I have data for.",
+                animation_tag=tag,
             )
         return SkillResult(text="Weekend — " + "; ".join(lines), animation_tag=tag)
 

@@ -55,7 +55,9 @@ async def handle(params, ctx):
         return SkillResult(text="Google Calendar isn't connected yet.")
 
     title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar"))
-    when_text = get_single_param(params, "when", ignore_keys=("title", "duration_minutes", "calendar"))
+    when_text = get_single_param(
+        params, "when", ignore_keys=("title", "duration_minutes", "calendar")
+    )
     if not title or not when_text:
         return SkillResult(text="I need both a title and a time to create a calendar event.")
 
