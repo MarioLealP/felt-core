@@ -63,7 +63,11 @@ def with_end_times(lines: list[dict]) -> list[dict]:
     client needs to build a mouth-along viseme timeline."""
     out = []
     for i, line in enumerate(lines):
-        end_ms = lines[i + 1]["time_ms"] if i + 1 < len(lines) else line["time_ms"] + _FINAL_LINE_WINDOW_MS
+        end_ms = (
+            lines[i + 1]["time_ms"]
+            if i + 1 < len(lines)
+            else line["time_ms"] + _FINAL_LINE_WINDOW_MS
+        )
         out.append({"start_ms": line["time_ms"], "end_ms": end_ms, "text": line["text"]})
     return out
 
@@ -95,7 +99,9 @@ def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | Non
     if top < _MIN_CHORUS_REPEATS:
         return None
     chorus_lines = {
-        text for text, count in counts.items() if count >= max(_MIN_CHORUS_REPEATS, top - _CHORUS_COUNT_SLACK)
+        text
+        for text, count in counts.items()
+        if count >= max(_MIN_CHORUS_REPEATS, top - _CHORUS_COUNT_SLACK)
     }
 
     windows: list[dict] = []
@@ -106,7 +112,13 @@ def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | Non
             windows[-1]["end_ms"] = timed_line["end_ms"]
             windows[-1]["lines"].append(timed_line)
         else:
-            windows.append({"start_ms": timed_line["start_ms"], "end_ms": timed_line["end_ms"], "lines": [timed_line]})
+            windows.append(
+                {
+                    "start_ms": timed_line["start_ms"],
+                    "end_ms": timed_line["end_ms"],
+                    "lines": [timed_line],
+                }
+            )
 
     pick = windows[0]
     if position_ms is not None:
@@ -114,7 +126,12 @@ def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | Non
             (w for w in windows if position_ms <= w["end_ms"]),
             windows[0],
         )
-    return {"text": chorus_text, "start_ms": pick["start_ms"], "end_ms": pick["end_ms"], "windows": windows}
+    return {
+        "text": chorus_text,
+        "start_ms": pick["start_ms"],
+        "end_ms": pick["end_ms"],
+        "windows": windows,
+    }
 
 
 def current_line(lines: list[dict], position_ms: int) -> str | None:
@@ -130,14 +147,18 @@ def current_line(lines: list[dict], position_ms: int) -> str | None:
     return active["text"] if active and active["text"] else None
 
 
-def _cache_key(track_id: str | None, track_name: str, artist_name: str, album_name: str, duration_s: int) -> str:
+def _cache_key(
+    track_id: str | None, track_name: str, artist_name: str, album_name: str, duration_s: int
+) -> str:
     """A Spotify catalogue id (base62) is used as-is. Anything else - a
     local file's null id, a uri with colons - would either collide
     ("None.json" shared by every local file) or not be filesystem-safe,
     so it's keyed by a hash of what was actually looked up instead."""
     if track_id and _TRACK_ID_RE.match(track_id):
         return track_id
-    digest = hashlib.sha1(f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha1(
+        f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode("utf-8")
+    ).hexdigest()
     return f"k_{digest[:24]}"
 
 
@@ -167,7 +188,9 @@ async def get_lyrics(
     or a 5xx is deliberately NOT cached - none of those mean "no lyrics
     exist", and caching them would hide the track's lyrics forever."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    path = _cache_path(cache_dir, _cache_key(track_id, track_name, artist_name, album_name, duration_s))
+    path = _cache_path(
+        cache_dir, _cache_key(track_id, track_name, artist_name, album_name, duration_s)
+    )
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))["result"]
 
@@ -194,7 +217,9 @@ async def get_lyrics(
         elif response.status_code != 404:
             # 404 is LRCLIB's normal "not found" (cached as a real miss
             # below). Anything else - 429, 5xx - is transient.
-            logger.warning("LRCLIB returned %s for track_id=%s - not caching", response.status_code, track_id)
+            logger.warning(
+                "LRCLIB returned %s for track_id=%s - not caching", response.status_code, track_id
+            )
             return None
     except httpx.HTTPError:
         logger.warning("LRCLIB request failed for track_id=%s", track_id, exc_info=True)

@@ -174,7 +174,9 @@ async def test_get_lyrics_does_not_cache_a_429_or_5xx(tmp_path, monkeypatch):
     async def fake_get(self, url, params, headers):
         calls.append(1)
         status = next(statuses)
-        return _FakeResponse(status, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"} if status == 200 else {})
+        return _FakeResponse(
+            status, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"} if status == 200 else {}
+        )
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
 
@@ -198,7 +200,9 @@ async def test_get_lyrics_sends_the_configured_user_agent(tmp_path, monkeypatch)
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        await get_lyrics(client, tmp_path, "track6", "Song", "Artist", "Album", 200, user_agent="custom-ua/1")
+        await get_lyrics(
+            client, tmp_path, "track6", "Song", "Artist", "Album", 200, user_agent="custom-ua/1"
+        )
 
     assert seen["User-Agent"] == "custom-ua/1"
 
@@ -221,14 +225,23 @@ async def test_null_track_ids_do_not_share_one_cache_file(tmp_path, monkeypatch)
 def test_find_chorus_lists_every_occurrence():
     chorus = find_chorus(parse_lrc(_SAMPLE_LRC))
 
-    assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [(15000, 20000), (30000, 35000), (40000, 44000)]
-    assert chorus["windows"][1]["lines"] == [{"start_ms": 30000, "end_ms": 35000, "text": "This is the chorus"}]
+    assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [
+        (15000, 20000),
+        (30000, 35000),
+        (40000, 44000),
+    ]
+    assert chorus["windows"][1]["lines"] == [
+        {"start_ms": 30000, "end_ms": 35000, "text": "This is the chorus"}
+    ]
 
 
 def test_find_chorus_top_level_window_follows_the_position():
     lines = parse_lrc(_SAMPLE_LRC)
 
-    assert (find_chorus(lines, 31000)["start_ms"], find_chorus(lines, 31000)["end_ms"]) == (30000, 35000)
+    assert (find_chorus(lines, 31000)["start_ms"], find_chorus(lines, 31000)["end_ms"]) == (
+        30000,
+        35000,
+    )
     assert find_chorus(lines, 36000)["start_ms"] == 40000  # between choruses -> the next one
     assert find_chorus(lines, 0)["start_ms"] == 15000
 
@@ -237,14 +250,25 @@ def test_find_chorus_merges_adjacent_chorus_lines_into_one_window():
     lrc = "".join(
         f"[00:{s:02d}.00]{t}\n"
         for s, t in [
-            (0, "verse"), (5, "la la"), (10, "oh oh"), (15, "verse two"),
-            (20, "la la"), (25, "oh oh"), (30, "bridge"), (35, "la la"), (40, "oh oh"),
+            (0, "verse"),
+            (5, "la la"),
+            (10, "oh oh"),
+            (15, "verse two"),
+            (20, "la la"),
+            (25, "oh oh"),
+            (30, "bridge"),
+            (35, "la la"),
+            (40, "oh oh"),
         ]
     )
 
     chorus = find_chorus(parse_lrc(lrc))
 
-    assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [(5000, 15000), (20000, 30000), (35000, 44000)]
+    assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [
+        (5000, 15000),
+        (20000, 30000),
+        (35000, 44000),
+    ]
     assert [line["text"] for line in chorus["windows"][0]["lines"]] == ["la la", "oh oh"]
 
 
@@ -253,4 +277,7 @@ def test_with_end_times_uses_the_next_line_start():
 
     timed = with_end_times([{"time_ms": 0, "text": "a"}, {"time_ms": 2500, "text": "b"}])
 
-    assert timed == [{"start_ms": 0, "end_ms": 2500, "text": "a"}, {"start_ms": 2500, "end_ms": 6500, "text": "b"}]
+    assert timed == [
+        {"start_ms": 0, "end_ms": 2500, "text": "a"},
+        {"start_ms": 2500, "end_ms": 6500, "text": "b"},
+    ]

@@ -223,7 +223,9 @@ def save_alarm(db_path: str, fire_at_iso: str, label: str) -> int:
 
 def get_pending_alarms(db_path: str) -> list[dict]:
     conn = _connect(db_path)
-    rows = conn.execute("SELECT id, fire_at, label FROM alarms WHERE fired = 0 ORDER BY fire_at ASC").fetchall()
+    rows = conn.execute(
+        "SELECT id, fire_at, label FROM alarms WHERE fired = 0 ORDER BY fire_at ASC"
+    ).fetchall()
     conn.close()
     return [{"id": row[0], "fire_at": row[1], "label": row[2]} for row in rows]
 
@@ -281,7 +283,9 @@ _REMARK_EXCLUSION_SQL = (
 )
 
 
-def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False) -> list[dict]:
+def get_history(
+    db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False
+) -> list[dict]:
     """`exclude_remarks=True` drops her own unprompted remarks (spoken
     screen reactions), leaving only the real back-and-forth - what the
     local screen-reaction path wants as "recent conversation" (audit
@@ -342,7 +346,12 @@ def get_recent_observations(db_path: str, session_id: str, limit: int = 3) -> li
     ).fetchall()
     conn.close()
     return [
-        {"id": obs_id, "description": description, "spoken_reply": spoken_reply, "created_at": created_at}
+        {
+            "id": obs_id,
+            "description": description,
+            "spoken_reply": spoken_reply,
+            "created_at": created_at,
+        }
         for obs_id, description, spoken_reply, created_at in reversed(rows)
     ]
 
@@ -367,7 +376,9 @@ def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float |
     return row[0] if row else None
 
 
-def get_current_screen_description(db_path: str, session_id: str, max_age_seconds: int) -> str | None:
+def get_current_screen_description(
+    db_path: str, session_id: str, max_age_seconds: int
+) -> str | None:
     """The most recent observation for the session, if it's recent enough
     to still count as "what's currently on screen" (WP-02: normal chat
     gets a "Currently on Mario's screen: ..." system message when this is
@@ -540,7 +551,9 @@ def save_latency_row(
     conn.close()
 
 
-def get_latency_rows(db_path: str, since_hours: int = 24, endpoint: str | None = None) -> list[dict]:
+def get_latency_rows(
+    db_path: str, since_hours: int = 24, endpoint: str | None = None
+) -> list[dict]:
     conn = _connect(db_path)
     query = "SELECT stage, ms, route, skill FROM latency WHERE created_at >= datetime('now', ?)"
     params: list = [f"-{since_hours} hours"]
@@ -549,13 +562,19 @@ def get_latency_rows(db_path: str, since_hours: int = 24, endpoint: str | None =
         params.append(endpoint)
     rows = conn.execute(query, params).fetchall()
     conn.close()
-    return [{"stage": stage, "ms": ms, "route": route, "skill": skill} for stage, ms, route, skill in rows]
+    return [
+        {"stage": stage, "ms": ms, "route": route, "skill": skill}
+        for stage, ms, route, skill in rows
+    ]
 
 
 def delete_old_latency_rows(db_path: str, older_than_days: int = 30) -> None:
     conn = _connect(db_path)
     with conn:
-        conn.execute("DELETE FROM latency WHERE created_at < datetime('now', ?)", (f"-{older_than_days} days",))
+        conn.execute(
+            "DELETE FROM latency WHERE created_at < datetime('now', ?)",
+            (f"-{older_than_days} days",),
+        )
     conn.close()
 
 
@@ -611,7 +630,13 @@ def get_cloud_usage_today(db_path: str, pt_day: str) -> list[dict]:
 
 
 def record_music_play(
-    db_path: str, track_id: str, track_name: str, artists: str, played_ms: int, duration_ms: int, skipped: bool
+    db_path: str,
+    track_id: str,
+    track_name: str,
+    artists: str,
+    played_ms: int,
+    duration_ms: int,
+    skipped: bool,
 ) -> None:
     conn = _connect(db_path)
     with conn:
@@ -640,12 +665,20 @@ def get_music_taste_stats(db_path: str, limit: int = 200) -> list[dict]:
     ).fetchall()
     conn.close()
     return [
-        {"track_id": track_id, "track_name": track_name, "artists": artists, "plays": plays, "skips": skips}
+        {
+            "track_id": track_id,
+            "track_name": track_name,
+            "artists": artists,
+            "plays": plays,
+            "skips": skips,
+        }
         for track_id, track_name, artists, plays, skips in rows
     ]
 
 
-def save_event_reaction(db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str) -> None:
+def save_event_reaction(
+    db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str
+) -> None:
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -662,7 +695,9 @@ def seconds_since_last_event_reaction(
     one event type, or one event+dedupe_key (e.g. the same track). None if
     there's never been one. Global across sessions on purpose: there's one
     Felt, and cooldowns are about how often SHE talks."""
-    query = "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
+    query = (
+        "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
+    )
     params: list = []
     if event is not None:
         query += " AND event = ?"

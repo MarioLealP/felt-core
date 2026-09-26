@@ -8,7 +8,9 @@ from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import LoadedSkill
 
 
-async def run_skill(name: str, params: dict, registry: dict[str, LoadedSkill], ctx: ExecutionContext):
+async def run_skill(
+    name: str, params: dict, registry: dict[str, LoadedSkill], ctx: ExecutionContext
+):
     skill = registry.get(name)
     if skill is None:
         raise ValueError(f"Unknown skill: {name}")

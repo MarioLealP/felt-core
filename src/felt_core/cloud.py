@@ -33,7 +33,9 @@ from felt_core.config import FeltConfig
 
 logger = logging.getLogger(__name__)
 
-Purpose = Literal["conversation", "screen_reaction", "routing", "skill_phrasing", "summary", "event_reaction"]
+Purpose = Literal[
+    "conversation", "screen_reaction", "routing", "skill_phrasing", "summary", "event_reaction"
+]
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 _REST_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -123,7 +125,9 @@ def _limits(config: FeltConfig) -> dict[str, dict[str, int]]:
         try:
             override = json.loads(config.cloud_limits)
         except json.JSONDecodeError:
-            logger.warning("FELT_CLOUD_LIMITS isn't valid JSON - ignoring override: %r", config.cloud_limits)
+            logger.warning(
+                "FELT_CLOUD_LIMITS isn't valid JSON - ignoring override: %r", config.cloud_limits
+            )
             override = {}
         for model, vals in override.items():
             limits.setdefault(model, {}).update(vals)
@@ -173,7 +177,9 @@ def _mark_exhausted(model: str, body: dict, now: float | None = None) -> None:
     _exhausted_until[model] = (until, reason)
 
 
-def _has_rpd_budget(config: FeltConfig, model: str, purpose: Purpose, pt_day: str, limits: dict) -> bool:
+def _has_rpd_budget(
+    config: FeltConfig, model: str, purpose: Purpose, pt_day: str, limits: dict
+) -> bool:
     from felt_core.db import get_model_usage_today, get_purpose_usage_today
 
     rpd = limits.get(model, {}).get("rpd")
@@ -209,7 +215,9 @@ def _has_tpm_budget(model: str, now: float, est_tokens: int, limits: dict) -> bo
     return used + est_tokens < tpm * _SAFETY_MARGIN
 
 
-def _record_call(config: FeltConfig, model: str, purpose: Purpose, pt_day: str, now: float, est_tokens: int) -> None:
+def _record_call(
+    config: FeltConfig, model: str, purpose: Purpose, pt_day: str, now: float, est_tokens: int
+) -> None:
     _recent_calls.setdefault(model, []).append(now)
     _recent_tokens.setdefault(model, []).append((now, est_tokens))
     try:
@@ -222,12 +230,20 @@ def _record_call(config: FeltConfig, model: str, purpose: Purpose, pt_day: str, 
 
 def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[dict]:
     contents = [
-        {"role": "model" if m.get("role") == "assistant" else "user", "parts": [{"text": m.get("content", "")}]}
+        {
+            "role": "model" if m.get("role") == "assistant" else "user",
+            "parts": [{"text": m.get("content", "")}],
+        }
         for m in messages
     ]
     if images:
         image_parts = [
-            {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(img).decode("ascii")}}
+            {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": base64.b64encode(img).decode("ascii"),
+                }
+            }
             for img in images
         ]
         if contents and contents[-1]["role"] == "user":
@@ -237,8 +253,12 @@ def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[di
     return contents
 
 
-def _build_payload(system: str, contents: list[dict], generation_config: dict, use_system_field: bool) -> dict:
-    contents = [dict(c, parts=list(c["parts"])) for c in contents]  # don't mutate the shared list across retries
+def _build_payload(
+    system: str, contents: list[dict], generation_config: dict, use_system_field: bool
+) -> dict:
+    contents = [
+        dict(c, parts=list(c["parts"])) for c in contents
+    ]  # don't mutate the shared list across retries
     payload: dict = {}
     if use_system_field:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
@@ -338,16 +358,22 @@ async def _generate(
     # and remember it so every later call to this model skips straight
     # to that form.
     if status == 400 and use_system_field and _looks_like_system_instruction_rejection(body):
-        logger.info("model %r rejected systemInstruction - retrying with it in the first user turn", model)
+        logger.info(
+            "model %r rejected systemInstruction - retrying with it in the first user turn", model
+        )
         _no_system_instruction.add(model)
         payload = _build_payload(system, contents, generation_config, False)
         status, body = await _post_generate_content(model, payload, config)
 
     if status == 400 and json_mode and "responseMimeType" in generation_config:
-        logger.info("model %r rejected responseMimeType - retrying as a plain-text JSON instruction", model)
+        logger.info(
+            "model %r rejected responseMimeType - retrying as a plain-text JSON instruction", model
+        )
         generation_config = {k: v for k, v in generation_config.items() if k != "responseMimeType"}
         retry_system = system + "\n\nRespond with only a JSON object, no other text."
-        payload = _build_payload(retry_system, contents, generation_config, model not in _no_system_instruction)
+        payload = _build_payload(
+            retry_system, contents, generation_config, model not in _no_system_instruction
+        )
         status, body = await _post_generate_content(model, payload, config)
         if status == 200:
             return _extract_json_block(_extract_text(body))
@@ -403,22 +429,36 @@ async def cloud_generate(
     last_error: Exception | None = None
     for model in candidates:
         if _is_exhausted(model, now):
-            logger.info("cloud model %r is marked exhausted, skipping for purpose %r", model, purpose)
+            logger.info(
+                "cloud model %r is marked exhausted, skipping for purpose %r", model, purpose
+            )
             continue
         if not _has_rpd_budget(config, model, purpose, pt_day, limits):
-            logger.info("cloud model %r is at its RPD budget, skipping for purpose %r", model, purpose)
+            logger.info(
+                "cloud model %r is at its RPD budget, skipping for purpose %r", model, purpose
+            )
             continue
         if not _has_rpm_budget(model, now, limits):
-            logger.info("cloud model %r is at its RPM budget, skipping for purpose %r", model, purpose)
+            logger.info(
+                "cloud model %r is at its RPM budget, skipping for purpose %r", model, purpose
+            )
             continue
         if not _has_tpm_budget(model, now, est_tokens, limits):
-            logger.info("cloud model %r is at its TPM budget, skipping for purpose %r", model, purpose)
+            logger.info(
+                "cloud model %r is at its TPM budget, skipping for purpose %r", model, purpose
+            )
             continue
 
         try:
             async with metrics.timed("cloud", model=model, purpose=purpose):
                 text = await _generate(
-                    model, system, contents, json_mode, max_tokens, config, _THINKING_LEVELS.get(purpose)
+                    model,
+                    system,
+                    contents,
+                    json_mode,
+                    max_tokens,
+                    config,
+                    _THINKING_LEVELS.get(purpose),
                 )
             _record_call(config, model, purpose, pt_day, now, est_tokens)
             return text
@@ -437,11 +477,21 @@ async def cloud_generate(
             # every other cloud failure - so every caller's fallback (the
             # local path, felt-tray's felt-vision path on a 503) actually
             # runs instead of the request 500ing (audit 2026-09-24).
-            logger.warning("cloud model %r failed for purpose %r (%s) - trying next candidate", model, purpose, e)
+            logger.warning(
+                "cloud model %r failed for purpose %r (%s) - trying next candidate",
+                model,
+                purpose,
+                e,
+            )
             continue
         except httpx.HTTPError as e:
             last_error = e
-            logger.warning("cloud model %r unreachable for purpose %r (%r) - trying next candidate", model, purpose, e)
+            logger.warning(
+                "cloud model %r unreachable for purpose %r (%r) - trying next candidate",
+                model,
+                purpose,
+                e,
+            )
             continue
 
     raise CloudUnavailable(f"no available cloud model for purpose {purpose!r}") from last_error
@@ -455,7 +505,11 @@ def cloud_status(config: FeltConfig) -> dict:
 
     now = time.time()
     pt_day = _pacific_day()
-    exhausted = {model: {"until_epoch": until, "reason": reason} for model, (until, reason) in _exhausted_until.items() if now < until}
+    exhausted = {
+        model: {"until_epoch": until, "reason": reason}
+        for model, (until, reason) in _exhausted_until.items()
+        if now < until
+    }
     return {
         "pt_day": pt_day,
         "next_reset_epoch": _next_pacific_midnight_epoch(),

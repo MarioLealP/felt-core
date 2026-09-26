@@ -23,9 +23,7 @@ _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = None) -> str:
-    tool_lines = "\n".join(
-        f"- {skill.name}: {skill.description}" for skill in registry.values()
-    )
+    tool_lines = "\n".join(f"- {skill.name}: {skill.description}" for skill in registry.values())
     today = today or date.today()
     return (
         "You are a routing classifier, not a conversational assistant. "
@@ -59,7 +57,7 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'User: "What\'s the weather in 5 days?"\n'
         'Correct: {"skill": "get_weather", "params": {"day": "in 5 days"}}\n'
         'Wrong: {"skill": "get_weather", "params": {"days": 5}} — wrong '
-        "param key (must be \"day\"), and wrong to extract just the "
+        'param key (must be "day"), and wrong to extract just the '
         "number out of the phrase.\n\n"
         'User: "What\'s the weather on october 3rd?"\n'
         'Correct: {"skill": "get_weather", "params": {"day": "october 3rd"}}\n'
@@ -68,7 +66,7 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "RULE for get_weather's day/date argument: always pass the "
         "phrase through EXACTLY as the user said it, under the key "
         '"day". Never reformat it into ISO format, never invent a year, '
-        "never reduce a phrase like \"in 5 days\" to just the number.\n\n"
+        'never reduce a phrase like "in 5 days" to just the number.\n\n'
         'User: "Check the ninerouter container."\n'
         'Correct: {"skill": "get_container_status", "params": {"container": "ninerouter"}}\n'
         'Wrong: {"skill": "get_container_status", "params": {}} — wrong '
@@ -78,14 +76,14 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Correct: {"skill": "set_alarm", "params": {"time": "7:45am", "label": "gym"}}\n'
         'Wrong: {"skill": "set_timer", "params": {"minutes": ...}} — wrong '
         "because a clock time (a specific time of day, with am/pm or "
-        "\"o'clock\", or a day+time like \"tomorrow at 9am\") means "
+        '"o\'clock", or a day+time like "tomorrow at 9am") means '
         "set_alarm, never set_timer, no matter how close the wording "
         "sounds to a timer.\n\n"
         'User: "Set a timer for 10 minutes."\n'
         'Correct: {"skill": "set_timer", "params": {"minutes": 10}}\n'
         'Wrong: {"skill": "set_alarm", "params": {...}} — wrong because '
         '"10 minutes" is a duration from now, not a clock time; set_timer '
-        "is ONLY for a duration (\"in N minutes\"), never a specific time "
+        'is ONLY for a duration ("in N minutes"), never a specific time '
         "of day.\n\n"
         'User: "Is the shelf plug on?"\n'
         'Correct: {"skill": "smart_home_control", "params": {"device": "shelf", "action": "status"}}\n'
@@ -94,18 +92,18 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         "health check; get_container_status is ONLY for clockmost's own docker "
         "containers, never a light/plug/fan.\n"
         'Also wrong: {"skill": "smart_home_control", "params": {"device": "plug"}} — wrong '
-        "to drop the device's actual name (\"shelf\") for a generic category word "
-        "(\"plug\") that isn't specific to which device is meant.\n\n"
+        'to drop the device\'s actual name ("shelf") for a generic category word '
+        '("plug") that isn\'t specific to which device is meant.\n\n'
         'User: "Draw me a picture of a cat riding a motorcycle."\n'
         'Correct: {"skill": "generate_image", "params": {"prompt": "a cat riding a motorcycle"}}\n'
         'Wrong: {"skill": "web_search", "params": {"query": "cat riding a motorcycle"}} — '
         "wrong because Mario wants something MADE, not an existing photo found "
-        "online; any \"draw/generate/make/create an image\" phrasing means "
+        'online; any "draw/generate/make/create an image" phrasing means '
         "generate_image, never web_search.\n\n"
         'User: "What does the Eiffel Tower look like?"\n'
         'Correct: {"skill": "web_search", "params": {"query": "Eiffel Tower"}}\n'
         'Wrong: {"skill": "generate_image", "params": {"prompt": "the Eiffel Tower"}} — '
-        "wrong because \"what does X look like\" asks about a REAL, EXISTING "
+        'wrong because "what does X look like" asks about a REAL, EXISTING '
         "thing — that's always web_search. generate_image is ONLY for an "
         "explicit draw/generate/make/create request for something imagined, "
         "never for describing something real.\n\n"
@@ -165,15 +163,15 @@ def _build_router_prompt(registry: dict[str, LoadedSkill], today: date | None = 
         'Correct: {"skill": "felt_presence", "params": {"intent": "brb"}}\n'
         'Wrong: {"skill": "set_timer", "params": {"minutes": 5}} — wrong '
         "because Mario is telling FELT to go away, not asking for a "
-        "kitchen-timer style alarm; \"give me N minutes\" directed at her "
+        'kitchen-timer style alarm; "give me N minutes" directed at her '
         "presence is always felt_presence, never set_timer.\n\n"
         'User: "Come back."\n'
         'Correct: {"skill": "felt_presence", "params": {"intent": "come_back"}}\n\n'
         'User: "Come here."\n'
         'Correct: {"skill": "felt_presence", "params": {"intent": "come"}}\n'
         'Wrong: {"skill": "felt_presence", "params": {"intent": "come_back"}} — '
-        "wrong because she's already visible and on screen; \"come back\" is only "
-        "for summoning her from hidden/away, \"come here\"/\"move over\" moves her "
+        'wrong because she\'s already visible and on screen; "come back" is only '
+        'for summoning her from hidden/away, "come here"/"move over" moves her '
         "somewhere on screen while she's already present.\n\n"
         'User: "Look at this."\n'
         'Correct: {"skill": "felt_presence", "params": {"intent": "look"}}\n\n'

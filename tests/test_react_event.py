@@ -62,7 +62,9 @@ def test_global_min_gap_covers_every_remark():
 
 
 def test_same_track_is_deduped_after_the_cooldown_passes():
-    assert _decide("music_new_track", _TRACK, since_event=10 * 60, since_same=10 * 60) == "duplicate"
+    assert (
+        _decide("music_new_track", _TRACK, since_event=10 * 60, since_same=10 * 60) == "duplicate"
+    )
 
 
 def test_afk_end_only_speaks_after_a_long_absence():
@@ -79,14 +81,19 @@ def test_game_stop_needs_a_real_session():
 def test_policy_override_from_config(tmp_path):
     config = _config(tmp_path, event_policies='{"music_new_track": {"cooldown_s": 5}}')
     assert events.policies(config)["music_new_track"].cooldown_s == 5
-    assert events.policies(config)["music_new_track"].dedupe_s == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
+    assert (
+        events.policies(config)["music_new_track"].dedupe_s
+        == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
+    )
 
 
 # -- prompts: whitelisted fields only -------------------------------------
 
 
 def test_prompt_uses_only_whitelisted_fields():
-    prompt = events.build_prompt("music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la")
+    prompt = events.build_prompt(
+        "music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la"
+    )
     assert '"Song A" by Artist A' in prompt
     assert "la la la" in prompt
     assert "do not send" not in prompt
@@ -129,7 +136,9 @@ async def test_event_is_never_a_screen_observation(tmp_path, monkeypatch):
 
     assert result.line
     assert get_recent_observations(config.db_path, "s", limit=10) == []
-    assert seconds_since_last_spoken_reaction(config.db_path, "s") is None  # screen cooldown untouched
+    assert (
+        seconds_since_last_spoken_reaction(config.db_path, "s") is None
+    )  # screen cooldown untouched
     # Her line is in chat history, but not as "real conversation".
     assert [m["content"] for m in get_history(config.db_path, "s")] == [result.line]
     assert get_history(config.db_path, "s", exclude_remarks=True) == []
@@ -244,7 +253,8 @@ def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monke
     client = _client(tmp_path, monkeypatch)
 
     response = client.post(
-        "/v1/react/event", json={"event": "gpu_hot", "details": {"temp_c": 86}, "tone": "sleepy and a bit grumpy"}
+        "/v1/react/event",
+        json={"event": "gpu_hot", "details": {"temp_c": 86}, "tone": "sleepy and a bit grumpy"},
     )
 
     assert response.status_code == 200
@@ -266,7 +276,11 @@ def test_unhushed_has_a_small_cooldown_and_ignores_the_min_gap():
 def test_unhushed_prompt_early_vs_full():
     early = events.build_prompt("unhushed", _EARLY)
     full = events.build_prompt("unhushed", _FULL)
-    assert "couldn't last without you" in early and "about 2 minutes" in early and "about 10 minutes" in early
+    assert (
+        "couldn't last without you" in early
+        and "about 2 minutes" in early
+        and "about 10 minutes" in early
+    )
     assert "the whole about 10 minutes" in full and "stay quiet" in full
     assert "max 12 words" in early and "max 12 words" in full
 
@@ -283,7 +297,10 @@ def test_unhushed_prompt_names_the_last_line_to_avoid():
 
 def test_cap_words():
     assert events.cap_words("Short and sweet.", 12) == "Short and sweet."
-    assert events.cap_words("Finally free! I have so many things to tell you right now, honestly.", 12) == "Finally free!"
+    assert (
+        events.cap_words("Finally free! I have so many things to tell you right now, honestly.", 12)
+        == "Finally free!"
+    )
     assert events.cap_words(" ".join(["word"] * 20), 12) == " ".join(["word"] * 12) + "."
 
 
@@ -293,7 +310,9 @@ def test_same_line_ignores_case_and_punctuation():
     assert not events.same_line("", None)
 
 
-async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(tmp_path, monkeypatch):
+async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(
+    tmp_path, monkeypatch
+):
     config = _config(tmp_path)
     calls = _fake_cloud(monkeypatch, line="Couldn't last without me, huh?")
     obs = save_observation(config.db_path, "s", "a game")
@@ -304,7 +323,9 @@ async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_scr
     assert result.line == "Couldn't last without me, huh?" and result.emotion == "amused"
     assert calls[0]["purpose"] == "event_reaction"
     assert "Right now: smug" in calls[0]["system"]
-    assert len(get_recent_observations(config.db_path, "s", limit=10)) == 1  # only the one saved above
+    assert (
+        len(get_recent_observations(config.db_path, "s", limit=10)) == 1
+    )  # only the one saved above
 
 
 async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, monkeypatch):
@@ -353,7 +374,9 @@ def test_endpoint_unhushed_returns_audio_and_text(tmp_path, monkeypatch):
     _fake_cloud(monkeypatch, line="Oh, I'm allowed to talk now?")
     client = _client(tmp_path, monkeypatch)
 
-    response = client.post("/v1/react/event", json={"event": "unhushed", "details": _EARLY, "tone": "playful"})
+    response = client.post(
+        "/v1/react/event", json={"event": "unhushed", "details": _EARLY, "tone": "playful"}
+    )
 
     assert response.status_code == 200
     assert response.content == b"RIFF-fake-wav"

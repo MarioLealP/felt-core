@@ -37,13 +37,19 @@ class _RequestMetrics:
 _current: ContextVar[_RequestMetrics | None] = ContextVar("felt_core_metrics", default=None)
 
 
-def start_request(request_id: str, endpoint: str, db_path: str, session_id: str | None = None) -> None:
+def start_request(
+    request_id: str, endpoint: str, db_path: str, session_id: str | None = None
+) -> None:
     """Called once by the FastAPI middleware, before the route handler
     runs. Everything `timed()`/`record()` do below reads this same
     ContextVar - contextvars.copy_context() (what asyncio.create_task uses
     under the hood) means a task spawned after this point, like WP-03's
     concurrent privacy-check task, still sees it."""
-    _current.set(_RequestMetrics(request_id=request_id, endpoint=endpoint, db_path=db_path, session_id=session_id))
+    _current.set(
+        _RequestMetrics(
+            request_id=request_id, endpoint=endpoint, db_path=db_path, session_id=session_id
+        )
+    )
 
 
 def record(stage: str, ms: float, **tags) -> None:

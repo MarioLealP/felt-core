@@ -35,7 +35,7 @@ def summarize_taste(rows: list[dict]) -> str:
     notes = []
     skip_note_track = None
     if most_skipped["skips"] / most_skipped["plays"] >= 0.5:
-        notes.append(f"often skips \"{most_skipped['track_name']}\" by {most_skipped['artists']}")
+        notes.append(f'often skips "{most_skipped["track_name"]}" by {most_skipped["artists"]}')
         skip_note_track = most_skipped["track_name"]
 
     # Only suppressed when the skip note above was actually emitted for
@@ -46,7 +46,9 @@ def summarize_taste(rows: list[dict]) -> str:
         most_replayed["track_name"] != skip_note_track
         and most_replayed["plays"] - most_replayed["skips"] >= _MIN_PLAYS_TO_MENTION
     ):
-        notes.append(f"often plays \"{most_replayed['track_name']}\" by {most_replayed['artists']} all the way through")
+        notes.append(
+            f'often plays "{most_replayed["track_name"]}" by {most_replayed["artists"]} all the way through'
+        )
 
     if not notes:
         return ""

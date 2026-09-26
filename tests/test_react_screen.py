@@ -5,7 +5,11 @@ from fastapi.testclient import TestClient
 import felt_core.brain as brain
 from felt_core.api import app
 from felt_core.config import FeltConfig
-from felt_core.db import get_recent_observations, seconds_since_last_spoken_reaction, set_observation_reply
+from felt_core.db import (
+    get_recent_observations,
+    seconds_since_last_spoken_reaction,
+    set_observation_reply,
+)
 
 
 def _config(tmp_path, **kwargs):
@@ -23,7 +27,9 @@ async def test_react_to_screen_happy_path(tmp_path, monkeypatch):
     config = _config(tmp_path)
     captured = {}
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         captured["purpose"] = purpose
         captured["images"] = images
         captured["json_mode"] = json_mode
@@ -32,7 +38,9 @@ async def test_react_to_screen_happy_path(tmp_path, monkeypatch):
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
     jpeg_bytes = b"fake-jpeg-bytes"
-    result = await brain.react_to_screen(jpeg_bytes, "game.exe", "My Game", config, session_id="wp07-test")
+    result = await brain.react_to_screen(
+        jpeg_bytes, "game.exe", "My Game", config, session_id="wp07-test"
+    )
 
     assert result.reply == "Ooh, tough boss!"
     assert result.emotion == "excited"
@@ -48,12 +56,16 @@ async def test_react_to_screen_happy_path(tmp_path, monkeypatch):
 async def test_unknown_emotion_folds_to_neutral(tmp_path, monkeypatch):
     config = _config(tmp_path)
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         return _json_response(emotion="ecstatic")  # not in the fixed set
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-test2")
+    result = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-test2"
+    )
 
     assert result.emotion == "neutral"
 
@@ -65,17 +77,23 @@ async def test_cooldown_blocks_a_second_call_with_zero_model_calls(tmp_path, mon
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
     calls = []
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         calls.append(1)
         return _json_response()
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    first = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown")
+    first = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown"
+    )
     assert first.reply
     assert len(calls) == 1
 
-    second = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown")
+    second = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown"
+    )
     assert second.reply == ""
     assert len(calls) == 1  # no new model call while on cooldown
 
@@ -84,13 +102,17 @@ async def test_manual_trigger_bypasses_cooldown(tmp_path, monkeypatch):
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
     calls = []
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         calls.append(1)
         return _json_response()
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-manual", trigger="focus")
+    await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-manual", trigger="focus"
+    )
     assert len(calls) == 1
 
     # Still well within the 90s cooldown, but trigger="manual" skips it.
@@ -108,7 +130,9 @@ async def test_json_parse_failure_retries_once_without_json_mode(tmp_path, monke
     config = _config(tmp_path)
     calls = []
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         calls.append(json_mode)
         if len(calls) == 1:
             return "not json at all"
@@ -116,7 +140,9 @@ async def test_json_parse_failure_retries_once_without_json_mode(tmp_path, monke
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-retry")
+    result = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-retry"
+    )
 
     assert result.reply == "recovered"
     assert calls == [True, False]  # first with json_mode, retry without
@@ -126,13 +152,17 @@ async def test_json_parse_failure_twice_gives_up_silently(tmp_path, monkeypatch)
     config = _config(tmp_path)
     calls = []
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
         calls.append(1)
         return "still not json"
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-giveup")
+    result = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-giveup"
+    )
 
     assert result.reply == ""
     assert len(calls) == 2  # first attempt + exactly one retry, no more
@@ -141,12 +171,16 @@ async def test_json_parse_failure_twice_gives_up_silently(tmp_path, monkeypatch)
 async def test_lenient_extraction_of_json_block_from_extra_text(tmp_path, monkeypatch):
     config = _config(tmp_path)
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None):
-        return 'Sure! ' + _json_response(line="extracted fine") + ' Hope that helps!'
+    async def fake_cloud_generate(
+        purpose, system, messages, cfg, images=None, json_mode=False, max_tokens=None
+    ):
+        return "Sure! " + _json_response(line="extracted fine") + " Hope that helps!"
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-lenient")
+    result = await brain.react_to_screen(
+        b"jpeg", "app.exe", "Title", config, session_id="wp07-lenient"
+    )
 
     assert result.reply == "extracted fine"
 
@@ -165,7 +199,9 @@ async def test_cloud_unavailable_propagates_uncaught(tmp_path, monkeypatch):
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
     try:
-        await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable")
+        await brain.react_to_screen(
+            b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable"
+        )
         assert False, "expected CloudUnavailable to propagate"
     except CloudUnavailable:
         pass

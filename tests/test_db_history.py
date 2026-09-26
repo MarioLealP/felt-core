@@ -32,7 +32,12 @@ def test_get_history_excludes_legacy_system_observation_rows(tmp_path):
     # in a prod DB.
     db_path = str(tmp_path / "felt.db")
     save_message(db_path, "default", "user", "hey")
-    save_message(db_path, "default", "user", "[System Observation: The user's screen currently shows: a spreadsheet]")
+    save_message(
+        db_path,
+        "default",
+        "user",
+        "[System Observation: The user's screen currently shows: a spreadsheet]",
+    )
     save_message(db_path, "default", "assistant", "hey yourself")
 
     history = get_history(db_path, "default", limit=20)

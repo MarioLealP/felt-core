@@ -5,7 +5,13 @@ earlier screen remarks."""
 
 import felt_core.brain as brain
 from felt_core.config import FeltConfig
-from felt_core.db import get_history, save_fact, save_message, save_observation, set_observation_reply
+from felt_core.db import (
+    get_history,
+    save_fact,
+    save_message,
+    save_observation,
+    set_observation_reply,
+)
 
 
 def _config(tmp_path, **kwargs):
@@ -24,13 +30,17 @@ async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, monke
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    reply = await brain._phrase_skill_result("find my notes", "found 3 notes", [], "local", config, tone="tired")
+    reply = await brain._phrase_skill_result(
+        "find my notes", "found 3 notes", [], "local", config, tone="tired"
+    )
 
     assert reply == "local reply"
     assert captured["messages"][0]["role"] == "system"
     assert brain._PERSONALITY_PROMPT in captured["messages"][0]["content"]
     assert "tired" in captured["messages"][0]["content"]
-    assert any("likes pizza" in m["content"] for m in captured["messages"])  # local path keeps facts
+    assert any(
+        "likes pizza" in m["content"] for m in captured["messages"]
+    )  # local path keeps facts
     assert captured["kwargs"]["max_tokens"] == brain._REPLY_MAX_TOKENS
 
 
@@ -42,8 +52,15 @@ def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
     set_observation_reply(db, obs, "spreadsheets again?")
     save_message(db, "s", "assistant", "spreadsheets again?")
 
-    assert [m["content"] for m in get_history(db, "s")] == ["hey felt", "hey mario", "spreadsheets again?"]
-    assert [m["content"] for m in get_history(db, "s", exclude_remarks=True)] == ["hey felt", "hey mario"]
+    assert [m["content"] for m in get_history(db, "s")] == [
+        "hey felt",
+        "hey mario",
+        "spreadsheets again?",
+    ]
+    assert [m["content"] for m in get_history(db, "s", exclude_remarks=True)] == [
+        "hey felt",
+        "hey mario",
+    ]
 
 
 async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_path, monkeypatch):

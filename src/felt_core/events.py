@@ -71,8 +71,12 @@ class EventPolicy:
 # any field per deployment with FELT_EVENT_POLICIES (JSON).
 DEFAULT_POLICIES: dict[str, EventPolicy] = {
     "music_new_track": EventPolicy(cooldown_s=5 * 60, dedupe_s=60 * 60, emotion="happy"),
-    "game_start": EventPolicy(cooldown_s=20 * 60, dedupe_s=2 * 60 * 60, emotion="excited", privacy="gated"),
-    "game_stop": EventPolicy(cooldown_s=20 * 60, min_duration_s=20 * 60, emotion="amused", privacy="gated"),
+    "game_start": EventPolicy(
+        cooldown_s=20 * 60, dedupe_s=2 * 60 * 60, emotion="excited", privacy="gated"
+    ),
+    "game_stop": EventPolicy(
+        cooldown_s=20 * 60, min_duration_s=20 * 60, emotion="amused", privacy="gated"
+    ),
     "afk_end": EventPolicy(cooldown_s=30 * 60, min_duration_s=30 * 60, emotion="happy"),
     "gpu_hot": EventPolicy(cooldown_s=60 * 60, emotion="surprised"),
     "call_join_guess": EventPolicy(cooldown_s=20 * 60, emotion="happy"),
@@ -202,7 +206,11 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
         )
     else:
         situation = "Mario just let you talk again after hushing you. Tease him about it."
-    avoid = f' Your last line when unhushed was "{previous}" - say something different.' if previous else ""
+    avoid = (
+        f' Your last line when unhushed was "{previous}" - say something different.'
+        if previous
+        else ""
+    )
     return (
         f"{situation}{avoid} Say ONE short, snappy, teasing line (max {UNHUSHED_MAX_WORDS} words), "
         "in character. No questions that need an answer. Plain spoken words only: no *actions*, "
@@ -226,12 +234,16 @@ def same_line(a: str | None, b: str | None) -> bool:
     """Pure: the same line, ignoring case and punctuation."""
 
     def norm(text: str | None) -> str:
-        return " ".join("".join(c for c in (text or "").lower() if c.isalnum() or c.isspace()).split())
+        return " ".join(
+            "".join(c for c in (text or "").lower() if c.isalnum() or c.isspace()).split()
+        )
 
     return bool(norm(a)) and norm(a) == norm(b)
 
 
-def build_prompt(event: str, details: dict, lyric: str | None = None, previous: str | None = None) -> str | None:
+def build_prompt(
+    event: str, details: dict, lyric: str | None = None, previous: str | None = None
+) -> str | None:
     """Pure: the user-turn text for an event, from whitelisted fields
     only. None if the details are too thin to say anything real about.
     `previous` is this event's last spoken line (unhushed uses it so the
@@ -239,10 +251,18 @@ def build_prompt(event: str, details: dict, lyric: str | None = None, previous: 
     if event == "unhushed":
         return _unhushed_prompt(details, previous)
     if event == "music_new_track":
-        title, artist, album = _text(details, "title"), _text(details, "artist"), _text(details, "album")
+        title, artist, album = (
+            _text(details, "title"),
+            _text(details, "artist"),
+            _text(details, "album"),
+        )
         if not title:
             return None
-        song = f'"{title}"' + (f" by {artist}" if artist else "") + (f" (from {album})" if album else "")
+        song = (
+            f'"{title}"'
+            + (f" by {artist}" if artist else "")
+            + (f" (from {album})" if album else "")
+        )
         lyric_part = f' A line from it: "{lyric}". You may quote it if it fits.' if lyric else ""
         return f"Mario just started playing {song}.{lyric_part} {_EVENT_INSTRUCTION}"
     if event == "game_start":
@@ -254,7 +274,9 @@ def build_prompt(event: str, details: dict, lyric: str | None = None, previous: 
         what = f"{name}" if name else "his game"
         duration = _number(details, "duration_s")
         took = f" after {_spoken_duration(duration)}" if duration else ""
-        return f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
+        return (
+            f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
+        )
     if event == "afk_end":
         duration = _number(details, "duration_s") or 0
         return (
@@ -308,7 +330,9 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
     return chorus["text"] if chorus else None
 
 
-async def _generate_line(event: str, prompt: str, policy: EventPolicy, config: FeltConfig, tone: str | None) -> str:
+async def _generate_line(
+    event: str, prompt: str, policy: EventPolicy, config: FeltConfig, tone: str | None
+) -> str:
     # Imported here, not at module level: brain imports half of felt_core,
     # and events only needs these three helpers.
     from felt_core.brain import _local_reply, _music_taste_context, _personality_prompt
@@ -324,30 +348,48 @@ async def _generate_line(event: str, prompt: str, policy: EventPolicy, config: F
     use_cloud = bool(config.gemini_api_key)
     if use_cloud and policy.privacy == "gated":
         use_cloud = await is_safe_for_cloud(prompt, config)
-        logger.info("event reaction %s: privacy check %s", event, "passed" if use_cloud else "failed - local")
+        logger.info(
+            "event reaction %s: privacy check %s",
+            event,
+            "passed" if use_cloud else "failed - local",
+        )
 
     if use_cloud:
         try:
-            async with metrics.timed("event_reaction", route="cloud", model=config.cloud_model_volume):
+            async with metrics.timed(
+                "event_reaction", route="cloud", model=config.cloud_model_volume
+            ):
                 line = await cloud_generate(
-                    "event_reaction", system, [{"role": "user", "content": prompt}], config, max_tokens=300
+                    "event_reaction",
+                    system,
+                    [{"role": "user", "content": prompt}],
+                    config,
+                    max_tokens=300,
                 )
             line = line.strip(" \n\"'")
             if line:
                 return line
-            logger.warning("event reaction %s: cloud returned nothing usable, falling back to local", event)
+            logger.warning(
+                "event reaction %s: cloud returned nothing usable, falling back to local", event
+            )
         except Exception:
             logger.exception("event reaction %s: cloud failed, falling back to local", event)
 
     async with metrics.timed("event_reaction", route="local", model=config.ollama_model):
         # No facts (an event remark doesn't need them); _local_reply adds
         # the personality prompt and the length cap.
-        line = await _local_reply(taste + [{"role": "user", "content": prompt}], config, include_facts=False, tone=tone)
+        line = await _local_reply(
+            taste + [{"role": "user", "content": prompt}], config, include_facts=False, tone=tone
+        )
     return line.strip(" \n\"'")
 
 
 async def react_to_event(
-    event: str, details: dict | None, config: FeltConfig, session_id: str = "dashboard", tone: str | None = None
+    event: str,
+    details: dict | None,
+    config: FeltConfig,
+    session_id: str = "dashboard",
+    tone: str | None = None,
 ) -> EventReaction:
     details = details if isinstance(details, dict) else {}
     table = policies(config)
@@ -362,7 +404,9 @@ async def react_to_event(
         table,
         min_gap_s=config.event_reaction_min_gap_s,
         since_any_remark=since_any,
-        since_event=seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
+        since_event=seconds_since_last_event_reaction(config.db_path, event)
+        if event in table
+        else None,
         since_same=seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
     )
     if reason is not None:
@@ -376,7 +420,9 @@ async def react_to_event(
     previous = last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
     prompt = build_prompt(event, details, lyric, previous)
     if prompt is None:
-        logger.info("event reaction %s: details too thin to say anything (%s)", event, sorted(details))
+        logger.info(
+            "event reaction %s: details too thin to say anything (%s)", event, sorted(details)
+        )
         return EventReaction(skipped="missing_details")
 
     try:
@@ -385,7 +431,9 @@ async def react_to_event(
             line = cap_words(line, UNHUSHED_MAX_WORDS)
             if same_line(line, previous):
                 logger.info("event reaction %s: repeated the last line, asking once more", event)
-                line = cap_words(await _generate_line(event, prompt, policy, config, tone), UNHUSHED_MAX_WORDS)
+                line = cap_words(
+                    await _generate_line(event, prompt, policy, config, tone), UNHUSHED_MAX_WORDS
+                )
     except Exception:
         logger.exception("event reaction %s: line generation failed", event)
         return EventReaction(skipped="generation_failed")

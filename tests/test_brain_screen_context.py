@@ -92,7 +92,9 @@ async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_p
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    result = await brain.process_screen_context("something interesting", config, session_id="wp02-test")
+    result = await brain.process_screen_context(
+        "something interesting", config, session_id="wp02-test"
+    )
 
     assert result.reply == "look at that"
     history = get_history(config.db_path, "wp02-test")

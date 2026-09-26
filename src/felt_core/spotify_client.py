@@ -69,7 +69,10 @@ async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -
     callers can reuse format_track_name directly instead of re-flattening
     it themselves."""
     now = time.monotonic()
-    if _now_playing_cache["data"] != "unset" and now < _now_playing_cache["cached_at"] + _NOW_PLAYING_CACHE_TTL_S:
+    if (
+        _now_playing_cache["data"] != "unset"
+        and now < _now_playing_cache["cached_at"] + _NOW_PLAYING_CACHE_TTL_S
+    ):
         return _now_playing_cache["data"]
 
     token = await _get_access_token(client, config)
@@ -107,7 +110,9 @@ async def list_devices(client: httpx.AsyncClient, config: FeltConfig) -> list[di
     return response.json().get("devices", [])
 
 
-async def play_track(client: httpx.AsyncClient, config: FeltConfig, track_uri: str, device_id: str) -> None:
+async def play_track(
+    client: httpx.AsyncClient, config: FeltConfig, track_uri: str, device_id: str
+) -> None:
     token = await _get_access_token(client, config)
     response = await client.put(
         f"{_API_BASE}/me/player/play",

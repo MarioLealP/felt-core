@@ -13,7 +13,9 @@ param (under any key name), that's almost certainly the intended value.
 from typing import Any
 
 
-def get_single_param(params: dict[str, Any], *expected_keys: str, ignore_keys: tuple[str, ...] = ()) -> Any | None:
+def get_single_param(
+    params: dict[str, Any], *expected_keys: str, ignore_keys: tuple[str, ...] = ()
+) -> Any | None:
     for key in expected_keys:
         if key in params and params[key] is not None:
             return params[key]

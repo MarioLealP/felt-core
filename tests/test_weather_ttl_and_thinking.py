@@ -126,14 +126,20 @@ async def test_skill_phrasing_asks_for_minimal_thinking(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
 
-    await cloud.cloud_generate("skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path), max_tokens=100)
-    await cloud.cloud_generate("conversation", "sys", [{"role": "user", "content": "hi"}], _cfg(tmp_path))
+    await cloud.cloud_generate(
+        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path), max_tokens=100
+    )
+    await cloud.cloud_generate(
+        "conversation", "sys", [{"role": "user", "content": "hi"}], _cfg(tmp_path)
+    )
 
     assert payloads[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"}
     assert "thinkingConfig" not in payloads[1].get("generationConfig", {})
 
 
-async def test_thinking_config_rejection_retries_without_it_and_is_remembered(tmp_path, monkeypatch):
+async def test_thinking_config_rejection_retries_without_it_and_is_remembered(
+    tmp_path, monkeypatch
+):
     payloads = []
 
     async def fake_post(model, payload, cfg):
@@ -144,8 +150,12 @@ async def test_thinking_config_rejection_retries_without_it_and_is_remembered(tm
 
     monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
 
-    first = await cloud.cloud_generate("skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path))
-    second = await cloud.cloud_generate("skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path))
+    first = await cloud.cloud_generate(
+        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path)
+    )
+    second = await cloud.cloud_generate(
+        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path)
+    )
 
     assert first == second == "sunny"
     assert len(payloads) == 3  # rejected once, retried, then skipped straight to the plain form

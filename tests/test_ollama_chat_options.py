@@ -31,7 +31,9 @@ async def test_num_ctx_sent_with_num_predict(monkeypatch):
     sent = _capture(monkeypatch)
     config = FeltConfig(_env_file=None)
 
-    await brain._ollama_chat([{"role": "user", "content": "x"}], config.ollama_model, config, max_tokens=80)
+    await brain._ollama_chat(
+        [{"role": "user", "content": "x"}], config.ollama_model, config, max_tokens=80
+    )
 
     assert sent[0]["model"] == "qwen2.5:3b"
     assert sent[0]["options"] == {"num_ctx": 4096, "num_predict": 80}

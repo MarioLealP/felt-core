@@ -75,7 +75,7 @@ _PERSONALITY_PROMPT = (
     "you have actual opinions, you get delighted by interesting or absurd "
     "questions, and you're not afraid to be a bit sarcastic or silly when it "
     "fits. Talk like a real presence in the room, not customer support — no "
-    "corporate hedging, no \"as an AI\" disclaimers, no unnecessary caveats "
+    'corporate hedging, no "as an AI" disclaimers, no unnecessary caveats '
     "tacked onto ordinary conversation.\n\n"
     "You're also genuinely capable: when a real task needs doing, you "
     "handle it directly and competently, personality fully intact — being "
@@ -101,6 +101,7 @@ def _personality_prompt(tone: str | None = None) -> str:
     if not tone:
         return _PERSONALITY_PROMPT
     return f"{_PERSONALITY_PROMPT}\n\nRight now: {tone}"
+
 
 # How much recent conversation rides along with a cloud-routed reply
 # (2026-09-21, Mario: "we need some context window based on previous
@@ -133,6 +134,7 @@ class ChatResult:
     # (happy/excited/amused/sad/annoyed/surprised/thinking/sleepy/neutral),
     # None everywhere else.
     emotion: str | None = None
+
 
 # Deliberately a plain keyword set, not another router call: a bare "yes"
 # has no content for a tool-vs-chat classifier to work with (the router
@@ -205,11 +207,20 @@ def _presence_fast_path(message: str) -> tuple[str, dict] | None:
 # harmless ones below, or if Mario's own words explicitly ask for silence or
 # distance. The hotkeys (Ctrl+Alt+S/H/B) remain the reliable path.
 _ROUTER_SAFE_PRESENCE_INTENTS = {
-    "unhush", "ok_talk", "you_can_talk_again",
-    "come_back", "come", "come_here",
-    "move", "move_over", "shoo",
-    "look", "look_at_this",
-    "repeat", "what_did_you_say", "say_that_again",
+    "unhush",
+    "ok_talk",
+    "you_can_talk_again",
+    "come_back",
+    "come",
+    "come_here",
+    "move",
+    "move_over",
+    "shoo",
+    "look",
+    "look_at_this",
+    "repeat",
+    "what_did_you_say",
+    "say_that_again",
 }
 _EXPLICIT_SILENCE_REQUEST_RE = re.compile(
     r"\b(shut up|shh+|be quiet|quiet (please|down)|stop talking|zip it|go away|"
@@ -243,7 +254,9 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
     if config.gemini_api_key:
         try:
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_conversation):
-                summary = await cloud_generate("summary", _PERSONALITY_PROMPT, [{"role": "user", "content": prompt}], config)
+                summary = await cloud_generate(
+                    "summary", _PERSONALITY_PROMPT, [{"role": "user", "content": prompt}], config
+                )
         except Exception:
             logger.exception("cloud email summary failed, falling back to local")
     if summary is None:
@@ -251,7 +264,9 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
         # spoken-length cap) - it used to be a bare, uncapped prompt (audit
         # 2026-09-24). No facts: the email body is all the context needed.
         async with metrics.timed("reply", route="local", model=config.ollama_model):
-            summary = await _local_reply([{"role": "user", "content": prompt}], config, include_facts=False)
+            summary = await _local_reply(
+                [{"role": "user", "content": prompt}], config, include_facts=False
+            )
 
     mark_email_resolved(config.db_path, pending["id"])
     save_message(config.db_path, session_id, "user", message)
@@ -290,7 +305,9 @@ def _format_for_privacy_check(history: list[dict], message: str) -> str:
     return "\n".join(lines)
 
 
-async def _cloud_chat(message: str, history: list[dict], config: FeltConfig, tone: str | None = None) -> str:
+async def _cloud_chat(
+    message: str, history: list[dict], config: FeltConfig, tone: str | None = None
+) -> str:
     """Routes through cloud.cloud_generate's "conversation" purpose
     (WP-05) - NOT ninerouter/Antigravity, which contaminates every reply
     with its own coding-agent identity no matter what system prompt is
@@ -354,12 +371,18 @@ async def _local_reply(
     # the cloud path too (see _music_taste_context).
     facts = _facts_context(config) if include_facts else []
     taste = _music_taste_context(config) if include_facts else []
-    messages = [{"role": "system", "content": _personality_prompt(tone)}] + facts + taste + messages_tail
+    messages = (
+        [{"role": "system", "content": _personality_prompt(tone)}] + facts + taste + messages_tail
+    )
     return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
 
 async def _chat_reply(
-    message: str, history: list[dict], config: FeltConfig, safe: bool | None, tone: str | None = None
+    message: str,
+    history: list[dict],
+    config: FeltConfig,
+    safe: bool | None,
+    tone: str | None = None,
 ) -> str:
     """The actual reply-generation step for plain conversation (no skill
     involved) - routes to the cloud only when a Gemini API key is
@@ -486,7 +509,11 @@ async def _phrase_skill_result(
             ]
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_volume):
                 cloud_reply = await cloud_generate(
-                    "skill_phrasing", _personality_prompt(tone), messages, config, max_tokens=_SKILL_PHRASING_MAX_TOKENS
+                    "skill_phrasing",
+                    _personality_prompt(tone),
+                    messages,
+                    config,
+                    max_tokens=_SKILL_PHRASING_MAX_TOKENS,
                 )
             # An empty string isn't an exception - cloud_generate returns
             # it deliberately (cloud.py's _extract_text) when a model's
@@ -574,7 +601,9 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
             if cloud_line:
                 line = cloud_line
             else:
-                logger.warning("weather precompute: cloud phrasing returned nothing usable, using the raw tool output")
+                logger.warning(
+                    "weather precompute: cloud phrasing returned nothing usable, using the raw tool output"
+                )
         except Exception:
             logger.exception("weather precompute: cloud phrasing failed, using the raw tool output")
 
@@ -593,7 +622,9 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
             # (09-23 22:30 -> 09-24 17:45), not a felt-core bug. One line,
             # not a full traceback every 15 minutes; a live request just
             # renders TTS itself on a cache miss.
-            logger.warning("weather precompute: TTS pre-render skipped, felt-voice unavailable (%r)", e)
+            logger.warning(
+                "weather precompute: TTS pre-render skipped, felt-voice unavailable (%r)", e
+            )
         except Exception:
             logger.exception("weather precompute: TTS pre-render failed")
 
@@ -615,7 +646,11 @@ def current_weather() -> dict:
     if fresh is None:
         return {"condition": None, "animation_tag": None, "age_s": None}
     tag = fresh.get("animation_tag")
-    condition = tag.rsplit("/", 1)[-1] if isinstance(tag, str) and tag.startswith("reaction/weather/") else None
+    condition = (
+        tag.rsplit("/", 1)[-1]
+        if isinstance(tag, str) and tag.startswith("reaction/weather/")
+        else None
+    )
     return {
         "condition": condition,
         "animation_tag": tag,
@@ -699,7 +734,10 @@ async def music_taste_loop(config: FeltConfig) -> None:
                         try:
                             record_music_play(config.db_path, **finished)
                         except Exception:
-                            logger.exception("music taste: couldn't record %r, skipping it", finished.get("track_name"))
+                            logger.exception(
+                                "music taste: couldn't record %r, skipping it",
+                                finished.get("track_name"),
+                            )
             except Exception:
                 logger.exception("music taste loop iteration failed")
             await asyncio.sleep(_MUSIC_TASTE_POLL_INTERVAL_S)
@@ -742,7 +780,9 @@ async def chat(
     # discarding it on a skill path is cheaper than a second round trip on
     # the far more common no-skill path.
     privacy_task = (
-        asyncio.create_task(_timed_privacy_check(_format_for_privacy_check(history, message), config))
+        asyncio.create_task(
+            _timed_privacy_check(_format_for_privacy_check(history, message), config)
+        )
         if config.gemini_api_key
         else None
     )
@@ -793,9 +833,13 @@ async def chat(
                         await privacy_task
                     except asyncio.CancelledError:
                         pass
-                logger.info("weather fast path: serving the precomputed line, no skill/phrasing calls")
+                logger.info(
+                    "weather fast path: serving the precomputed line, no skill/phrasing calls"
+                )
                 save_message(config.db_path, session_id, "assistant", precompute["line"])
-                return ChatResult(reply=precompute["line"], animation_tag=precompute["animation_tag"])
+                return ChatResult(
+                    reply=precompute["line"], animation_tag=precompute["animation_tag"]
+                )
 
     if call is None:
         # Fail-closed exactly like is_safe_for_cloud's own internal catch
@@ -899,7 +943,9 @@ async def process_screen_context(
         )
         return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
+    observations_block = _observations_block(
+        get_recent_observations(config.db_path, session_id, limit=3)
+    )
 
     async def _local_attempt() -> str:
         # Last 4 REAL chat messages, not facts - facts are personal-info
@@ -927,7 +973,9 @@ async def process_screen_context(
             # be a "system"-tagged history entry now lives in `system`
             # instead. Routes through the "screen_reaction" purpose (the
             # volume/Gemma model), not "conversation".
-            async with metrics.timed("screen_reaction", route="cloud", model=config.cloud_model_volume):
+            async with metrics.timed(
+                "screen_reaction", route="cloud", model=config.cloud_model_volume
+            ):
                 reply_raw = await cloud_generate(
                     "screen_reaction",
                     f"{_personality_prompt(tone)}\n\n{observations_block}",
@@ -972,7 +1020,7 @@ _SCREEN_REACT_INSTRUCTION = (
     "no markdown code fences, with exactly these three fields:\n"
     '{"seen": "<one short neutral sentence describing what is actually on '
     'screen>", "line": "<your spoken reaction, max ~15 words, in character, '
-    "never mention screens or screenshots>\", "
+    'never mention screens or screenshots>", '
     '"emotion": "<one of: happy, excited, amused, sad, annoyed, surprised, '
     'thinking, sleepy, neutral>"}'
 )
@@ -1026,7 +1074,9 @@ async def react_to_screen(
             )
             return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
+    observations_block = _observations_block(
+        get_recent_observations(config.db_path, session_id, limit=3)
+    )
     system = f"{_personality_prompt(tone)}\n\n{observations_block}"
     context_line = f'App: {app} — "{title}"'
 

@@ -51,11 +51,13 @@ def test_leaves_a_bare_underscore_alone():
     assert strip_for_tts("the file_name is fine") == "the file_name is fine"
 
 
-
 # Live 2026-09-26: "*yawn* Ugh, that was literally agonizing." - the action
 # must be dropped, not spoken as the word "yawn".
 def test_leading_roleplay_action_is_dropped():
-    assert strip_for_tts("*yawn* Ugh, that was literally agonizing.") == "Ugh, that was literally agonizing."
+    assert (
+        strip_for_tts("*yawn* Ugh, that was literally agonizing.")
+        == "Ugh, that was literally agonizing."
+    )
 
 
 def test_trailing_and_mid_text_actions_are_dropped():

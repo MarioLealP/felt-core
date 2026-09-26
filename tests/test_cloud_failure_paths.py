@@ -65,7 +65,9 @@ async def test_non_429_error_on_volume_falls_back_to_overflow(tmp_path, monkeypa
 
     monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
 
-    result = await cloud.cloud_generate("skill_phrasing", "sys", [{"role": "user", "content": "hey"}], config)
+    result = await cloud.cloud_generate(
+        "skill_phrasing", "sys", [{"role": "user", "content": "hey"}], config
+    )
     assert result == "from overflow"
 
 
@@ -83,7 +85,9 @@ async def test_network_error_surfaces_as_cloud_unavailable(tmp_path, monkeypatch
 
 
 async def test_screen_share_cap_also_applies_to_the_overflow_model(tmp_path, monkeypatch):
-    config = _config(tmp_path, cloud_limits='{"volume-model": {"rpd": 10}, "overflow-model": {"rpd": 10}}')
+    config = _config(
+        tmp_path, cloud_limits='{"volume-model": {"rpd": 10}, "overflow-model": {"rpd": 10}}'
+    )
     from felt_core.db import increment_cloud_usage
 
     pt_day = cloud._pacific_day()
@@ -102,7 +106,9 @@ async def test_screen_share_cap_also_applies_to_the_overflow_model(tmp_path, mon
 
 
 async def test_other_purposes_still_use_overflow_after_screen_share_is_spent(tmp_path, monkeypatch):
-    config = _config(tmp_path, cloud_limits='{"volume-model": {"rpd": 10}, "overflow-model": {"rpd": 10}}')
+    config = _config(
+        tmp_path, cloud_limits='{"volume-model": {"rpd": 10}, "overflow-model": {"rpd": 10}}'
+    )
     from felt_core.db import increment_cloud_usage
 
     pt_day = cloud._pacific_day()
@@ -114,7 +120,9 @@ async def test_other_purposes_still_use_overflow_after_screen_share_is_spent(tmp
 
     monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
 
-    result = await cloud.cloud_generate("conversation", "sys", [{"role": "user", "content": "hey"}], config)
+    result = await cloud.cloud_generate(
+        "conversation", "sys", [{"role": "user", "content": "hey"}], config
+    )
     assert result == "conv-model"
 
 
@@ -137,7 +145,9 @@ async def test_system_role_messages_are_folded_into_the_system_instruction(tmp_p
 
     payload = payloads[0]
     assert "Mario often skips X." in payload["systemInstruction"]["parts"][0]["text"]
-    assert all("Mario often skips X." not in p["text"] for c in payload["contents"] for p in c["parts"])
+    assert all(
+        "Mario often skips X." not in p["text"] for c in payload["contents"] for p in c["parts"]
+    )
     assert [c["role"] for c in payload["contents"]] == ["user"]
 
 
@@ -153,7 +163,11 @@ async def test_cloud_chat_puts_music_taste_in_the_system_instruction(tmp_path, m
         return "hi"
 
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(brain, "_music_taste_context", lambda cfg: [{"role": "system", "content": "Mario often skips X."}])
+    monkeypatch.setattr(
+        brain,
+        "_music_taste_context",
+        lambda cfg: [{"role": "system", "content": "Mario often skips X."}],
+    )
 
     await brain._cloud_chat("hey", [], config)
 

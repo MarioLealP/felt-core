@@ -58,7 +58,9 @@ async def test_gated_skill_goes_to_cloud_when_the_result_passes_privacy(tmp_path
     monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
 
-    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], "gated", config)
+    reply = await brain._phrase_skill_result(
+        "shelf plug?", "the shelf plug is on", [], "gated", config
+    )
 
     assert reply == "cloud reply"
 
@@ -79,12 +81,16 @@ async def test_gated_skill_stays_local_when_the_result_fails_privacy(tmp_path, m
     monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    reply = await brain._phrase_skill_result("shelf plug?", "the shelf plug is on", [], "gated", config)
+    reply = await brain._phrase_skill_result(
+        "shelf plug?", "the shelf plug is on", [], "gated", config
+    )
 
     assert reply == "local reply"
 
 
-async def test_local_skill_never_calls_cloud_even_if_everything_would_say_safe(tmp_path, monkeypatch):
+async def test_local_skill_never_calls_cloud_even_if_everything_would_say_safe(
+    tmp_path, monkeypatch
+):
     config = _config(tmp_path, gemini_api_key="fake-key")
 
     async def fake_is_safe_for_cloud(text, cfg):
@@ -161,7 +167,9 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
 
     captured = {}
 
-    async def fake_phrase_skill_result(message, tool_output, history, skill_privacy, cfg, tone=None):
+    async def fake_phrase_skill_result(
+        message, tool_output, history, skill_privacy, cfg, tone=None
+    ):
         captured["tool_output"] = tool_output
         return "phrased reply"
 

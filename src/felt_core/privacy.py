@@ -46,7 +46,7 @@ _PRIVACY_PROMPT = (
     "with nothing sensitive in it - a device status, a calendar time, a "
     "public schedule - is SAFE even if it came from a personal skill; "
     "PRIVATE is about the CONTENT, not which skill produced it (Mario,\n"
-    "2026-09-22: \"stuff like your shelf light is on isn't private,\" and "
+    '2026-09-22: "stuff like your shelf light is on isn\'t private," and '
     "email/calendar/alarms/shopping-list/music results are fine too since "
     "Google already has that data).\n\n"
     "Worked examples:\n"

@@ -13,7 +13,9 @@ import httpx
 from felt_core.config import FeltConfig
 
 
-async def notify(config: FeltConfig, message: str, title: str | None = None, priority: int = 3) -> bool:
+async def notify(
+    config: FeltConfig, message: str, title: str | None = None, priority: int = 3
+) -> bool:
     if not config.ntfy_url or not config.ntfy_publish_topic or not config.ntfy_publish_user:
         return False
 

@@ -45,7 +45,9 @@ def test_v1_chat_unhush_phrasing(tmp_path, monkeypatch):
     _no_cloud(monkeypatch)
 
     with TestClient(api.app) as client:
-        response = client.post("/v1/chat", json={"message": "you can talk again", "session_id": "wp09-test"})
+        response = client.post(
+            "/v1/chat", json={"message": "you can talk again", "session_id": "wp09-test"}
+        )
 
     assert response.status_code == 200
     assert response.json()["ui_action"] == {"kind": "presence", "payload": {"action": "unhush"}}
@@ -58,12 +60,17 @@ def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch):
     monkeypatch.setattr(api.tts_cache, "get", lambda text: b"fake-wav-bytes")
 
     with TestClient(api.app) as client:
-        response = client.post("/v1/text-chat", json={"message": "shut up", "session_id": "wp09-test"})
+        response = client.post(
+            "/v1/text-chat", json={"message": "shut up", "session_id": "wp09-test"}
+        )
 
     assert response.status_code == 200
     raw = response.headers.get("x-ui-action")
     assert raw is not None
-    assert json.loads(unquote(raw)) == {"kind": "presence", "payload": {"action": "hush", "minutes": 10}}
+    assert json.loads(unquote(raw)) == {
+        "kind": "presence",
+        "payload": {"action": "hush", "minutes": 10},
+    }
 
 
 def test_v1_chat_plain_message_has_no_ui_action(tmp_path, monkeypatch):
@@ -76,7 +83,9 @@ def test_v1_chat_plain_message_has_no_ui_action(tmp_path, monkeypatch):
     monkeypatch.setattr(brain, "decide_tool", fake_decide_tool)
 
     with TestClient(api.app) as client:
-        response = client.post("/v1/chat", json={"message": "hello there", "session_id": "wp09-test"})
+        response = client.post(
+            "/v1/chat", json={"message": "hello there", "session_id": "wp09-test"}
+        )
 
     assert response.status_code == 200
     assert response.json()["ui_action"] is None

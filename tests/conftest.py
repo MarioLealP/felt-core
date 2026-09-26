@@ -73,7 +73,9 @@ def google_calendar_config():
     goes out, so these dummy fallbacks are all a normal `pytest` run
     ever needs."""
     return FeltConfig(
-        google_calendar_client_id=os.environ.get("FELT_GOOGLE_CALENDAR_CLIENT_ID", "dummy-client-id"),
+        google_calendar_client_id=os.environ.get(
+            "FELT_GOOGLE_CALENDAR_CLIENT_ID", "dummy-client-id"
+        ),
         google_calendar_client_secret=os.environ.get(
             "FELT_GOOGLE_CALENDAR_CLIENT_SECRET", "dummy-client-secret"
         ),

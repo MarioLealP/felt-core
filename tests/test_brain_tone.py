@@ -127,7 +127,9 @@ async def test_process_screen_context_local_path_carries_tone(tmp_path, monkeypa
 
     monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
 
-    await brain.process_screen_context("a cat", config, session_id="wp15-test", tone="Cozy, relaxed.")
+    await brain.process_screen_context(
+        "a cat", config, session_id="wp15-test", tone="Cozy, relaxed."
+    )
 
     system_messages = [m["content"] for m in captured["messages"] if m["role"] == "system"]
     # _local_reply prepends its own system message ahead of the caller's

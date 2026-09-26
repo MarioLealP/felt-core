@@ -1,13 +1,13 @@
 from felt_core.plugin_loader import load_plugins
 
-_VALID_SKILL = '''
+_VALID_SKILL = """
 name = "example_skill"
 description = "An example skill."
 parameters_schema = {"type": "object", "properties": {}}
 
 async def handle(params, ctx):
     return "ok"
-'''
+"""
 
 _MALFORMED_SKILL = "this is not valid python syntax !!!"
 

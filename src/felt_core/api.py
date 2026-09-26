@@ -118,7 +118,14 @@ app.add_middleware(
 
 
 # Polling / status / metrics reads - not user-facing turns, never timed.
-_UNTIMED_PATHS = ("/v1/metrics/", "/v1/music/now", "/v1/music/lyrics", "/v1/history", "/v1/health", "/v1/status")
+_UNTIMED_PATHS = (
+    "/v1/metrics/",
+    "/v1/music/now",
+    "/v1/music/lyrics",
+    "/v1/history",
+    "/v1/health",
+    "/v1/status",
+)
 
 
 def _is_untimed(path: str) -> bool:
@@ -252,12 +259,15 @@ async def voice_chat_endpoint(
     the brain -> felt-voice (TTS), so a client doesn't have to."""
     config = load_config()
     if not config.voice_url:
-        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
+        raise HTTPException(
+            status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
+        )
 
     async with httpx.AsyncClient(timeout=60) as client:
         async with metrics.timed("stt"):
             stt_resp = await client.post(
-                f"{config.voice_url}/v1/stt", files={"file": (file.filename, await file.read(), file.content_type)}
+                f"{config.voice_url}/v1/stt",
+                files={"file": (file.filename, await file.read(), file.content_type)},
             )
             stt_resp.raise_for_status()
             transcribed = stt_resp.json()["text"]
@@ -281,7 +291,12 @@ async def voice_chat_endpoint(
             reply = "I didn't catch that."
 
         return await _synthesize_reply(
-            reply, ui_action, animation_tag, config, client, {"X-Transcribed-Text": quote(transcribed)}
+            reply,
+            ui_action,
+            animation_tag,
+            config,
+            client,
+            {"X-Transcribed-Text": quote(transcribed)},
         )
 
 
@@ -294,7 +309,9 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
     was voice input, need her to reply with TTS + animation")."""
     config = load_config()
     if not config.voice_url:
-        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
+        raise HTTPException(
+            status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
+        )
 
     result = await chat(req.message, config, req.session_id, req.tone)
     async with httpx.AsyncClient(timeout=60) as client:
@@ -313,7 +330,9 @@ class ScreenContextRequest(BaseModel):
 
 
 @app.post("/v1/context/screen")
-async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "default") -> Response:
+async def screen_context_endpoint(
+    req: ScreenContextRequest, session_id: str = "default"
+) -> Response:
     """Receives passive screen observations from felt-vision.
     Returns audio+animation headers just like chat, but handles pure-silent
     reactions by skipping TTS entirely."""
@@ -326,7 +345,7 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
         if result.animation_tag is not None:
             headers["X-Animation-Tag"] = quote(result.animation_tag)
         return Response(content=b"", media_type="audio/wav", headers=headers)
-        
+
     async with httpx.AsyncClient(timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
@@ -388,7 +407,9 @@ class EventReactionRequest(BaseModel):
 
 
 @app.post("/v1/react/event")
-async def react_event_endpoint(req: EventReactionRequest, session_id: str = "dashboard") -> Response:
+async def react_event_endpoint(
+    req: EventReactionRequest, session_id: str = "dashboard"
+) -> Response:
     """A short spoken reaction to a desktop event (events.py) - e.g.
     {"event": "music_new_track", "details": {"title", "artist", "album"}}.
 
@@ -403,16 +424,22 @@ async def react_event_endpoint(req: EventReactionRequest, session_id: str = "das
     if not config.voice_url:
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
 
-    result = await react_to_event(req.event, req.details, config, session_id=session_id, tone=req.tone)
+    result = await react_to_event(
+        req.event, req.details, config, session_id=session_id, tone=req.tone
+    )
     if not result.line:
         return Response(
-            content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": quote(result.skipped or "none")}
+            content=b"",
+            media_type="audio/wav",
+            headers={"X-Reaction-Skipped": quote(result.skipped or "none")},
         )
 
     emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            return await _synthesize_reply(result.line, None, None, config, client, extra_headers=emotion_headers or None)
+            return await _synthesize_reply(
+                result.line, None, None, config, client, extra_headers=emotion_headers or None
+            )
     except httpx.HTTPError:
         logger.exception("event reaction: TTS failed for %r", result.line)
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})

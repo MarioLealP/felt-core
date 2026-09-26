@@ -2,7 +2,18 @@ from felt_core.brain import _looks_affirmative
 
 
 def test_recognizes_common_affirmatives():
-    for message in ["yes", "Yeah", "yep", "sure", "ok", "okay", "please", "go ahead", "summarize it", "do it"]:
+    for message in [
+        "yes",
+        "Yeah",
+        "yep",
+        "sure",
+        "ok",
+        "okay",
+        "please",
+        "go ahead",
+        "summarize it",
+        "do it",
+    ]:
         assert _looks_affirmative(message), f"expected {message!r} to be recognized"
 
 

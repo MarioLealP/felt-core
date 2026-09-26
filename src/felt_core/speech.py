@@ -28,12 +28,12 @@ _ACTION_LEAD_RE = re.compile(r"(^|[.!?…]\s+)\*[^*\n]{1,40}\*[.!?…,]*\s*")
 _ACTION_TAIL_RE = re.compile(r"\s*\*[^*\n]{1,40}\*[.!?…]*\s*$")
 _EMOJI_RE = re.compile(
     "["
-    "\U0001F300-\U0001FAFF"  # misc symbols/pictographs through supplemental symbols
-    "\U00002600-\U000027BF"  # misc symbols + dingbats
-    "\U0001F1E6-\U0001F1FF"  # regional indicators (flag emoji)
-    "\U00002B00-\U00002BFF"  # misc symbols and arrows (stars, etc.)
-    "\U0000FE0F"  # emoji variation selector
-    "\U0000200D"  # zero-width joiner (combined emoji)
+    "\U0001f300-\U0001faff"  # misc symbols/pictographs through supplemental symbols
+    "\U00002600-\U000027bf"  # misc symbols + dingbats
+    "\U0001f1e6-\U0001f1ff"  # regional indicators (flag emoji)
+    "\U00002b00-\U00002bff"  # misc symbols and arrows (stars, etc.)
+    "\U0000fe0f"  # emoji variation selector
+    "\U0000200d"  # zero-width joiner (combined emoji)
     "]+"
 )
 _WHITESPACE_RE = re.compile(r"[ \t]+")

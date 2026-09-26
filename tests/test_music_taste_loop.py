@@ -8,7 +8,12 @@ _SONG_B = {"id": "b2", "name": "Song B", "artists": [{"name": "Artist B"}]}
 
 
 def _snapshot(track, progress_ms, duration_ms=200000, is_playing=True):
-    return {"track": track, "progress_ms": progress_ms, "duration_ms": duration_ms, "is_playing": is_playing}
+    return {
+        "track": track,
+        "progress_ms": progress_ms,
+        "duration_ms": duration_ms,
+        "is_playing": is_playing,
+    }
 
 
 def test_no_previous_snapshot_means_nothing_finished():
@@ -54,22 +59,39 @@ def test_playback_stopping_also_finishes_the_previous_track():
 
 # -- null ids (audit 2026-09-24: the loop wedged on a local file) --------
 
-_LOCAL_FILE = {"id": None, "uri": "spotify:local:Artist+L:Album:Local+Song:200", "name": "Local Song", "artists": [{"name": "Artist L"}]}
+_LOCAL_FILE = {
+    "id": None,
+    "uri": "spotify:local:Artist+L:Album:Local+Song:200",
+    "name": "Local Song",
+    "artists": [{"name": "Artist L"}],
+}
 _NO_ID_NO_URI = {"id": None, "name": "Mystery", "artists": []}
 
 
 def test_null_id_item_is_keyed_by_uri():
-    finished = brain._finished_play_from_transition(_snapshot(_LOCAL_FILE, 190000), _snapshot(_SONG_B, 1000))
+    finished = brain._finished_play_from_transition(
+        _snapshot(_LOCAL_FILE, 190000), _snapshot(_SONG_B, 1000)
+    )
 
     assert finished["track_id"] == _LOCAL_FILE["uri"]
 
 
 def test_item_with_neither_id_nor_uri_is_not_recorded():
-    assert brain._finished_play_from_transition(_snapshot(_NO_ID_NO_URI, 190000), _snapshot(_SONG_B, 1000)) is None
+    assert (
+        brain._finished_play_from_transition(
+            _snapshot(_NO_ID_NO_URI, 190000), _snapshot(_SONG_B, 1000)
+        )
+        is None
+    )
 
 
 def test_same_null_id_local_file_still_playing_means_nothing_finished():
-    assert brain._finished_play_from_transition(_snapshot(_LOCAL_FILE, 1000), _snapshot(_LOCAL_FILE, 16000)) is None
+    assert (
+        brain._finished_play_from_transition(
+            _snapshot(_LOCAL_FILE, 1000), _snapshot(_LOCAL_FILE, 16000)
+        )
+        is None
+    )
 
 
 class _StopLoop(Exception):

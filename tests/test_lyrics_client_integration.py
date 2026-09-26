@@ -13,7 +13,13 @@ async def test_get_lyrics_finds_a_real_synced_track(tmp_path):
 
     async with httpx.AsyncClient(timeout=20) as client:
         result = await get_lyrics(
-            client, tmp_path, "bohemian-rhapsody-queen", "Bohemian Rhapsody", "Queen", "A Night at the Opera", 355
+            client,
+            tmp_path,
+            "bohemian-rhapsody-queen",
+            "Bohemian Rhapsody",
+            "Queen",
+            "A Night at the Opera",
+            355,
         )
 
     assert result is not None

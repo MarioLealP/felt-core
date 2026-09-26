@@ -71,9 +71,7 @@ def _fetch_unseen(config: FeltConfig) -> list[dict]:
         found = []
         for uid in uids:
             uid_str = uid.decode()
-            status, msg_data = conn.uid(
-                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"
-            )
+            status, msg_data = conn.uid("FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
             if status != "OK" or not msg_data or not msg_data[0]:
                 continue
             raw_headers = msg_data[0][1]
