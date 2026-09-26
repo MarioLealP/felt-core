@@ -1,8 +1,10 @@
 """Decides whether a plain conversational message is safe to send to an
-external cloud model (Gemini, via ninerouter) for a higher-quality reply,
-or whether it needs to stay on the local model. Same pattern as router.py's
-decide_tool - a small, dedicated, narrow classification call, not the chat
-model reasoning about itself.
+external cloud model (Gemini, called directly - NOT via ninerouter, which
+contaminates every reply with its own coding-agent identity no matter what
+system prompt is supplied, see config.py's gemini_api_key comment) for a
+higher-quality reply, or whether it needs to stay on the local model. Same
+pattern as router.py's decide_tool - a small, dedicated, narrow
+classification call, not the chat model reasoning about itself.
 
 Fails closed, deliberately: this is the one thing standing between a
 message and leaving the LAN, so any parse failure, timeout, or model error

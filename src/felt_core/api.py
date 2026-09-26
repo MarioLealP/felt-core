@@ -20,7 +20,16 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
@@ -613,7 +622,18 @@ async def chat_ws(websocket: WebSocket) -> None:
                     "animation_tag": result.animation_tag,
                 }
             )
+    except WebSocketDisconnect:
+        # The ordinary way this loop ends - the client closed the tab/app.
+        # Nothing to log beyond that it happened; the socket is already
+        # gone, so there's no `websocket.close()` to call here either.
+        logger.info("chat_ws: client disconnected")
     except Exception:
+        # WP-40: this used to swallow any error and just close the socket
+        # with zero logging - the single worst offender across ~50+ broad
+        # excepts audited (ENGINEERING-RULES.md rule 33/34). Now logged
+        # with what was actually happening (the /v1/chat/ws message loop)
+        # before still closing the socket the same way as before.
+        logger.exception("chat_ws: message loop failed, closing the socket")
         await websocket.close()
 
 
