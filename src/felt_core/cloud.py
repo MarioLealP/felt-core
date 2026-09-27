@@ -312,9 +312,12 @@ async def _post_generate_content(model: str, payload: dict, config: FeltConfig) 
     tests (returns (status_code, json_body) rather than a full
     httpx.Response, so a fake doesn't need to construct one)."""
     async with httpx.AsyncClient(timeout=60) as client:
+        # The key goes in a header, never the URL: httpx logs request URLs at
+        # INFO, so `?key=` leaked the Gemini key into the container logs
+        # (found 2026-09-27).
         response = await client.post(
             f"{_REST_BASE}/models/{model}:generateContent",
-            params={"key": config.gemini_api_key},
+            headers={"x-goog-api-key": config.gemini_api_key},
             json=payload,
         )
     try:

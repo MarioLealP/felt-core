@@ -643,5 +643,8 @@ def run() -> None:
     # were silently dropped below the default WARNING threshold. Only
     # uvicorn's own access-log lines were ever visible.
     logging.basicConfig(level=logging.INFO)
+    # httpx logs every request URL at INFO; keep URLs (and anything a caller
+    # ever puts in a query string) out of the logs (2026-09-27 key leak).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     config = load_config()
     uvicorn.run(app, host=config.host, port=config.port)
