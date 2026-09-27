@@ -50,7 +50,35 @@ def _load_json_manifest(plugins_dir: Path, filename: str) -> dict[str, str]:
     return {key: value for key, value in data.items() if not key.startswith("_")}
 
 
+_cache: dict[str, tuple[tuple, dict[str, LoadedSkill]]] = {}
+
+
+def _plugins_signature(base: Path) -> tuple:
+    """What a reload depends on: the manifests plus every plugin's skill.py,
+    each with its mtime. Not just the directory's own mtime: editing a
+    file inside a plugin subfolder doesn't change the parent dir's mtime."""
+    if not base.is_dir():
+        return ()
+    files = [base / "tags.json", base / "skills.json"]
+    files += sorted(e / "skill.py" for e in base.iterdir() if e.is_dir())
+    return tuple((str(f), f.stat().st_mtime_ns) for f in files if f.is_file())
+
+
 def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
+    """WP-24: cached. This runs on every chat message (orchestrator and
+    background), and a rescan re-imports every plugin module. It now only
+    rescans when a manifest or a skill.py is added, removed or modified.
+    A stat per file is far cheaper than exec'ing each module."""
+    signature = _plugins_signature(Path(plugins_dir))
+    cached = _cache.get(plugins_dir)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    registry = _scan_plugins(plugins_dir)
+    _cache[plugins_dir] = (signature, registry)
+    return registry
+
+
+def _scan_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
     registry: dict[str, LoadedSkill] = {}
     base = Path(plugins_dir)
     if not base.is_dir():
