@@ -27,8 +27,8 @@ jobs:
       - name: format (ruff format --check)
         run: uv run ruff format --check
 
-      - name: types (pyright, gated on the WP-39 baseline)
-        run: uv run python scripts/check_pyright_baseline.py
+      - name: types (ty, zero errors)
+        run: uv run ty check --output-format concise
 
       - name: test (pytest)
         run: uv run pytest -v
