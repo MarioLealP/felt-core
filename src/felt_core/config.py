@@ -222,6 +222,11 @@ class FeltConfig(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8420
 
+    # WP-25: enables POST /v1/proactive/debug (insert a proactive item by
+    # hand, for the accept test / live poking). Off by default - this is a
+    # debug-only door into the proactive queue, not a normal client path.
+    debug: bool = False
+
 
 def load_config() -> FeltConfig:
     return FeltConfig()

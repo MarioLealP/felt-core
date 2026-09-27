@@ -53,8 +53,11 @@ from felt_core.db import (
     delete_shopping_item,
     get_history,
     get_latency_rows,
+    get_proactive_item,
     get_setting,
     get_shopping_items,
+    prune_expired_proactive,
+    requeue_proactive,
     set_setting,
     set_shopping_item_checked,
 )
@@ -63,6 +66,7 @@ from felt_core.events import react_to_event
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
+from felt_core.proactive import clamp_timeout, enqueue_proactive, wait_for_next
 from felt_core.speech import strip_for_tts
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
@@ -94,6 +98,13 @@ async def lifespan(app: FastAPI):
         delete_old_latency_rows(config.db_path, older_than_days=30)
     except Exception:
         logger.exception("failed to prune old latency rows")
+    # WP-25: same startup-sweep convention - an expired proactive item is
+    # already unreachable via claim_next_proactive, this just stops the
+    # table growing forever.
+    try:
+        prune_expired_proactive(config.db_path)
+    except Exception:
+        logger.exception("failed to prune expired proactive items")
     yield
     ntfy_task.cancel()
     email_task.cancel()
@@ -134,6 +145,10 @@ _UNTIMED_PATHS = (
     "/v1/history",
     "/v1/health",
     "/v1/status",
+    # WP-25: a long-poll that can sit open for up to 30s by design - not a
+    # real turn, and would otherwise swamp the `total` stage's percentiles
+    # the same way /v1/music/now's old un-excluded polling did (WP-04 fix).
+    "/v1/proactive/next",
 )
 
 
@@ -626,6 +641,83 @@ async def delete_shopping_item_endpoint(item_id: int) -> dict:
 @app.get("/shopping-list")
 async def shopping_list_page() -> FileResponse:
     return FileResponse(_STATIC_DIR / "shopping-list.html")
+
+
+# -- WP-25: the proactive channel (felt-core -> desktop) --------------------
+
+
+@app.get("/v1/proactive/next")
+async def proactive_next_endpoint(timeout: float = 25.0) -> Response:
+    """felt-tray's long-poll. Returns the oldest undelivered, unexpired
+    item (already marked delivered) as soon as one exists, or an empty
+    204 once the (clamped) timeout elapses with nothing to hand out."""
+    config = load_config()
+    item = await wait_for_next(config, clamp_timeout(timeout))
+    if item is None:
+        return Response(status_code=204)
+    return JSONResponse(content=item)
+
+
+@app.get("/v1/proactive/{item_id}/audio")
+async def proactive_audio_endpoint(item_id: int) -> Response:
+    """The item's TTS WAV, fetched separately from /next so a client can
+    show/queue the item before audio is ready - reuses the same WP-06
+    cache + felt-voice call /v1/voice-chat and friends already share via
+    tts_cache/_synthesize_reply, just without the X-* reply headers (there's
+    no ui_action/animation_tag to carry here beyond what /next already
+    returned)."""
+    config = load_config()
+    row = get_proactive_item(config.db_path, item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="not found")
+    if not config.voice_url:
+        raise HTTPException(status_code=503, detail="voice_unavailable")
+
+    tts_text = strip_for_tts(row["text"])
+    audio_bytes = tts_cache.get(tts_text)
+    if audio_bytes is None:
+        async with httpx.AsyncClient(timeout=60) as client:
+            async with metrics.timed("tts", chars=len(tts_text)):
+                tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
+                tts_resp.raise_for_status()
+            audio_bytes = tts_resp.content
+        tts_cache.put(tts_text, audio_bytes)
+    return Response(content=audio_bytes, media_type="audio/wav")
+
+
+@app.post("/v1/proactive/{item_id}/requeue")
+async def proactive_requeue_endpoint(item_id: int) -> dict:
+    """felt-tray calls this when Felt was hidden/away and the item wasn't
+    `urgent` - don't lose it, hand it out again on the next /next poll."""
+    config = load_config()
+    return {"requeued": requeue_proactive(config.db_path, item_id)}
+
+
+class ProactiveDebugRequest(BaseModel):
+    kind: str = "debug"
+    text: str
+    animation_tag: str | None = None
+    emotion: str | None = None
+    ttl_s: float = 600.0
+
+
+@app.post("/v1/proactive/debug")
+async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
+    """WP-25 accept test's door into the queue - only reachable with
+    FELT_DEBUG=1, a 404 (not just an auth error) otherwise so its
+    existence isn't even discoverable on a normal deployment."""
+    config = load_config()
+    if not config.debug:
+        raise HTTPException(status_code=404, detail="not found")
+    item_id = enqueue_proactive(
+        config,
+        req.kind,
+        req.text,
+        animation_tag=req.animation_tag,
+        emotion=req.emotion,
+        ttl_s=req.ttl_s,
+    )
+    return {"id": item_id}
 
 
 @app.websocket("/v1/chat/ws")

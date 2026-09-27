@@ -59,6 +59,7 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 | `api.py` | 600 | FastAPI app: CORS, latency middleware, all 20 HTTP/WS routes, request→brain wiring, TTS synthesis glue. |
 | `cloud.py` | 470 | Sole Gemini/Gemma API client: purpose-routed model choice, RPM/TPM/RPD quota tracking, thinking-budget handling, `CloudUnavailable`. |
 | `events.py` | 400 | Desktop-event (`/v1/react/event`) policy table, cooldown/dedupe decision, prompt building, phrasing. |
+| `proactive.py` | ~90 | WP-25: the `proactive` queue's `enqueue_proactive`/`wait_for_next` (long-poll logic, timeout clamping) - other WPs' server→desktop pushes call `enqueue_proactive`, not `db.py` directly. |
 | `router.py` | 257 | Tool-vs-chat routing: builds a ~160-line few-shot prompt for the router model, parses its JSON reply. |
 | `config.py` | 227 | `FeltConfig` (pydantic-settings), every env-driven setting. |
 | `lyrics_client.py` | 204 | LRCLIB lookup + disk cache (one JSON file per track). |
@@ -147,6 +148,10 @@ command uses.
 | PATCH/DELETE | `/v1/shopping-list/{item_id}` | `set_shopping_item_checked_endpoint` / `delete_shopping_item_endpoint` |
 | GET | `/shopping-list` | `shopping_list_page` (static HTML) |
 | WS | `/v1/chat/ws` | `chat_ws` |
+| GET | `/v1/proactive/next?timeout=` | `proactive_next_endpoint` (WP-25 long-poll, 204 on timeout) |
+| GET | `/v1/proactive/{item_id}/audio` | `proactive_audio_endpoint` (WP-25, reuses the WP-06 TTS cache) |
+| POST | `/v1/proactive/{item_id}/requeue` | `proactive_requeue_endpoint` (WP-25) |
+| POST | `/v1/proactive/debug` | `proactive_debug_endpoint` (WP-25, 404 unless `FELT_DEBUG=1`) |
 
 No auth on any route (documented, deliberate — LAN-only posture, same as
 Ollama/ComfyUI elsewhere on clockmost). All routes are one file, `api.py`.
