@@ -32,7 +32,7 @@ from felt_core.brain.screen_reactions import (
     RECENT_LINES_N,
     recent_lines_block,
 )
-from felt_core.cloud import cloud_generate
+from felt_core.cloud import CloudUnavailable, Purpose, cloud_generate
 from felt_core.config import FeltConfig
 
 # Four consecutive glances per session. The "crushing it" bug is repetition
@@ -119,6 +119,21 @@ SCREEN_PACE_S = 2.5  # Gemma 30 RPM
 CHAT_PACE_S = 4.5  # flash-lite 15 RPM
 
 
+async def _generate(purpose: Purpose, system: str, messages: list[dict], config: FeltConfig) -> str:
+    """cloud_generate with backoff. The v2 sheet is ~2K tokens, and Gemma's
+    free tier is 16K TPM, so the governor refuses calls mid-run
+    (CloudUnavailable). The first rerun crashed on exactly that. Wait it out
+    rather than die: this is a batch job, and live Felt keeps priority."""
+    for attempt in range(8):
+        try:
+            return await cloud_generate(purpose, system, messages, config)
+        except CloudUnavailable:
+            wait = min(15 * (attempt + 1), 60)
+            print(f"  {purpose}: cloud unavailable (budget), retry in {wait}s", flush=True)
+            await asyncio.sleep(wait)
+    raise CloudUnavailable(f"{purpose}: still unavailable after 8 attempts")
+
+
 def _ngrams(text: str, n: int) -> list[tuple[str, ...]]:
     words = re.findall(r"[a-z']+", text.lower())
     return [tuple(words[i : i + n]) for i in range(len(words) - n + 1)]
@@ -149,7 +164,7 @@ async def _run_arm(arm: str, config: FeltConfig) -> dict:
             sys_prompt = f"{system()}\n\nRecently on screen (oldest first):\n{obs}"
             # Same "her recent remarks, last" block production sends.
             instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(lines[-RECENT_LINES_N:])
-            reply = await cloud_generate(
+            reply = await _generate(
                 "screen_reaction",
                 sys_prompt,
                 [{"role": "user", "content": instruction}],
@@ -161,7 +176,7 @@ async def _run_arm(arm: str, config: FeltConfig) -> dict:
 
     chat: list[dict] = []
     for text, debatable in CHAT_CASES:
-        reply = await cloud_generate(
+        reply = await _generate(
             "conversation", system(), [{"role": "user", "content": text}], config
         )
         chat.append({"mario": text, "felt": reply.strip(), "debatable": debatable})
