@@ -57,6 +57,29 @@ def _observations_block(observations: list[dict]) -> str:
     return f"Recently on screen (oldest first):\n{lines}"
 
 
+RECENT_LINES_N = 8
+
+
+def recent_lines_block(lines: list[str]) -> str:
+    """Her own recent remarks, fed back so she stops echoing herself
+    (personality plan P3, B-1). It goes LAST, in the per-glance
+    instruction, not in `system`: models weight what they read last most
+    (the SillyTavern post-history lesson), and "don't repeat" loses to a
+    long persona block otherwise."""
+    if not lines:
+        return ""
+    listed = "\n".join(f"- {line}" for line in lines)
+    return (
+        "\n\nThings you already said recently (never repeat, rephrase, or reuse the "
+        "opening words of any of these; if they were upbeat, don't cheer again):\n" + listed
+    )
+
+
+def _recent_lines(config: FeltConfig, session_id: str) -> list[str]:
+    rows = get_recent_observations(config.db_path, session_id, limit=RECENT_LINES_N)
+    return [r["spoken_reply"] for r in rows if r.get("spoken_reply")]
+
+
 def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
     """WP-40 merge: the one cooldown check both process_screen_context and
     react_to_screen use - previously each inlined an identical copy of
@@ -106,6 +129,7 @@ async def process_screen_context(
     observations_block = _observations_block(
         get_recent_observations(config.db_path, session_id, limit=3)
     )
+    instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(_recent_lines(config, session_id))
 
     async def _local_attempt() -> str:
         # Last 4 REAL chat messages, not facts - facts are personal-info
@@ -117,7 +141,7 @@ async def process_screen_context(
             return await local_reply(
                 [{"role": "system", "content": observations_block}]
                 + history_tail
-                + [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                + [{"role": "user", "content": instruction}],
                 config,
                 include_facts=False,
                 tone=tone,
@@ -139,7 +163,7 @@ async def process_screen_context(
                 reply_raw = await cloud_generate(
                     "screen_reaction",
                     f"{personality_prompt(tone)}\n\n{observations_block}",
-                    [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                    [{"role": "user", "content": instruction}],
                     config,
                 )
         except Exception:
@@ -232,6 +256,7 @@ async def react_to_screen(
     )
     system = f"{personality_prompt(tone)}\n\n{observations_block}"
     context_line = f'App: {app} — "{title}"'
+    recent = recent_lines_block(_recent_lines(config, session_id))
 
     # WP-04's screen_reaction stage (the model call(s), cloud route) -
     # WP-05 had left only the generic `cloud` stage here (audit 2026-09-24).
@@ -239,7 +264,7 @@ async def react_to_screen(
         raw = await cloud_generate(
             "screen_reaction",
             system,
-            [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}"}],
+            [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}"}],
             config,
             images=[jpeg_bytes],
             json_mode=True,
@@ -254,7 +279,7 @@ async def react_to_screen(
                 [
                     {
                         "role": "user",
-                        "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}\n\n"
+                        "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}\n\n"
                         "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
                     }
                 ],

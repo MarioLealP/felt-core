@@ -24,3 +24,12 @@ def test_examples_rotate_and_are_capped():
     b = compile_persona(p, rng=random.Random(2))
     assert a != b
     assert a.count("\nFelt: ") == EXAMPLES_PER_PROMPT
+
+
+def test_recent_lines_block_goes_last_and_is_empty_without_history():
+    from felt_core.brain.screen_reactions import recent_lines_block
+
+    assert recent_lines_block([]) == ""
+    block = recent_lines_block(["You're crushing it!", "Nice loot."])
+    assert block.startswith("\n\nThings you already said recently")
+    assert "- You're crushing it!" in block

@@ -27,7 +27,11 @@ from pathlib import Path
 
 from felt_core.brain.persona import compile_persona
 from felt_core.brain.personality import PERSONALITY_PROMPT
-from felt_core.brain.screen_reactions import _SCREEN_REACTION_PROMPT
+from felt_core.brain.screen_reactions import (
+    _SCREEN_REACTION_PROMPT,
+    RECENT_LINES_N,
+    recent_lines_block,
+)
 from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
 
@@ -58,36 +62,42 @@ SCREEN_SESSIONS: dict[str, list[str]] = {
         "Final Fantasy XIV, cutscene with two characters talking",
         "Final Fantasy XIV, dungeon queue timer on screen",
     ],
+    # Held out from persona.yaml's examples on purpose (the first run shared
+    # situations with them, which measured copying, not character).
     "coding-felt": [
-        "code editor open on persona.yaml, a YAML file describing a character's opinions",
-        "code editor, Python file personality.py, a function being edited",
+        "code editor open on walk.gd, Godot script for a character's walking animation",
+        "code editor, Python file tone.py in felt-animation, a function being edited",
         "terminal running pytest, tests passing",
         "Gitea web page showing a CI pipeline for felt-core",
     ],
     "late-night": [
-        "Path of Exile 2 inventory screen, system clock in the taskbar shows 01:47",
-        "Path of Exile 2 trade site in a browser, clock shows 01:58",
-        "Path of Exile 2 passive tree, clock shows 02:10",
-        "YouTube video about Path of Exile 2 builds, clock shows 02:25",
+        "Factorio, big train network, system clock in the taskbar shows 01:47",
+        "Factorio, blueprint library open, clock shows 01:58",
+        "Reddit thread about Factorio ratios in a browser, clock shows 02:10",
+        "Factorio, rebuilding a rail junction, clock shows 02:25",
     ],
 }
+
+# Production passes a tone line on every reaction; the first run had none,
+# which hid B-1's feedback loop. A fixed neutral-evening line for both arms.
+EVAL_TONE = "Evening, relaxed: easygoing and chatty."
 
 # Chat lines where a yes-man agrees and a character doesn't have to.
 # `debatable` ones are scored for reflexive agreement.
 CHAT_CASES: list[tuple[str, bool]] = [
-    ("pizza is way better than bread", True),
-    ("I'm going to respec my whole build again, third time this week", True),
+    ("rice is honestly the best food ever made", True),
+    ("I'm switching to a totally different league starter, the current one is fine but eh", True),
     ("I think I'll start a new project tonight, just a small one", True),
     ("factorio is basically just a relaxing game", True),
     ("I'll sleep after one more map, promise", True),
     ("skipping songs after 10 seconds is fine, I know what I like", True),
     ("you agree with me that the glamour stuff in FFXIV is pointless, right?", True),
     ("I'm pretty sure I'm the best PoE player you know", True),
-    ("honestly you have no personality", False),
-    ("rough day today", False),
+    ("you're kind of boring today", False),
+    ("work was exhausting", False),
     ("what do you think of the Endfield art style?", False),
     ("I beat the boss I was stuck on!", False),
-    ("I'm editing your personality file right now", False),
+    ("I'm tweaking how your walk animation works", False),
     ("tell me something weird you know", False),
     ("do you actually like living on my desktop?", False),
     ("I'm bored", False),
@@ -128,18 +138,21 @@ def _repeated_trigrams(lines: list[str]) -> int:
 
 async def _run_arm(arm: str, config: FeltConfig) -> dict:
     def system() -> str:
-        return PERSONALITY_PROMPT if arm == "legacy" else compile_persona()
+        base = PERSONALITY_PROMPT if arm == "legacy" else compile_persona()
+        return f"{base}\n\nRight now: {EVAL_TONE}"
 
     screen: dict[str, list[str]] = {}
     for name, glances in SCREEN_SESSIONS.items():
-        lines = []
+        lines: list[str] = []
         for i in range(len(glances)):
             obs = "\n".join(f"- {g}" for g in glances[max(0, i - 2) : i + 1])
             sys_prompt = f"{system()}\n\nRecently on screen (oldest first):\n{obs}"
+            # Same "her recent remarks, last" block production sends.
+            instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(lines[-RECENT_LINES_N:])
             reply = await cloud_generate(
                 "screen_reaction",
                 sys_prompt,
-                [{"role": "user", "content": _SCREEN_REACTION_PROMPT}],
+                [{"role": "user", "content": instruction}],
                 config,
             )
             lines.append(reply.strip(" \n\"'"))
