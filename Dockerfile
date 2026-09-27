@@ -6,6 +6,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
 COPY static/ ./static/
+COPY plugins/ ./plugins/
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8420
