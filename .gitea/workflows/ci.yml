@@ -46,12 +46,19 @@ jobs:
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    uses: Benylin/ci-workflows/.gitea/workflows/deploy.yml@main
-    with:
-      app: felt-core
-    secrets:
-      REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-      INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
-      INFRA_REPO_URL: ${{ secrets.INFRA_REPO_URL }}
-      INFRA_KNOWN_HOSTS: ${{ secrets.INFRA_KNOWN_HOSTS }}
-      NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - uses: actions/checkout@v4
+      - name: build, push, promote (shared deploy.sh, WP-53)
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
+          INFRA_REPO_URL: ${{ secrets.INFRA_REPO_URL }}
+          INFRA_KNOWN_HOSTS: ${{ secrets.INFRA_KNOWN_HOSTS }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: curl -fsSL https://git.clockmost.com/Benylin/ci-workflows/raw/branch/main/deploy.sh | bash -s -- felt-core
