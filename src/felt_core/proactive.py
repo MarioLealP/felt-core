@@ -12,11 +12,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from felt_core import db
+import httpx
+
+from felt_core import db, metrics, tts_cache
+from felt_core.speech import strip_for_tts
+
+logger = logging.getLogger(__name__)
 
 # How often wait_for_next re-checks the DB while long-polling. Plain
 # asyncio.sleep, not an asyncio.Event wakeup: felt-core is a single
@@ -29,6 +35,72 @@ _POLL_INTERVAL_S = 0.5
 _MIN_TIMEOUT_S = 1.0
 _MAX_TIMEOUT_S = 30.0
 _DEFAULT_TTL_S = 600.0
+
+
+# Audio synthesis in flight, keyed on the TTS text. The accept test
+# measured ~3 s enqueue->playback, 2.1 s of it an on-demand felt-voice call
+# made only when felt-tray fetched /audio. Synthesis now starts at enqueue
+# time. A fetch that lands mid-synthesis awaits the same task rather than
+# starting a second felt-voice call. A task from another event loop (tests
+# run a fresh loop each) is ignored, never awaited.
+_inflight: dict[str, asyncio.Task[bytes]] = {}
+
+
+async def _synthesize(config: Any, tts_text: str) -> bytes:
+    cached = tts_cache.get(tts_text)
+    if cached is not None:
+        return cached
+    async with (
+        httpx.AsyncClient(timeout=60) as client,
+        metrics.timed("tts", chars=len(tts_text)),
+    ):
+        resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
+        resp.raise_for_status()
+    tts_cache.put(tts_text, resp.content)
+    return resp.content
+
+
+async def proactive_audio(config: Any, text: str) -> bytes:
+    """The item's WAV via the shared WP-06 TTS cache, joining an in-flight
+    pre-synthesis if there is one."""
+    tts_text = strip_for_tts(text)
+    cached = tts_cache.get(tts_text)
+    if cached is not None:
+        return cached
+    task = _inflight.get(tts_text)
+    if task is not None and not task.done() and task.get_loop() is asyncio.get_running_loop():
+        return await task
+    return await _synthesize(config, tts_text)
+
+
+def _prewarm_audio(config: Any, text: str) -> None:
+    """Best-effort: start synthesis now if we're inside the server's event
+    loop and felt-voice is configured. Enqueueing from sync code with no
+    running loop (scripts, tests) just skips it, and /audio synthesises on
+    demand as before."""
+    if not getattr(config, "voice_url", None):
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    tts_text = strip_for_tts(text)
+    if tts_cache.get(tts_text) is not None or tts_text in _inflight:
+        return
+
+    async def _run() -> bytes:
+        try:
+            return await _synthesize(config, tts_text)
+        finally:
+            _inflight.pop(tts_text, None)
+
+    task = loop.create_task(_run())
+    task.add_done_callback(
+        lambda t: (
+            t.exception() and logger.warning("proactive pre-synthesis failed: %r", t.exception())
+        )
+    )
+    _inflight[tts_text] = task
 
 
 def clamp_timeout(timeout_s: float) -> float:
@@ -58,7 +130,10 @@ def enqueue_proactive(
     if emotion is not None:
         payload["emotion"] = emotion
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_s)).strftime("%Y-%m-%d %H:%M:%S")
-    return db.insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
+    item_id = db.insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
+    if ttl_s > 0:
+        _prewarm_audio(config, text)
+    return item_id
 
 
 def _item_to_response(row: dict) -> dict:

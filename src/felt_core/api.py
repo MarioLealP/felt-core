@@ -66,7 +66,7 @@ from felt_core.events import react_to_event
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
-from felt_core.proactive import clamp_timeout, enqueue_proactive, wait_for_next
+from felt_core.proactive import clamp_timeout, enqueue_proactive, proactive_audio, wait_for_next
 from felt_core.speech import strip_for_tts
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
@@ -673,15 +673,8 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
     if not config.voice_url:
         raise HTTPException(status_code=503, detail="voice_unavailable")
 
-    tts_text = strip_for_tts(row["text"])
-    audio_bytes = tts_cache.get(tts_text)
-    if audio_bytes is None:
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with metrics.timed("tts", chars=len(tts_text)):
-                tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
-                tts_resp.raise_for_status()
-            audio_bytes = tts_resp.content
-        tts_cache.put(tts_text, audio_bytes)
+    # Pre-synthesised at enqueue time where possible (proactive.py).
+    audio_bytes = await proactive_audio(config, row["text"])
     return Response(content=audio_bytes, media_type="audio/wav")
 
 

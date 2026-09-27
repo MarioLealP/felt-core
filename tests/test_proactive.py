@@ -188,3 +188,32 @@ def test_audio_endpoint_503_without_voice_url(tmp_path, monkeypatch):
     response = client.get(f"/v1/proactive/{item_id}/audio")
 
     assert response.status_code == 503
+
+
+async def test_enqueue_inside_the_loop_presynthesises_and_audio_joins_it(tmp_path, monkeypatch):
+    """Accept test measured 2.1 s of on-demand TTS at /audio time; synthesis
+    now starts at enqueue and a fetch mid-synthesis joins it (one call)."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from felt_core import proactive, tts_cache
+
+    calls = []
+    gate = asyncio.Event()
+
+    async def fake_synth(config, tts_text):
+        calls.append(tts_text)
+        await gate.wait()
+        tts_cache.put(tts_text, b"RIFFwav")
+        return b"RIFFwav"
+
+    monkeypatch.setattr(proactive, "_synthesize", fake_synth)
+    monkeypatch.setattr(proactive.db, "insert_proactive", lambda *a, **k: 7)
+    cfg = SimpleNamespace(db_path=str(tmp_path / "x.db"), voice_url="http://voice")
+    text = "prewarm check, unique 42"
+    assert proactive.enqueue_proactive(cfg, "test", text, ttl_s=60) == 7
+    fetch = asyncio.create_task(proactive.proactive_audio(cfg, text))
+    await asyncio.sleep(0)
+    gate.set()
+    assert await fetch == b"RIFFwav"
+    assert len(calls) == 1  # the fetch joined the in-flight synthesis
