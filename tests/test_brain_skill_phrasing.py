@@ -12,6 +12,10 @@ def _config(tmp_path, **kwargs):
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
+async def _unused_handle(params, ctx):
+    raise AssertionError("not expected to be called in these tests")
+
+
 # -- _phrase_skill_result: the class -> route matrix -------------------
 
 
@@ -159,7 +163,11 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
     config = _config(tmp_path)
     fake_registry = {
         "dummy_skill": LoadedSkill(
-            name="dummy_skill", description="", parameters_schema={}, handle=None, privacy="public"
+            name="dummy_skill",
+            description="",
+            parameters_schema={},
+            handle=_unused_handle,
+            privacy="public",
         )
     }
 

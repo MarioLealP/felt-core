@@ -1,14 +1,8 @@
-import importlib.util
-from pathlib import Path
-
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "get_weather" / "skill.py"
+from conftest import load_plugin_module
 
 
 def _load_skill():
-    spec = importlib.util.spec_from_file_location("get_weather_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_plugin_module("get_weather/skill.py")
 
 
 def test_clear_sky_maps_to_sun():

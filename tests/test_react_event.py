@@ -94,6 +94,7 @@ def test_prompt_uses_only_whitelisted_fields():
     prompt = events.build_prompt(
         "music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la"
     )
+    assert prompt is not None
     assert '"Song A" by Artist A' in prompt
     assert "la la la" in prompt
     assert "do not send" not in prompt
@@ -101,6 +102,7 @@ def test_prompt_uses_only_whitelisted_fields():
 
 def test_game_prompt_strips_exe_and_formats_duration():
     prompt = events.build_prompt("game_stop", {"name": "endfield.exe", "duration_s": 7200})
+    assert prompt is not None
     assert "endfield" in prompt and ".exe" not in prompt
     assert "about 2 hours" in prompt
 
@@ -276,6 +278,8 @@ def test_unhushed_has_a_small_cooldown_and_ignores_the_min_gap():
 def test_unhushed_prompt_early_vs_full():
     early = events.build_prompt("unhushed", _EARLY)
     full = events.build_prompt("unhushed", _FULL)
+    assert early is not None
+    assert full is not None
     assert (
         "couldn't last without you" in early
         and "about 2 minutes" in early
@@ -287,11 +291,13 @@ def test_unhushed_prompt_early_vs_full():
 
 def test_unhushed_prompt_after_a_few_seconds():
     prompt = events.build_prompt("unhushed", {"hushed_for_s": 5, "planned_s": 600, "early": True})
+    assert prompt is not None
     assert "after only a few seconds" in prompt and "1 minutes" not in prompt
 
 
 def test_unhushed_prompt_names_the_last_line_to_avoid():
     prompt = events.build_prompt("unhushed", _EARLY, previous="Missed me already?")
+    assert prompt is not None
     assert '"Missed me already?"' in prompt and "something different" in prompt
 
 

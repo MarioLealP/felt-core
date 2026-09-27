@@ -2,22 +2,17 @@
 for current conditions, 3 h for a daily forecast) and the skill_phrasing
 thinkingLevel that stops Gemma spending its whole output budget thinking."""
 
-import importlib.util
 from datetime import date, timedelta
-from pathlib import Path
+
+from conftest import load_plugin_module
 
 import felt_core.cloud as cloud
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
 
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "get_weather" / "skill.py"
-
 
 def _load_skill():
-    spec = importlib.util.spec_from_file_location("get_weather_ttl_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_plugin_module("get_weather/skill.py")
 
 
 class _FakeResponse:

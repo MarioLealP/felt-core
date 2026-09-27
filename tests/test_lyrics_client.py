@@ -55,12 +55,14 @@ def test_parse_lrc_sorts_by_time():
 
 def test_find_chorus_picks_the_most_repeated_line():
     chorus = find_chorus(parse_lrc(_SAMPLE_LRC))
+    assert chorus is not None
     assert chorus["text"] == "This is the chorus"
     assert chorus["start_ms"] == 15000
 
 
 def test_find_chorus_end_ms_is_the_next_lines_start():
     chorus = find_chorus(parse_lrc(_SAMPLE_LRC))
+    assert chorus is not None
     assert chorus["end_ms"] == 20000
 
 
@@ -116,6 +118,7 @@ async def test_get_lyrics_caches_a_hit_to_disk(tmp_path, monkeypatch):
     async with httpx.AsyncClient() as client:
         result = await get_lyrics(client, tmp_path, "track1", "Song", "Artist", "Album", 200)
 
+    assert result is not None
     assert result["synced"] == [{"time_ms": 1000, "text": "Hi"}]
     cached = json.loads((tmp_path / "track1.json").read_text())
     assert cached["result"]["plain"] == "Hi"
@@ -186,6 +189,7 @@ async def test_get_lyrics_does_not_cache_a_429_or_5xx(tmp_path, monkeypatch):
         third = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
 
     assert first is None and second is None
+    assert third is not None
     assert third["plain"] == "Hi"  # the real lyrics were still fetched once LRCLIB recovered
     assert len(calls) == 3
 
@@ -217,6 +221,8 @@ async def test_null_track_ids_do_not_share_one_cache_file(tmp_path, monkeypatch)
         a = await get_lyrics(client, tmp_path, None, "Local A", "Artist", "Album", 200)
         b = await get_lyrics(client, tmp_path, None, "Local B", "Artist", "Album", 200)
 
+    assert a is not None
+    assert b is not None
     assert a["plain"] == "Local A"
     assert b["plain"] == "Local B"
     assert not (tmp_path / "None.json").exists()
@@ -225,6 +231,7 @@ async def test_null_track_ids_do_not_share_one_cache_file(tmp_path, monkeypatch)
 def test_find_chorus_lists_every_occurrence():
     chorus = find_chorus(parse_lrc(_SAMPLE_LRC))
 
+    assert chorus is not None
     assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [
         (15000, 20000),
         (30000, 35000),
@@ -238,12 +245,17 @@ def test_find_chorus_lists_every_occurrence():
 def test_find_chorus_top_level_window_follows_the_position():
     lines = parse_lrc(_SAMPLE_LRC)
 
-    assert (find_chorus(lines, 31000)["start_ms"], find_chorus(lines, 31000)["end_ms"]) == (
-        30000,
-        35000,
-    )
-    assert find_chorus(lines, 36000)["start_ms"] == 40000  # between choruses -> the next one
-    assert find_chorus(lines, 0)["start_ms"] == 15000
+    at_31000 = find_chorus(lines, 31000)
+    assert at_31000 is not None
+    assert (at_31000["start_ms"], at_31000["end_ms"]) == (30000, 35000)
+
+    at_36000 = find_chorus(lines, 36000)
+    assert at_36000 is not None
+    assert at_36000["start_ms"] == 40000  # between choruses -> the next one
+
+    at_0 = find_chorus(lines, 0)
+    assert at_0 is not None
+    assert at_0["start_ms"] == 15000
 
 
 def test_find_chorus_merges_adjacent_chorus_lines_into_one_window():
@@ -264,6 +276,7 @@ def test_find_chorus_merges_adjacent_chorus_lines_into_one_window():
 
     chorus = find_chorus(parse_lrc(lrc))
 
+    assert chorus is not None
     assert [(w["start_ms"], w["end_ms"]) for w in chorus["windows"]] == [
         (5000, 15000),
         (20000, 30000),

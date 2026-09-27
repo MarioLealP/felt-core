@@ -65,6 +65,8 @@ def load_plugins(plugins_dir: str) -> dict[str, LoadedSkill]:
             continue
         try:
             spec = importlib.util.spec_from_file_location(f"felt_plugin_{entry.name}", skill_file)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"could not build a module spec for {skill_file}")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             skill = LoadedSkill(

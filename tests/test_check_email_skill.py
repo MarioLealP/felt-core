@@ -1,26 +1,16 @@
-import importlib.util
-from pathlib import Path
+from conftest import load_plugin_module
 
+from felt_core.config import FeltConfig
 from felt_core.db import save_pending_email
 from felt_core.plugin import ExecutionContext
 
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "check_email" / "skill.py"
-
 
 def _load_skill():
-    spec = importlib.util.spec_from_file_location("check_email_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_plugin_module("check_email/skill.py")
 
 
 async def _run(module, db_path):
-    class Config:
-        pass
-
-    config = Config()
-    config.db_path = db_path
-    ctx = ExecutionContext(config=config)
+    ctx = ExecutionContext(config=FeltConfig(db_path=db_path))
     return await module.handle({}, ctx)
 
 

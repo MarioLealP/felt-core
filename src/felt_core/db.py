@@ -10,6 +10,19 @@ import sqlite3
 from pathlib import Path
 
 
+def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
+    """`Cursor.lastrowid` is typed `int | None` by the stdlib stub because
+    it's genuinely `None` for a statement that isn't an INSERT - but every
+    caller here only ever calls this right after an INSERT, where sqlite3
+    always sets it. Narrows the type at the one real use; if this ever
+    fired for real it would mean the INSERT itself silently didn't happen,
+    which deserves a loud error, not a `None` propagating into a call site
+    that thinks it got an `int`."""
+    if cursor.lastrowid is None:
+        raise RuntimeError("INSERT did not produce a lastrowid")
+    return cursor.lastrowid
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -216,7 +229,7 @@ def save_alarm(db_path: str, fire_at_iso: str, label: str) -> int:
         cursor = conn.execute(
             "INSERT INTO alarms (fire_at, label) VALUES (?, ?)", (fire_at_iso, label)
         )
-        alarm_id = cursor.lastrowid
+        alarm_id = _require_lastrowid(cursor)
     conn.close()
     return alarm_id
 
@@ -321,7 +334,7 @@ def save_observation(db_path: str, session_id: str, description: str) -> int:
             "INSERT INTO screen_observations (session_id, description) VALUES (?, ?)",
             (session_id, description),
         )
-        obs_id = cursor.lastrowid
+        obs_id = _require_lastrowid(cursor)
     conn.close()
     return obs_id
 
@@ -412,7 +425,7 @@ def add_shopping_item(db_path: str, text: str) -> int:
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute("INSERT INTO shopping_list (text) VALUES (?)", (text,))
-        item_id = cursor.lastrowid
+        item_id = _require_lastrowid(cursor)
     conn.close()
     return item_id
 
@@ -461,7 +474,7 @@ def save_pending_email(db_path: str, uid: str, sender: str, subject: str) -> int
             "INSERT INTO pending_emails (uid, sender, subject) VALUES (?, ?, ?)",
             (uid, sender, subject),
         )
-        email_id = cursor.lastrowid
+        email_id = _require_lastrowid(cursor)
     conn.close()
     return email_id
 

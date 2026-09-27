@@ -35,7 +35,9 @@ def test_resolve_calendar_no_name_returns_primary():
         {"id": "a", "summary": "Public Holidays", "primary": False},
         {"id": "b", "summary": "Mario", "primary": True},
     ]
-    assert resolve_calendar(calendars, None)["id"] == "b"
+    result = resolve_calendar(calendars, None)
+    assert result is not None
+    assert result["id"] == "b"
 
 
 def test_resolve_calendar_exact_match_preferred_over_partial():
@@ -43,12 +45,16 @@ def test_resolve_calendar_exact_match_preferred_over_partial():
         {"id": "a", "summary": "Professional"},
         {"id": "b", "summary": "Professional Extras"},
     ]
-    assert resolve_calendar(calendars, "Professional")["id"] == "a"
+    result = resolve_calendar(calendars, "Professional")
+    assert result is not None
+    assert result["id"] == "a"
 
 
 def test_resolve_calendar_partial_match():
     calendars = [{"id": "a", "summary": "Public Holidays"}]
-    assert resolve_calendar(calendars, "holidays")["id"] == "a"
+    result = resolve_calendar(calendars, "holidays")
+    assert result is not None
+    assert result["id"] == "a"
 
 
 def test_resolve_calendar_no_match_returns_none():

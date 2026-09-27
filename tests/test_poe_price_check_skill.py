@@ -1,17 +1,6 @@
-import importlib.util
-from pathlib import Path
+from conftest import load_plugin_module
 
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "poe_price_check" / "skill.py"
-
-
-def _load_skill():
-    spec = importlib.util.spec_from_file_location("poe_price_check_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-skill = _load_skill()
+skill = load_plugin_module("poe_price_check/skill.py")
 
 
 def test_resolve_item_exact_match():

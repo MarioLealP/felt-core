@@ -15,7 +15,7 @@ import time
 import uuid
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from urllib.parse import quote
 
 import httpx
@@ -224,12 +224,33 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
     return get_history(config.db_path, session_id, limit)
 
 
+class _TTSResponse(Protocol):
+    """What `_synthesize_reply` needs back from a TTS POST - narrower than
+    `httpx.Response` so the unit tests' hand-written fake responses (no
+    real network, see `tests/test_api_tts_cache.py`) satisfy the type
+    without subclassing httpx."""
+
+    @property
+    def content(self) -> bytes: ...
+
+    def raise_for_status(self) -> object: ...
+
+
+class _TTSClient(Protocol):
+    """What `_synthesize_reply` needs from its HTTP client - just enough
+    of `httpx.AsyncClient`'s surface to also accept the tests' fake
+    clients (`_ExplodingClient`/`FakeClient`), which duck-type `.post()`
+    without subclassing `httpx.AsyncClient`."""
+
+    async def post(self, url: str, *, json: dict[str, Any]) -> _TTSResponse: ...
+
+
 async def _synthesize_reply(
     reply: str,
     ui_action: dict[str, Any] | None,
     animation_tag: str | None,
     config: Any,
-    client: httpx.AsyncClient,
+    client: _TTSClient,
     extra_headers: dict[str, str] | None = None,
 ) -> Response:
     """Shared by voice-chat and text-chat: TTS the reply and build the same

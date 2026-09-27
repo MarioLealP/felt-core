@@ -319,3 +319,19 @@ def test_pacific_day_rollover():
 
     assert cloud._pacific_day(late) == "2026-09-22"
     assert cloud._pacific_day(early) == "2026-09-23"
+
+
+async def test_post_generate_content_refuses_without_an_api_key(tmp_path):
+    # WP-40: _post_generate_content now narrows config.gemini_api_key
+    # itself instead of trusting cloud_generate's own earlier check across
+    # the call boundary - defense in depth, not reachable through
+    # cloud_generate today (it already raises first), but a direct call
+    # (as a future caller or a test might make) gets the same clear error
+    # rather than sending `x-goog-api-key: None` to Google.
+    config = FeltConfig(db_path=str(tmp_path / "felt.db"), gemini_api_key=None)
+
+    try:
+        await cloud._post_generate_content("some-model", {}, config)
+        raise AssertionError("expected CloudUnavailable")
+    except cloud.CloudUnavailable:
+        pass

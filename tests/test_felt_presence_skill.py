@@ -1,17 +1,6 @@
-import importlib.util
-from pathlib import Path
+from conftest import load_plugin_module
 
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "felt_presence" / "skill.py"
-
-
-def _load_skill():
-    spec = importlib.util.spec_from_file_location("felt_presence_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-skill = _load_skill()
+skill = load_plugin_module("felt_presence/skill.py")
 
 
 async def test_shut_up_intent_returns_a_hush_ui_action():

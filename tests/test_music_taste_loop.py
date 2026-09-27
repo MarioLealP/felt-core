@@ -32,6 +32,7 @@ def test_track_change_finishes_the_previous_one():
 
     finished = brain._finished_play_from_transition(previous, current)
 
+    assert finished is not None
     assert finished["track_id"] == "a1"
     assert finished["track_name"] == "Song A"
     assert finished["artists"] == "Artist A"
@@ -45,6 +46,7 @@ def test_track_change_before_threshold_is_a_skip():
 
     finished = brain._finished_play_from_transition(previous, current)
 
+    assert finished is not None
     assert finished["skipped"] is True
 
 
@@ -53,6 +55,7 @@ def test_playback_stopping_also_finishes_the_previous_track():
 
     finished = brain._finished_play_from_transition(previous, None)
 
+    assert finished is not None
     assert finished["track_id"] == "a1"
     assert finished["skipped"] is False
 
@@ -73,6 +76,7 @@ def test_null_id_item_is_keyed_by_uri():
         _snapshot(_LOCAL_FILE, 190000), _snapshot(_SONG_B, 1000)
     )
 
+    assert finished is not None
     assert finished["track_id"] == _LOCAL_FILE["uri"]
 
 

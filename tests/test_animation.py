@@ -3,12 +3,16 @@ from felt_core.plugin import SkillResult
 from felt_core.plugin_loader import LoadedSkill
 
 
+async def _unused_handle(params, ctx):
+    raise AssertionError("not expected to be called in these tests")
+
+
 def _skill(default_tag: str | None) -> LoadedSkill:
     return LoadedSkill(
         name="example_skill",
         description="",
         parameters_schema={},
-        handle=None,  # not called in these tests
+        handle=_unused_handle,  # not called in these tests
         default_tag=default_tag,
     )
 

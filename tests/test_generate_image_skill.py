@@ -1,15 +1,8 @@
-import importlib.util
-from pathlib import Path
-
-_PLUGIN_DIR = Path(__file__).resolve().parent.parent / "plugins" / "generate_image"
-_SKILL_PATH = _PLUGIN_DIR / "skill.py"
+from conftest import load_plugin_module
 
 
 def _load_skill():
-    spec = importlib.util.spec_from_file_location("generate_image_test", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_plugin_module("generate_image/skill.py")
 
 
 def test_all_workflow_templates_load_and_have_expected_shape():
@@ -86,13 +79,11 @@ def test_build_image_url_strips_trailing_slash():
 
 
 async def test_handle_reports_unavailable_when_not_configured():
+    from felt_core.config import FeltConfig
     from felt_core.plugin import ExecutionContext
 
     module = _load_skill()
 
-    class Config:
-        comfyui_url = None
-
-    ctx = ExecutionContext(config=Config())
+    ctx = ExecutionContext(config=FeltConfig(comfyui_url=None))
     result = await module.handle({"prompt": "a cat"}, ctx)
     assert result.text == "Image generation isn't configured (no ComfyUI URL set)."

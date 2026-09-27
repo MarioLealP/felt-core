@@ -23,7 +23,7 @@ import logging
 import re
 import time
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Literal, TypedDict
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -36,6 +36,33 @@ logger = logging.getLogger(__name__)
 Purpose = Literal[
     "conversation", "screen_reaction", "routing", "skill_phrasing", "summary", "event_reaction"
 ]
+
+
+class _TextPart(TypedDict):
+    text: str
+
+
+class _InlineDataPart(TypedDict):
+    inline_data: dict[str, str]
+
+
+# The Gemini REST API's "part" shape - either a text turn or an inline
+# (base64) image, never both in the same part.
+Part = _TextPart | _InlineDataPart
+
+
+class Content(TypedDict):
+    """One turn in the Gemini `contents` list (WP-40: was a raw `dict`,
+    which made `contents[-1]["parts"]` resolve to the union of every
+    value type ever assigned into the literal - `str | list[Part]` -
+    rather than `list[Part]`, so appending onto it type-checked as
+    illegal. A typed model fixes that at the source instead of casting
+    around it (`ENGINEERING-RULES.md`'s "typed models, not `Any`/`cast`"
+    rule)."""
+
+    role: str
+    parts: list[Part]
+
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 _REST_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -228,8 +255,8 @@ def _record_call(
         logger.exception("failed to persist cloud usage row for %s/%s", model, purpose)
 
 
-def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[dict]:
-    contents = [
+def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[Content]:
+    contents: list[Content] = [
         {
             "role": "model" if m.get("role") == "assistant" else "user",
             "parts": [{"text": m.get("content", "")}],
@@ -237,7 +264,7 @@ def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[di
         for m in messages
     ]
     if images:
-        image_parts = [
+        image_parts: list[Part] = [
             {
                 "inline_data": {
                     "mime_type": "image/jpeg",
@@ -254,20 +281,20 @@ def _build_contents(messages: list[dict], images: list[bytes] | None) -> list[di
 
 
 def _build_payload(
-    system: str, contents: list[dict], generation_config: dict, use_system_field: bool
+    system: str, contents: list[Content], generation_config: dict, use_system_field: bool
 ) -> dict:
-    contents = [
-        dict(c, parts=list(c["parts"])) for c in contents
+    working: list[Content] = [
+        {"role": c["role"], "parts": list(c["parts"])} for c in contents
     ]  # don't mutate the shared list across retries
     payload: dict = {}
     if use_system_field:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
     else:
-        if contents and contents[0]["role"] == "user":
-            contents[0] = {"role": "user", "parts": [{"text": system}] + contents[0]["parts"]}
+        if working and working[0]["role"] == "user":
+            working[0] = {"role": "user", "parts": [{"text": system}] + working[0]["parts"]}
         else:
-            contents = [{"role": "user", "parts": [{"text": system}]}] + contents
-    payload["contents"] = contents or [{"role": "user", "parts": [{"text": system}]}]
+            working = [{"role": "user", "parts": [{"text": system}]}] + working
+    payload["contents"] = working or [{"role": "user", "parts": [{"text": system}]}]
     if generation_config:
         payload["generationConfig"] = generation_config
     return payload
@@ -311,13 +338,21 @@ async def _post_generate_content(model: str, payload: dict, config: FeltConfig) 
     """The one real network call - kept tiny and easily monkeypatched in
     tests (returns (status_code, json_body) rather than a full
     httpx.Response, so a fake doesn't need to construct one)."""
+    # `cloud_generate` already refuses to reach this far without a key
+    # (`CloudUnavailable("no Gemini API key configured")`) - this narrows
+    # the type at this function's own boundary rather than trusting that
+    # invariant across the call chain, per ENGINEERING-RULES.md's "narrow
+    # untyped data where it enters."
+    api_key = config.gemini_api_key
+    if not api_key:
+        raise CloudUnavailable("no Gemini API key configured")
     async with httpx.AsyncClient(timeout=60) as client:
         # The key goes in a header, never the URL: httpx logs request URLs at
         # INFO, so `?key=` leaked the Gemini key into the container logs
         # (found 2026-09-27).
         response = await client.post(
             f"{_REST_BASE}/models/{model}:generateContent",
-            headers={"x-goog-api-key": config.gemini_api_key},
+            headers={"x-goog-api-key": api_key},
             json=payload,
         )
     try:
@@ -330,7 +365,7 @@ async def _post_generate_content(model: str, payload: dict, config: FeltConfig) 
 async def _generate(
     model: str,
     system: str,
-    contents: list[dict],
+    contents: list[Content],
     json_mode: bool,
     max_tokens: int | None,
     config: FeltConfig,

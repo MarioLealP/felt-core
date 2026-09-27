@@ -1,6 +1,7 @@
 import httpx
 
 import felt_core.spotify_client as spotify_client
+from felt_core.config import FeltConfig
 from felt_core.spotify_client import format_track_name, get_currently_playing, pick_device
 
 _TRACK = {
@@ -37,7 +38,9 @@ def test_pick_device_prefers_active():
         {"id": "a", "name": "Desktop", "is_active": False},
         {"id": "b", "name": "Phone", "is_active": True},
     ]
-    assert pick_device(devices)["id"] == "b"
+    picked = pick_device(devices)
+    assert picked is not None
+    assert picked["id"] == "b"
 
 
 def test_pick_device_falls_back_to_first_when_none_active():
@@ -45,7 +48,9 @@ def test_pick_device_falls_back_to_first_when_none_active():
         {"id": "a", "name": "Desktop", "is_active": False},
         {"id": "b", "name": "Phone", "is_active": False},
     ]
-    assert pick_device(devices)["id"] == "a"
+    picked = pick_device(devices)
+    assert picked is not None
+    assert picked["id"] == "a"
 
 
 def test_pick_device_none_when_no_devices():
@@ -75,7 +80,7 @@ async def test_get_currently_playing_returns_none_on_204(monkeypatch):
     monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        result = await get_currently_playing(client, None)
+        result = await get_currently_playing(client, FeltConfig())
 
     assert result is None
 
@@ -90,7 +95,7 @@ async def test_get_currently_playing_returns_none_when_body_has_no_item(monkeypa
     monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        result = await get_currently_playing(client, None)
+        result = await get_currently_playing(client, FeltConfig())
 
     assert result is None
 
@@ -105,8 +110,9 @@ async def test_get_currently_playing_parses_track_and_progress(monkeypatch):
     monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        result = await get_currently_playing(client, None)
+        result = await get_currently_playing(client, FeltConfig())
 
+    assert result is not None
     assert result["track"]["id"] == "abc123"
     assert result["progress_ms"] == 50000
     assert result["duration_ms"] == 200000
@@ -127,9 +133,9 @@ async def test_get_currently_playing_caches_within_ttl(monkeypatch):
     monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        await get_currently_playing(client, None)
+        await get_currently_playing(client, FeltConfig())
         clock[0] += 5  # well within the 10s TTL
-        await get_currently_playing(client, None)
+        await get_currently_playing(client, FeltConfig())
 
     assert len(calls) == 1
 
@@ -148,8 +154,8 @@ async def test_get_currently_playing_refetches_after_ttl(monkeypatch):
     monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        await get_currently_playing(client, None)
+        await get_currently_playing(client, FeltConfig())
         clock[0] += 11
-        await get_currently_playing(client, None)
+        await get_currently_playing(client, FeltConfig())
 
     assert len(calls) == 2

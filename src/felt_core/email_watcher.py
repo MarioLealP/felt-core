@@ -46,9 +46,23 @@ def _sender_display_name(raw_from: str | None) -> str:
     return _decode_header(name) if name else address
 
 
+def _require_configured(name: str, value: str | None) -> str:
+    """`watch()` already checks `imap_host`/`imap_user` before starting the
+    background loop, but `_connect` is also reachable directly from
+    `fetch_email_body` (the check_email/summarize path) without going
+    through that guard - narrow here too rather than handing `imaplib` a
+    `None` and letting it fail with an unrelated low-level error."""
+    if not value:
+        raise RuntimeError(f"IMAP {name} is not configured")
+    return value
+
+
 def _connect(config: FeltConfig) -> imaplib.IMAP4_SSL:
-    conn = imaplib.IMAP4_SSL(config.imap_host, config.imap_port)
-    conn.login(config.imap_user, config.imap_password)
+    host = _require_configured("host", config.imap_host)
+    user = _require_configured("user", config.imap_user)
+    password = _require_configured("password", config.imap_password)
+    conn = imaplib.IMAP4_SSL(host, config.imap_port)
+    conn.login(user, password)
     conn.select(config.imap_mailbox)
     return conn
 
@@ -64,7 +78,10 @@ def _fetch_unseen(config: FeltConfig) -> list[dict]:
         # numbers are transient and shift down whenever an older message
         # in the mailbox is deleted, which would silently corrupt the
         # uid-based dedup in pending_emails (2026-09-14 review finding).
-        status, data = conn.uid("SEARCH", None, "UNSEEN")
+        # imaplib's own docs use `M.uid("search", None, "ALL")` - None means "no CHARSET",
+        # the documented idiom for UID SEARCH; the imaplib stub types uid()'s *args as str
+        # only, a stub gap, not a bug.
+        status, data = conn.uid("SEARCH", None, "UNSEEN")  # ty: ignore[invalid-argument-type]
         if status != "OK":
             return []
         uids = data[0].split()
@@ -93,19 +110,21 @@ def fetch_email_body(config: FeltConfig, uid: str) -> str:
     only when Mario actually confirms he wants a summary."""
     conn = _connect(config)
     try:
-        status, msg_data = conn.uid("FETCH", uid.encode(), "(RFC822)")
+        status, msg_data = conn.uid("FETCH", uid, "(RFC822)")
         if status != "OK" or not msg_data or not msg_data[0]:
             return ""
         msg = email.message_from_bytes(msg_data[0][1])
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == "text/plain" and not part.get_filename():
-                    charset = part.get_content_charset() or "utf-8"
-                    return part.get_payload(decode=True).decode(charset, errors="replace")
+                    raw = part.get_payload(decode=True)
+                    if isinstance(raw, bytes):
+                        charset = part.get_content_charset() or "utf-8"
+                        return raw.decode(charset, errors="replace")
             return "(no plain-text body found)"
         charset = msg.get_content_charset() or "utf-8"
         payload = msg.get_payload(decode=True)
-        return payload.decode(charset, errors="replace") if payload else ""
+        return payload.decode(charset, errors="replace") if isinstance(payload, bytes) else ""
     finally:
         conn.logout()
 

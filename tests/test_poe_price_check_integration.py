@@ -3,26 +3,14 @@ the full handle() flow against real poe.ninja / trade-API response
 shapes, not just the pure logic already covered in
 test_poe_price_check_skill.py."""
 
-import importlib.util
-from pathlib import Path
-
 import pytest
+from conftest import load_plugin_module
 
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
 from felt_core.poe_trade_cache import refresh
 
-_SKILL_PATH = Path(__file__).resolve().parent.parent / "plugins" / "poe_price_check" / "skill.py"
-
-
-def _load_skill():
-    spec = importlib.util.spec_from_file_location("poe_price_check_integration", _SKILL_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-skill = _load_skill()
+skill = load_plugin_module("poe_price_check/skill.py")
 
 
 @pytest.mark.vcr

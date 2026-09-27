@@ -26,6 +26,7 @@ def test_get_unresolved_pending_email_returns_the_newest(tmp_path):
     save_pending_email(db_path, "1", "Jane", "First")
     save_pending_email(db_path, "2", "John", "Second")
     pending = get_unresolved_pending_email(db_path)
+    assert pending is not None
     assert pending["uid"] == "2"
     assert pending["sender"] == "John"
     assert pending["subject"] == "Second"

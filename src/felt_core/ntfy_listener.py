@@ -21,13 +21,25 @@ from felt_core.db import save_ntfy_event
 logger = logging.getLogger(__name__)
 
 
+def _basic_auth(user: str | None, password: str | None) -> tuple[str, str] | None:
+    """`httpx.AsyncClient(auth=...)` wants either a real `(user, password)`
+    pair or `None` - never a pair with a `None` half. A user set without a
+    password (WP-40 audit: `config.ntfy_password` is independently
+    Optional) used to build exactly that broken half-pair and would have
+    failed at the first real connection; treat it the same as "no auth
+    configured" instead."""
+    if user and password:
+        return (user, password)
+    return None
+
+
 async def listen(config: FeltConfig) -> None:
     if not config.ntfy_url or not config.ntfy_topic:
         logger.info("ntfy not configured, listener not starting")
         return
 
     url = f"{config.ntfy_url}/{config.ntfy_topic}/json"
-    auth = (config.ntfy_user, config.ntfy_password) if config.ntfy_user else None
+    auth = _basic_auth(config.ntfy_user, config.ntfy_password)
 
     while True:
         try:

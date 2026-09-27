@@ -10,14 +10,38 @@ writing/changing a `@pytest.mark.vcr` test, run once with
 generated `tests/cassettes/...` file.
 """
 
+import importlib.util
 import json
 import os
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from felt_core.config import FeltConfig
 
 _SECRET_JSON_FIELDS = ("access_token", "refresh_token", "id_token", "client_secret")
+
+_PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
+
+
+def load_plugin_module(relative_skill_path: str) -> ModuleType:
+    """Import a plugin's skill.py directly from its file path, bypassing
+    the package layout - shared by every `test_*_skill.py` that used to
+    reimplement this trio of `importlib.util` calls itself (one per
+    plugin, ~12 copies, `ENGINEERING-RULES.md` rule 5). Plugins aren't a
+    real Python package (`plugin_loader.py` discovers them by directory,
+    not by import), so tests load the module by path the same way the
+    real loader does - see that module's own `load_plugins()`.
+
+    `relative_skill_path` is e.g. "now_playing/skill.py"."""
+    skill_path = _PLUGINS_DIR / relative_skill_path
+    spec = importlib.util.spec_from_file_location(skill_path.stem, skill_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"could not load plugin module from {skill_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _scrub_response_secrets(response):
