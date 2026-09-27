@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from felt_core.brain.persona import compile_persona
-from felt_core.brain.personality import PERSONALITY_PROMPT
+from felt_core.brain.personality import LEGACY_PERSONALITY_PROMPT
 from felt_core.brain.screen_reactions import (
     _SCREEN_REACTION_PROMPT,
     RECENT_LINES_N,
@@ -153,7 +153,7 @@ def _repeated_trigrams(lines: list[str]) -> int:
 
 async def _run_arm(arm: str, config: FeltConfig) -> dict:
     def system() -> str:
-        base = PERSONALITY_PROMPT if arm == "legacy" else compile_persona()
+        base = LEGACY_PERSONALITY_PROMPT if arm == "legacy" else compile_persona()
         return f"{base}\n\nRight now: {EVAL_TONE}"
 
     screen: dict[str, list[str]] = {}

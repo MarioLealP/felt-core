@@ -117,3 +117,19 @@ def spotify_config():
         spotify_client_secret=os.environ.get("FELT_SPOTIFY_CLIENT_SECRET", "dummy-client-secret"),
         spotify_refresh_token=os.environ.get("FELT_SPOTIFY_REFRESH_TOKEN", "dummy-refresh-token"),
     )
+
+
+@pytest.fixture(autouse=True)
+def _stable_persona_examples(monkeypatch):
+    """Live replies rotate the persona's example sample on every call
+    (brain/persona.py); tests compare prompts for equality, so pin the
+    rotation to the same stable compile PERSONALITY_PROMPT uses.
+    test_persona.py exercises the rotation itself via brain.persona
+    directly, which this doesn't touch."""
+    import random
+
+    from felt_core.brain import personality
+    from felt_core.brain.persona import compile_persona
+
+    stable = compile_persona(rng=random.Random(0))
+    monkeypatch.setattr(personality, "compile_persona", lambda *a, **k: stable)
