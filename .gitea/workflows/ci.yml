@@ -52,4 +52,6 @@ jobs:
     secrets:
       REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
       INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
+      INFRA_REPO_URL: ${{ secrets.INFRA_REPO_URL }}
+      INFRA_KNOWN_HOSTS: ${{ secrets.INFRA_KNOWN_HOSTS }}
       NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
