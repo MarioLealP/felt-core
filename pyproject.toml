@@ -25,11 +25,11 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.2",
-    "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-recording>=0.13.4",
     "ruff>=0.16.9",
+    "ty>=0.0.84",
 ]
 
 [tool.pytest.ini_options]
@@ -80,9 +80,9 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 # SIM117 (nested with -> single with): same reasoning as SIM105.
 "src/felt_core/ntfy_listener.py" = ["SIM117"]
 
-[tool.pyright]
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
 include = ["src", "tests"]
 exclude = ["**/__pycache__"]
-typeCheckingMode = "basic"
-venvPath = "."
-venv = ".venv"
