@@ -343,7 +343,7 @@ async def _generate_line(
     # Music taste is cloud-ok (see brain.replies.music_taste_context) and
     # keeps her opinions of a track consistent ("oh, this one again?").
     taste = music_taste_context(config) if event == "music_new_track" else []
-    system = personality_prompt(tone)
+    system = personality_prompt(tone, prompt, config)
     for note in taste:
         system = f"{system}\n\n{note['content']}"
 

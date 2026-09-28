@@ -114,8 +114,12 @@ async def local_reply(
     # the cloud path too (see music_taste_context).
     facts = _facts_context(config) if include_facts else []
     taste = music_taste_context(config) if include_facts else []
+    context_text = messages_tail[-1]["content"] if messages_tail else None
     messages = (
-        [{"role": "system", "content": personality_prompt(tone)}] + facts + taste + messages_tail
+        [{"role": "system", "content": personality_prompt(tone, context_text, config)}]
+        + facts
+        + taste
+        + messages_tail
     )
     return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
@@ -139,7 +143,7 @@ async def _cloud_chat(
     # Music taste goes into the system instruction, not `messages` - the
     # Gemini API has no system role there, so a "system" entry would be
     # sent as a user turn (audit 2026-09-24).
-    system = personality_prompt(tone)
+    system = personality_prompt(tone, message, config)
     for note in music_taste_context(config):
         system = f"{system}\n\n{note['content']}"
     return await cloud_generate(
@@ -283,7 +287,7 @@ async def _phrase_skill_result(
             async with metrics.timed("reply", route="cloud", model=config.cloud_model_volume):
                 cloud_reply = await cloud_generate(
                     "skill_phrasing",
-                    personality_prompt(tone),
+                    personality_prompt(tone, message, config),
                     messages,
                     config,
                     max_tokens=_SKILL_PHRASING_MAX_TOKENS,

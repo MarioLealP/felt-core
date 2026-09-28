@@ -162,7 +162,7 @@ async def process_screen_context(
             ):
                 reply_raw = await cloud_generate(
                     "screen_reaction",
-                    f"{personality_prompt(tone)}\n\n{observations_block}",
+                    f"{personality_prompt(tone, description, config)}\n\n{observations_block}",
                     [{"role": "user", "content": instruction}],
                     config,
                 )
@@ -254,7 +254,7 @@ async def react_to_screen(
     observations_block = _observations_block(
         get_recent_observations(config.db_path, session_id, limit=3)
     )
-    system = f"{personality_prompt(tone)}\n\n{observations_block}"
+    system = f"{personality_prompt(tone, f'{app} {title}', config)}\n\n{observations_block}"
     context_line = f'App: {app} — "{title}"'
     recent = recent_lines_block(_recent_lines(config, session_id))
 

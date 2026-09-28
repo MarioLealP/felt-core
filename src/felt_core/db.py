@@ -8,6 +8,7 @@ that the brief blocking calls aren't worth the extra complexity yet.
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 
 def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
@@ -222,6 +223,82 @@ def _connect(db_path: str) -> sqlite3.Connection:
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             expires_at TEXT,
             delivered_at TEXT
+        )
+        """
+    )
+    # WP-26: felt-animation's silent desktop-event log (POST /v1/events) -
+    # distinct from event_reactions above, which is SPOKEN reactions to
+    # /v1/react/event. This is just a record (game_start/stop, afk_start/
+    # end, day_start, music_track, mood, window_fall, prop_used, hush,
+    # ledge_sit, ...) that the diary's material gatherer reads back out by
+    # date range. `at` is stored normalized to a UTC 'YYYY-MM-DD HH:MM:SS'
+    # string (api.py's normalize_at) so it sorts/range-queries the same way
+    # every other `created_at` column here does.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            data_json TEXT NOT NULL DEFAULT '{}',
+            at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # WP-26: one row per day's diary entry, written once by the nightly
+    # writer (felt_core.diary). `date` is the Europe/Lisbon calendar date
+    # (YYYY-MM-DD) the entry is ABOUT, not when it was written (it's always
+    # written the next morning). `callbacks_json` is a list of
+    # {"text", "uses"} objects - each callback is usable in the prompt at
+    # most twice (see felt_core.self_memory.memory_block) before it's
+    # skipped, tracked here rather than a separate table since it's small
+    # and always read/written alongside the entry it belongs to.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS diary (
+            date TEXT PRIMARY KEY,
+            entry TEXT NOT NULL,
+            callbacks_json TEXT NOT NULL DEFAULT '[]',
+            mood_word TEXT NOT NULL DEFAULT '',
+            edited INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # WP-26: Sunday compression of the past week's diary rows into one
+    # summary. `week` is an ISO week string, e.g. "2026-W39".
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS diary_weeks (
+            week TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            callbacks_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # WP-26 combined with personality plan P4: what SHE takes away from a
+    # day, distinct from the diary (their shared record). Added
+    # automatically by the nightly writer, never behind an approval queue
+    # (Mario, 2026-09-27 decision 3) - he views/pins/edits/vetoes/deletes
+    # after the fact instead, via the /v1/self-memory API.
+    # `status`: active (usable in the prompt) / retired (aged out past the
+    # 30-cap, still kept for history) / vetoed (Mario rejected it - never
+    # re-added, its text goes on the writer's "never" list).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS self_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            text TEXT NOT NULL,
+            keywords_json TEXT NOT NULL DEFAULT '[]',
+            source_date TEXT,
+            uses INTEGER NOT NULL DEFAULT 0,
+            last_used TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            pinned INTEGER NOT NULL DEFAULT 0,
+            edited INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         """
     )
@@ -843,5 +920,328 @@ def prune_expired_proactive(db_path: str) -> None:
     with conn:
         conn.execute(
             "DELETE FROM proactive WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
+        )
+    conn.close()
+
+
+# -- WP-26: the silent desktop-event log (POST /v1/events) ------------------
+
+
+def save_event(db_path: str, kind: str, data_json: str, at_utc: str) -> int:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(
+            "INSERT INTO events (kind, data_json, at) VALUES (?, ?, ?)", (kind, data_json, at_utc)
+        )
+        event_id = _require_lastrowid(cursor)
+    conn.close()
+    return event_id
+
+
+def get_events_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
+    """Every logged event whose `at` falls in [start_utc, end_utc) - both
+    already-formatted 'YYYY-MM-DD HH:MM:SS' UTC strings, same convention as
+    every other timestamp column here, so plain string comparison works."""
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT kind, data_json, at FROM events WHERE at >= ? AND at < ? ORDER BY id ASC",
+        (start_utc, end_utc),
+    ).fetchall()
+    conn.close()
+    return [{"kind": kind, "data_json": data_json, "at": at} for kind, data_json, at in rows]
+
+
+def get_screen_observations_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT description, spoken_reply FROM screen_observations "
+        "WHERE created_at >= ? AND created_at < ? ORDER BY id ASC",
+        (start_utc, end_utc),
+    ).fetchall()
+    conn.close()
+    return [{"description": d, "spoken_reply": r} for d, r in rows]
+
+
+def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> list[list[dict]]:
+    """Real conversation (not her own unprompted remarks) in the window,
+    grouped by session - the diary's material gatherer runs
+    `is_safe_for_cloud` over each session's text as a WHOLE window, so
+    sessions must come back separately, not pre-flattened. Correlated
+    subqueries (not get_history's single-session-parameter exclusion SQL)
+    since this spans every session in the window at once."""
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT m.session_id, m.role, m.content FROM messages m "
+        "WHERE m.created_at >= ? AND m.created_at < ? "
+        "AND m.content NOT LIKE '[System Observation%' "
+        "AND NOT (m.role = 'assistant' AND ("
+        "m.content IN (SELECT spoken_reply FROM screen_observations "
+        "WHERE session_id = m.session_id AND spoken_reply IS NOT NULL)"
+        " OR m.content IN (SELECT line FROM event_reactions WHERE session_id = m.session_id)"
+        ")) ORDER BY m.id ASC",
+        (start_utc, end_utc),
+    ).fetchall()
+    conn.close()
+    sessions: dict[str, list[dict]] = {}
+    for session_id, role, content in rows:
+        sessions.setdefault(session_id, []).append({"role": role, "content": content})
+    return list(sessions.values())
+
+
+# -- WP-26: the diary --------------------------------------------------------
+
+
+def get_diary(db_path: str, date: str) -> dict | None:
+    conn = _connect(db_path)
+    row = conn.execute(
+        "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary WHERE date = ?",
+        (date,),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {
+        "date": row[0],
+        "entry": row[1],
+        "callbacks_json": row[2],
+        "mood_word": row[3],
+        "edited": bool(row[4]),
+        "created_at": row[5],
+    }
+
+
+def insert_diary(db_path: str, date: str, entry: str, callbacks_json: str, mood_word: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO diary (date, entry, callbacks_json, mood_word) "
+            "VALUES (?, ?, ?, ?)",
+            (date, entry, callbacks_json, mood_word),
+        )
+    conn.close()
+
+
+def update_diary_entry(db_path: str, date: str, entry: str, callbacks_json: str) -> bool:
+    """Mario's edit (PATCH /v1/diary/{date}) - marks the row edited and
+    replaces its callbacks (regenerated or cleared by the caller, see
+    api.py). Returns whether a row existed to update."""
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(
+            "UPDATE diary SET entry = ?, callbacks_json = ?, edited = 1 WHERE date = ?",
+            (entry, callbacks_json, date),
+        )
+        updated = cursor.rowcount > 0
+    conn.close()
+    return updated
+
+
+def update_diary_callbacks(db_path: str, date: str, callbacks_json: str) -> None:
+    """Internal decay bookkeeping (self_memory.memory_block increments a
+    used callback's count) - deliberately doesn't touch `edited`, since
+    this isn't Mario correcting anything."""
+    conn = _connect(db_path)
+    with conn:
+        conn.execute("UPDATE diary SET callbacks_json = ? WHERE date = ?", (callbacks_json, date))
+    conn.close()
+
+
+def delete_diary(db_path: str, date: str) -> bool:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute("DELETE FROM diary WHERE date = ?", (date,))
+        deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def get_diary_list(db_path: str, limit: int = 30) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary "
+        "ORDER BY date DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "date": r[0],
+            "entry": r[1],
+            "callbacks_json": r[2],
+            "mood_word": r[3],
+            "edited": bool(r[4]),
+            "created_at": r[5],
+        }
+        for r in rows
+    ]
+
+
+def insert_or_update_diary_week(db_path: str, week: str, summary: str, callbacks_json: str) -> None:
+    conn = _connect(db_path)
+    with conn:
+        conn.execute(
+            "INSERT INTO diary_weeks (week, summary, callbacks_json) VALUES (?, ?, ?) "
+            "ON CONFLICT(week) DO UPDATE SET summary = excluded.summary, "
+            "callbacks_json = excluded.callbacks_json",
+            (week, summary, callbacks_json),
+        )
+    conn.close()
+
+
+def get_diary_weeks(db_path: str, limit: int = 12) -> list[dict]:
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT week, summary, callbacks_json FROM diary_weeks ORDER BY week DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [{"week": w, "summary": s, "callbacks_json": c} for w, s, c in rows]
+
+
+def get_latest_diary_week(db_path: str) -> dict | None:
+    weeks = get_diary_weeks(db_path, limit=1)
+    return weeks[0] if weeks else None
+
+
+# -- WP-26 / personality plan P4: self-memory --------------------------------
+
+
+def insert_self_memory(
+    db_path: str, kind: str, text: str, keywords_json: str, source_date: str | None
+) -> int:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(
+            "INSERT INTO self_memory (kind, text, keywords_json, source_date) VALUES (?, ?, ?, ?)",
+            (kind, text, keywords_json, source_date),
+        )
+        memory_id = _require_lastrowid(cursor)
+    conn.close()
+    return memory_id
+
+
+_SELF_MEMORY_COLUMNS = "id, kind, text, keywords_json, source_date, uses, last_used, status, pinned, edited, created_at"
+
+
+def _row_to_self_memory(row: tuple) -> dict:
+    return {
+        "id": row[0],
+        "kind": row[1],
+        "text": row[2],
+        "keywords_json": row[3],
+        "source_date": row[4],
+        "uses": row[5],
+        "last_used": row[6],
+        "status": row[7],
+        "pinned": bool(row[8]),
+        "edited": bool(row[9]),
+        "created_at": row[10],
+    }
+
+
+def get_self_memory(db_path: str, memory_id: int) -> dict | None:
+    conn = _connect(db_path)
+    row = conn.execute(
+        f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)
+    ).fetchone()
+    conn.close()
+    return _row_to_self_memory(row) if row else None
+
+
+def get_self_memories(db_path: str, status: str | None = None) -> list[dict]:
+    conn = _connect(db_path)
+    if status is not None:
+        rows = conn.execute(
+            f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE status = ? ORDER BY id DESC",
+            (status,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory ORDER BY id DESC"
+        ).fetchall()
+    conn.close()
+    return [_row_to_self_memory(r) for r in rows]
+
+
+def get_vetoed_self_memory_texts(db_path: str) -> list[str]:
+    conn = _connect(db_path)
+    rows = conn.execute("SELECT text FROM self_memory WHERE status = 'vetoed'").fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+def count_active_self_memories(db_path: str) -> int:
+    conn = _connect(db_path)
+    row = conn.execute("SELECT COUNT(*) FROM self_memory WHERE status = 'active'").fetchone()
+    conn.close()
+    return row[0]
+
+
+def update_self_memory(
+    db_path: str,
+    memory_id: int,
+    *,
+    text: str | None = None,
+    pinned: bool | None = None,
+    status: str | None = None,
+) -> bool:
+    """Mario's edit/pin/veto/retire actions (PATCH /v1/self-memory/{id}).
+    Only the fields actually passed are touched; a text edit also marks
+    the row `edited` (same convention as diary's PATCH)."""
+    sets: list[str] = []
+    params: list[Any] = []
+    if text is not None:
+        sets.append("text = ?")
+        params.append(text)
+        sets.append("edited = 1")
+    if pinned is not None:
+        sets.append("pinned = ?")
+        params.append(int(pinned))
+    if status is not None:
+        sets.append("status = ?")
+        params.append(status)
+    if not sets:
+        return False
+    params.append(memory_id)
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute(f"UPDATE self_memory SET {', '.join(sets)} WHERE id = ?", params)
+        updated = cursor.rowcount > 0
+    conn.close()
+    return updated
+
+
+def delete_self_memory(db_path: str, memory_id: int) -> bool:
+    conn = _connect(db_path)
+    with conn:
+        cursor = conn.execute("DELETE FROM self_memory WHERE id = ?", (memory_id,))
+        deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def touch_self_memories(db_path: str, memory_ids: list[int]) -> None:
+    """Increments `uses` and stamps `last_used` for every memory actually
+    placed in a prompt (self_memory.memory_block) - what the ranking's
+    recency/cooldown signals are computed from next time."""
+    if not memory_ids:
+        return
+    conn = _connect(db_path)
+    with conn:
+        conn.executemany(
+            "UPDATE self_memory SET uses = uses + 1, last_used = datetime('now') WHERE id = ?",
+            [(mid,) for mid in memory_ids],
+        )
+    conn.close()
+
+
+def retire_self_memories(db_path: str, memory_ids: list[int]) -> None:
+    if not memory_ids:
+        return
+    conn = _connect(db_path)
+    with conn:
+        conn.executemany(
+            "UPDATE self_memory SET status = 'retired' WHERE id = ? AND status = 'active'",
+            [(mid,) for mid in memory_ids],
         )
     conn.close()

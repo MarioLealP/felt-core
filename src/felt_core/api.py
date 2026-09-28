@@ -21,6 +21,7 @@ from urllib.parse import quote
 import httpx
 import uvicorn
 from fastapi import (
+    BackgroundTasks,
     FastAPI,
     File,
     Form,
@@ -34,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from felt_core import metrics, tts_cache
+from felt_core import diary, metrics, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import (
     chat,
@@ -49,17 +50,27 @@ from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
     clear_checked_shopping_items,
+    delete_diary,
     delete_old_latency_rows,
+    delete_self_memory,
     delete_shopping_item,
+    get_diary,
+    get_diary_list,
+    get_diary_weeks,
     get_history,
     get_latency_rows,
     get_proactive_item,
+    get_self_memories,
+    get_self_memory,
     get_setting,
     get_shopping_items,
     prune_expired_proactive,
     requeue_proactive,
+    save_event,
     set_setting,
     set_shopping_item_checked,
+    update_diary_entry,
+    update_self_memory,
 )
 from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
@@ -488,6 +499,118 @@ async def react_event_endpoint(
     except httpx.HTTPError:
         logger.exception("event reaction: TTS failed for %r", result.line)
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
+
+
+class EventLogRequest(BaseModel):
+    kind: str
+    data: dict[str, Any] = {}
+    at: str | None = None
+
+
+@app.post("/v1/events", status_code=204)
+async def log_event_endpoint(req: EventLogRequest, background_tasks: BackgroundTasks) -> Response:
+    """WP-26: felt-animation's SILENT desktop-event log - game_start/stop,
+    afk_start/end, day_start, music_track, mood, window_fall, prop_used,
+    hush, ledge_sit, ... Any kind is accepted (an unrecognized one is
+    logged but contributes nothing to the diary - see diary._event_line);
+    `data` is size-capped, never rejected. No reaction, no TTS - distinct
+    from /v1/react/event (events.py), which is a SPOKEN reaction. Also the
+    WP-26 diary trigger: day_start/afk_end after 05:00 local writes
+    yesterday's entry. It runs as a FastAPI background task: after the 204
+    is sent (the cloud write takes seconds, and felt-animation's post
+    timeout is 2 s), but still on the server's event loop, so proactive
+    pre-synthesis (WP-25) works."""
+    config = load_config()
+    at_utc = diary.normalize_at(req.at)
+    save_event(config.db_path, req.kind[:64], diary.cap_event_data(req.data), at_utc)
+    background_tasks.add_task(diary.on_event, config, req.kind, at_utc)
+    return Response(status_code=204)
+
+
+@app.get("/v1/diary")
+async def diary_list_endpoint(limit: int = 30, date: str | None = None) -> dict:
+    """LAN-only, like the rest of felt-core's API (felt-dashboard's "Felt's
+    diary" page, WP-26). `date=` returns just that one entry (or an empty
+    `entries` list); otherwise the most recent `limit` entries, newest
+    first, plus the weekly summaries."""
+    config = load_config()
+    if date is not None:
+        row = get_diary(config.db_path, date)
+        return {"entries": [row] if row else [], "weeks": []}
+    return {
+        "entries": get_diary_list(config.db_path, limit=limit),
+        "weeks": get_diary_weeks(config.db_path),
+    }
+
+
+class DiaryPatchRequest(BaseModel):
+    entry: str
+
+
+@app.patch("/v1/diary/{date}")
+async def diary_patch_endpoint(date: str, req: DiaryPatchRequest) -> dict:
+    """Mario correcting her memory (WP-26: "Decided ... Mario can correct
+    her memory"). Marks the row edited. Deliberately CLEARS callbacks_json
+    rather than spending a second cloud call regenerating them from the
+    new text - a hand-edited entry is usually a small correction, and a
+    stale callback pointing at wording that's no longer there is worse
+    than no callback until the next nightly write naturally adds fresh
+    ones. Documented here since the WP left this as an implementer call."""
+    config = load_config()
+    updated = update_diary_entry(config.db_path, date, req.entry, "[]")
+    if not updated:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True}
+
+
+@app.delete("/v1/diary/{date}")
+async def diary_delete_endpoint(date: str) -> dict:
+    config = load_config()
+    return {"deleted": delete_diary(config.db_path, date)}
+
+
+@app.post("/v1/diary/write")
+async def diary_write_debug_endpoint(date: str) -> dict:
+    """A manual trigger for testing (WP-26), gated by FELT_DEBUG the same
+    way /v1/proactive/debug is - not a normal client path."""
+    config = load_config()
+    if not config.debug:
+        raise HTTPException(status_code=404, detail="not found")
+    written = await diary.write_diary_for_date(config, date)
+    return {"written": written}
+
+
+@app.get("/v1/self-memory")
+async def self_memory_list_endpoint(status: str | None = None) -> list[dict]:
+    config = load_config()
+    return get_self_memories(config.db_path, status=status)
+
+
+class SelfMemoryPatchRequest(BaseModel):
+    text: str | None = None
+    pinned: bool | None = None
+    status: str | None = None
+
+
+@app.patch("/v1/self-memory/{memory_id}")
+async def self_memory_patch_endpoint(memory_id: int, req: SelfMemoryPatchRequest) -> dict:
+    """Mario's view/pin/edit/veto controls (WP-26 combined with personality
+    plan P4, Decision 3). `status: "vetoed"` means never re-added - its
+    text feeds the nightly writer's "never" list (diary._build_writer_prompt)
+    for as long as the vetoed row exists."""
+    config = load_config()
+    if get_self_memory(config.db_path, memory_id) is None:
+        raise HTTPException(status_code=404, detail="not found")
+    updated = update_self_memory(
+        config.db_path, memory_id, text=req.text, pinned=req.pinned, status=req.status
+    )
+    return {"ok": updated}
+
+
+@app.delete("/v1/self-memory/{memory_id}")
+async def self_memory_delete_endpoint(memory_id: int) -> dict:
+    config = load_config()
+    return {"deleted": delete_self_memory(config.db_path, memory_id)}
 
 
 class TemperatureUnitRequest(BaseModel):

@@ -14,8 +14,13 @@ sent to cloud) - this is just who she is, safe everywhere.
 """
 
 import random
+from typing import TYPE_CHECKING
 
 from felt_core.brain.persona import compile_persona
+from felt_core.self_memory import memory_block
+
+if TYPE_CHECKING:
+    from felt_core.config import FeltConfig
 
 # The pre-2026-09-27 persona, kept ONLY as the eval's baseline arm
 # (felt_core.evals.persona_eval). Never used for live replies.
@@ -46,15 +51,33 @@ LEGACY_PERSONALITY_PROMPT = (
 PERSONALITY_PROMPT = compile_persona(rng=random.Random(0))
 
 
-def personality_prompt(tone: str | None = None) -> str:
+def personality_prompt(
+    tone: str | None = None,
+    context_text: str | None = None,
+    config: "FeltConfig | None" = None,
+) -> str:
     """WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day
     + streak awareness - felt-tray/felt-dashboard fetch it and attach it to
     /v1/react/screen, /v1/voice-chat, /v1/text-chat). None on an older
     client, felt-animation unreachable, or a call site that doesn't carry
     one (the pending-email summary, the weather precompute) - the compiled
     sheet alone is always a safe, complete system prompt on its own, this
-    is purely additive. Each call draws a fresh example sample."""
+    is purely additive. Each call draws a fresh example sample.
+
+    WP-26 combined with personality plan P4: `config` (when a call site has
+    one cheaply in scope - see replies.py/screen_reactions.py/events.py)
+    additionally threads in `self_memory.memory_block`'s budgeted "Recently
+    (from your diary)" + "Who you've become" block, ranked against
+    `context_text` (whatever's on screen/in the message right now) when
+    given, else by pinned+recency alone. `config=None` (a call site with no
+    config cheaply in scope, or a test exercising the bare persona) skips
+    the block entirely - no DB touched, no behaviour change from before."""
     base = compile_persona()
-    if not tone:
-        return base
-    return f"{base}\n\nRight now: {tone}"
+    parts = [base]
+    if config is not None:
+        block = memory_block(config, context_text)
+        if block:
+            parts.append(block)
+    if tone:
+        parts.append(f"Right now: {tone}")
+    return "\n\n".join(parts)

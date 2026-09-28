@@ -12,7 +12,9 @@ async def test_timed_records_into_db_and_server_timing(tmp_path):
     metrics.start_request("req-1", "/v1/test", db_path, session_id="s1")
 
     async with metrics.timed("mystage", route="local"):
-        await asyncio.sleep(0.01)
+        # > one Windows monotonic tick (~15.6 ms): 0.01 s could measure 0.0
+        # there, depending on which test ran just before (seen 2026-09-28).
+        await asyncio.sleep(0.05)
 
     header = metrics.server_timing_header()
     assert header is not None
