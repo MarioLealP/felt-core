@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from felt_core import diary, metrics, tts_cache
+from felt_core import diary, metrics, reply_stream, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.brain import (
     chat,
@@ -78,7 +78,7 @@ from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 from felt_core.proactive import clamp_timeout, enqueue_proactive, proactive_audio, wait_for_next
-from felt_core.speech import strip_for_tts
+from felt_core.speech import speech_chunks, strip_for_tts, tts_request_body
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
 logger = logging.getLogger(__name__)
@@ -144,6 +144,9 @@ app.add_middleware(
         "Server-Timing",
         "X-Emotion",
         "X-Reaction-Skipped",
+        "X-Reply-Stream",
+        "X-Reply-Chunks",
+        "X-Chunk-Text",
     ],
 )
 
@@ -160,6 +163,8 @@ _UNTIMED_PATHS = (
     # real turn, and would otherwise swamp the `total` stage's percentiles
     # the same way /v1/music/now's old un-excluded polling did (WP-04 fix).
     "/v1/proactive/next",
+    # WP-54: a long-poll (up to 60s) for a streamed reply's next chunk.
+    "/v1/reply/",
 )
 
 
@@ -271,6 +276,44 @@ class _TTSClient(Protocol):
     async def post(self, url: str, *, json: dict[str, Any]) -> _TTSResponse: ...
 
 
+async def _tts_audio(
+    tts_text: str,
+    emotion: str | None,
+    config: Any,
+    client: _TTSClient,
+    *,
+    first_chunk: bool = False,
+) -> bytes:
+    """One felt-voice /v1/tts call behind the shared WP-06 cache (keyed on
+    text + emotion). Each real call is timed as a "tts" stage; a streamed
+    reply's chunk 0 is additionally "tts_first_chunk" (WP-54) - it's the
+    part the user actually waits for."""
+    # WP-06: a cache hit here (warmed by brain.py's weather precompute
+    # loop) means the common "what's the weather right now?" turn makes
+    # zero calls to felt-voice at all.
+    audio_bytes = tts_cache.get(tts_text, emotion)
+    if audio_bytes is not None:
+        return audio_bytes
+    async with contextlib.AsyncExitStack() as stack:
+        if first_chunk:
+            await stack.enter_async_context(metrics.timed("tts_first_chunk", chars=len(tts_text)))
+        await stack.enter_async_context(metrics.timed("tts", chars=len(tts_text)))
+        tts_resp = await client.post(
+            f"{config.voice_url}/v1/tts", json=tts_request_body(tts_text, emotion)
+        )
+        tts_resp.raise_for_status()
+    audio_bytes = tts_resp.content
+    tts_cache.put(tts_text, audio_bytes, emotion)
+    return audio_bytes
+
+
+async def _fill_reply_stream(stream: reply_stream.ReplyStream, config: Any) -> None:
+    """Background half of a streamed reply: chunks 1..N-1, on a client of its
+    own (the request's is closed as soon as chunk 0's response is sent)."""
+    async with httpx.AsyncClient(timeout=60) as client:
+        await reply_stream.run(stream, lambda _n, text: _tts_audio(text, None, config, client))
+
+
 async def _synthesize_reply(
     reply: str,
     ui_action: dict[str, Any] | None,
@@ -278,27 +321,37 @@ async def _synthesize_reply(
     config: Any,
     client: _TTSClient,
     extra_headers: dict[str, str] | None = None,
+    emotion: str | None = None,
+    stream: bool = False,
 ) -> Response:
     """Shared by voice-chat and text-chat: TTS the reply and build the same
     audio/wav + X-* header response shape, so a client doesn't need to know
-    or care which input mode produced it."""
+    or care which input mode produced it.
+
+    `stream` (WP-54, only the two chat endpoints pass it): a reply that
+    splits into 2+ sentence chunks answers with chunk 0's audio plus
+    X-Reply-Stream/X-Reply-Chunks, and the rest is synthesised in the
+    background for GET /v1/reply/{id}/chunk/{n}. A one-chunk reply is
+    exactly the non-streamed response."""
     tts_text = strip_for_tts(reply)
     logger.debug("TTS input after strip_for_tts: %r", tts_text)
 
-    # WP-06: a cache hit here (warmed by brain.py's weather precompute
-    # loop) means the common "what's the weather right now?" turn makes
-    # zero calls to felt-voice at all.
-    audio_bytes = tts_cache.get(tts_text)
-    if audio_bytes is None:
-        async with metrics.timed("tts", chars=len(tts_text)):
-            tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
-            tts_resp.raise_for_status()
-        audio_bytes = tts_resp.content
-        tts_cache.put(tts_text, audio_bytes)
+    chunks = (
+        speech_chunks(tts_text, config.reply_stream_first_chunk_chars) if stream else [tts_text]
+    )
+    streaming = len(chunks) >= 2
+    audio_bytes = await _tts_audio(
+        chunks[0] if streaming else tts_text, emotion, config, client, first_chunk=streaming
+    )
 
     # Percent-encoded — headers must be ASCII-safe, a non-English reply
     # (accents, etc.) would otherwise break this.
     headers = {"X-Reply-Text": quote(reply), **(extra_headers or {})}
+    if streaming:
+        live = reply_stream.create(chunks, audio_bytes)
+        live.task = asyncio.create_task(_fill_reply_stream(live, config))
+        headers["X-Reply-Stream"] = live.id
+        headers["X-Reply-Chunks"] = str(len(chunks))
     if ui_action is not None:
         headers["X-UI-Action"] = quote(json.dumps(ui_action))
     if animation_tag is not None:
@@ -353,6 +406,7 @@ async def voice_chat_endpoint(
             config,
             client,
             {"X-Transcribed-Text": quote(transcribed)},
+            stream=config.reply_streaming,
         )
 
 
@@ -377,7 +431,31 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
             result.animation_tag,
             config,
             client,
+            stream=config.reply_streaming,
         )
+
+
+@app.get("/v1/reply/{stream_id}/chunk/{n}")
+async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) -> Response:
+    """WP-54: long-polls for chunk n of a streamed reply (see
+    _synthesize_reply). 200 + WAV + X-Chunk-Text once ready, 408 if it still
+    isn't after `timeout` (clamped to 1-60 s), 204 for n past the last chunk
+    (the stream is done), 404 for an unknown/expired id, 502 if that chunk's
+    TTS failed."""
+    stream = reply_stream.get(stream_id)
+    if stream is None or n < 0:
+        raise HTTPException(status_code=404, detail="unknown or expired stream")
+    if n >= len(stream):
+        return Response(status_code=204)
+    try:
+        wav = await stream.wait_chunk(n, max(1.0, min(60.0, timeout)))
+    except reply_stream.ChunkFailed:
+        raise HTTPException(status_code=502, detail="chunk TTS failed") from None
+    if wav is None:
+        raise HTTPException(status_code=408, detail="chunk not ready")
+    return Response(
+        content=wav, media_type="audio/wav", headers={"X-Chunk-Text": quote(stream.texts[n])}
+    )
 
 
 class ScreenContextRequest(BaseModel):
@@ -452,6 +530,7 @@ async def react_screen_endpoint(
             config,
             client,
             extra_headers=emotion_headers or None,
+            emotion=result.emotion,
         )
 
 
@@ -494,7 +573,13 @@ async def react_event_endpoint(
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             return await _synthesize_reply(
-                result.line, None, None, config, client, extra_headers=emotion_headers or None
+                result.line,
+                None,
+                None,
+                config,
+                client,
+                extra_headers=emotion_headers or None,
+                emotion=result.emotion,
             )
     except httpx.HTTPError:
         logger.exception("event reaction: TTS failed for %r", result.line)
@@ -797,7 +882,8 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
         raise HTTPException(status_code=503, detail="voice_unavailable")
 
     # Pre-synthesised at enqueue time where possible (proactive.py).
-    audio_bytes = await proactive_audio(config, row["text"])
+    emotion = json.loads(row["payload_json"] or "{}").get("emotion")
+    audio_bytes = await proactive_audio(config, row["text"], emotion)
     return Response(content=audio_bytes, media_type="audio/wav")
 
 

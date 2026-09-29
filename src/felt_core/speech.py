@@ -55,3 +55,66 @@ def strip_for_tts(text: str) -> str:
     text = _BLANK_LINES_RE.sub(" ", text)
     text = _WHITESPACE_RE.sub(" ", text)
     return text.strip()
+
+
+# Sentence ends: . ! ? … (a run of them, plus trailing closing quotes/
+# brackets) followed by whitespace or the end of the text - so a decimal
+# ("3.5") or a dotted token ("v1.2") never splits - or a newline.
+_SENTENCE_END_RE = re.compile(r"[.!?\u2026]+[\"')\]]*(?=\s|$)|\n")
+# A "." right after one of these is not a sentence end ("Dr. Smith", "e.g.
+# this"). Lower-case, without the dot. Deliberately short: a wrong split
+# just makes two chunks, a wrong merge just makes one longer one.
+_ABBREVIATIONS = frozenset(
+    {"mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "e.g", "i.e", "approx", "inc"}
+)
+_INITIALS_RE = re.compile(r"^(?:[A-Za-z]\.)*[A-Za-z]$")  # "U.S", "J", "a.m"
+
+
+def _is_abbreviation(text: str, end_match: re.Match) -> bool:
+    if end_match.group()[0] != "." or end_match.group().count(".") != 1:
+        return False
+    words = text[: end_match.start()].split()
+    if not words:
+        return False
+    word = words[-1].lstrip("\"'([").lower()
+    return word in _ABBREVIATIONS or (len(word) <= 5 and _INITIALS_RE.match(word) is not None)
+
+
+def speech_chunks(text: str, first_chunk_chars: int = 40, min_chunk_chars: int = 25) -> list[str]:
+    """Splits TTS text (already through strip_for_tts) into sentence chunks
+    for streamed synthesis (WP-54): the first chunk is synthesised before
+    answering, the rest in the background. Sentences accumulate until a
+    chunk reaches `first_chunk_chars` (first) / `min_chunk_chars` (later),
+    so a short "Hm." never becomes a chunk of its own; a short leftover at
+    the end joins the previous chunk. One chunk back means "don't stream"."""
+    sentences: list[str] = []
+    start = 0
+    for m in _SENTENCE_END_RE.finditer(text):
+        if _is_abbreviation(text, m):
+            continue
+        sentences.append(text[start : m.end()].strip())
+        start = m.end()
+    sentences.append(text[start:].strip())
+
+    chunks: list[str] = []
+    buffer = ""
+    for sentence in filter(None, sentences):
+        buffer = f"{buffer} {sentence}" if buffer else sentence
+        if len(buffer) >= (min_chunk_chars if chunks else first_chunk_chars):
+            chunks.append(buffer)
+            buffer = ""
+    if buffer:
+        if chunks:
+            chunks[-1] = f"{chunks[-1]} {buffer}"
+        else:
+            chunks.append(buffer)
+    return chunks
+
+
+def tts_request_body(text: str, emotion: str | None = None) -> dict[str, str]:
+    """The JSON body for felt-voice's /v1/tts. `emotion` (WP-54) is only
+    sent when felt-core has one - chat replies don't, and speak neutrally."""
+    body = {"text": text}
+    if emotion:
+        body["emotion"] = emotion
+    return body

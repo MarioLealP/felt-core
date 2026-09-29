@@ -221,7 +221,7 @@ def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_VOICE_URL", "http://voice.invalid")
     monkeypatch.setenv("FELT_GEMINI_API_KEY", "fake-key")
     monkeypatch.delenv("FELT_SPOTIFY_REFRESH_TOKEN", raising=False)
-    monkeypatch.setattr(api.tts_cache, "get", lambda text: b"RIFF-fake-wav")
+    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
     return TestClient(api.app)  # no lifespan - no background loops
 
 

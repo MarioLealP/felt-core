@@ -166,7 +166,7 @@ def test_audio_endpoint_404_for_unknown_item(tmp_path, monkeypatch):
 
 def test_audio_endpoint_returns_wav_from_the_tts_cache(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch, debug=True)
-    monkeypatch.setattr(api.tts_cache, "get", lambda text: b"RIFF-fake-wav")
+    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
     item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()[
         "id"
     ]
@@ -201,7 +201,7 @@ async def test_enqueue_inside_the_loop_presynthesises_and_audio_joins_it(tmp_pat
     calls = []
     gate = asyncio.Event()
 
-    async def fake_synth(config, tts_text):
+    async def fake_synth(config, tts_text, emotion=None):
         calls.append(tts_text)
         await gate.wait()
         tts_cache.put(tts_text, b"RIFFwav")

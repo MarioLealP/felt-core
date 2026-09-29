@@ -44,6 +44,13 @@ class FeltConfig(BaseSettings):
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None
 
+    # WP-54: /v1/voice-chat and /v1/text-chat answer with the first
+    # sentence chunk's audio and synthesise the rest in the background
+    # (GET /v1/reply/{id}/chunk/{n}). The first chunk aims for at least this
+    # many characters so it isn't a lone "Hm.".
+    reply_streaming: bool = True
+    reply_stream_first_chunk_chars: int = 40
+
     # felt-desktop-agent — KDE Connect etc. lives on the desktop, not here.
     desktop_agent_url: str | None = None
 

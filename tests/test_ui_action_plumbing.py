@@ -58,7 +58,7 @@ def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_VOICE_URL", "http://fake-voice")
     _no_cloud(monkeypatch)
-    monkeypatch.setattr(api.tts_cache, "get", lambda text: b"fake-wav-bytes")
+    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"fake-wav-bytes")
 
     with TestClient(api.app) as client:
         response = client.post(
