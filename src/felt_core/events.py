@@ -14,13 +14,9 @@ global minimum gap between remarks, or (for game_stop/afk_end) too short a
 duration each mean "no reaction". The model only ever phrases a line that
 has already been decided on - it never chooses silence.
 
-Privacy (review doc's cloud line): the prompt is composed here from a
-whitelist of typed detail fields, never by dumping `details`. Music is
-cloud-ok (Mario, 2026-09-22). afk_end/gpu_hot/call_join_guess prompts
-carry only numbers felt-core formats itself, and so does unhushed (Mario
-lifting a hush: how long it lasted vs. was planned). Game names aren't on the
-cloud-ok list, so game_start/game_stop prompts go through the local
-privacy classifier first. Any cloud failure falls back to local Ollama.
+The prompt is composed here from a whitelist of typed detail fields, never
+by dumping `details`. Lines come from felt-llm only (WP-36 D''): when it is
+unreachable LocalLLMUnavailable propagates and /v1/react/event answers 503.
 """
 
 from __future__ import annotations
@@ -33,7 +29,6 @@ from pathlib import Path
 import httpx
 
 from felt_core import local_llm, metrics
-from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
 from felt_core.db import (
     last_event_reaction_line,
@@ -57,8 +52,6 @@ class EventPolicy:
     min_duration_s: int = 0
     # X-Emotion sent with the line (the WP-07 fixed set).
     emotion: str = "neutral"
-    # "cloud" = straight to cloud; "gated" = local privacy check first.
-    privacy: str = "cloud"
     # Mario-triggered events (unhushed) speak even if she just said
     # something: the global min gap is for her unprompted chatter.
     bypass_min_gap: bool = False
@@ -71,19 +64,14 @@ class EventPolicy:
 # any field per deployment with FELT_EVENT_POLICIES (JSON).
 DEFAULT_POLICIES: dict[str, EventPolicy] = {
     "music_new_track": EventPolicy(cooldown_s=5 * 60, dedupe_s=60 * 60, emotion="happy"),
-    "game_start": EventPolicy(
-        cooldown_s=20 * 60, dedupe_s=2 * 60 * 60, emotion="excited", privacy="gated"
-    ),
-    "game_stop": EventPolicy(
-        cooldown_s=20 * 60, min_duration_s=20 * 60, emotion="amused", privacy="gated"
-    ),
+    "game_start": EventPolicy(cooldown_s=20 * 60, dedupe_s=2 * 60 * 60, emotion="excited"),
+    "game_stop": EventPolicy(cooldown_s=20 * 60, min_duration_s=20 * 60, emotion="amused"),
     "afk_end": EventPolicy(cooldown_s=30 * 60, min_duration_s=30 * 60, emotion="happy"),
     "gpu_hot": EventPolicy(cooldown_s=60 * 60, emotion="surprised"),
     "call_join_guess": EventPolicy(cooldown_s=20 * 60, emotion="happy"),
     # Mario lifting a hush (felt-animation /unhush?announce=1, 2026-09-26:
     # "give her some snappy comments about being unmuted"). He triggered
-    # it, so only a small anti-double-press cooldown and no min gap. The
-    # details are numbers felt-core formats itself: cloud-ok.
+    # it, so only a small anti-double-press cooldown and no min gap.
     "unhushed": EventPolicy(cooldown_s=20, emotion="amused", bypass_min_gap=True),
 }
 
@@ -330,81 +318,17 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
     return chorus["text"] if chorus else None
 
 
-async def _generate_line(
-    event: str, prompt: str, policy: EventPolicy, config: FeltConfig, tone: str | None
-) -> str:
+async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str | None) -> str:
     # WP-40: brain.replies is felt-core's small public surface for reply
     # generation - this used to reach straight into brain.py's
     # underscore-prefixed (private-by-convention) internals instead.
-    from felt_core.brain.personality import personality_prompt
-    from felt_core.brain.replies import (
-        legacy_config,
-        local_model_label,
-        local_reply,
-        music_taste_context,
-    )
-    from felt_core.privacy import is_safe_for_cloud
+    from felt_core.brain.replies import local_reply, music_taste_context
 
-    # Music taste is cloud-ok (see brain.replies.music_taste_context) and
-    # keeps her opinions of a track consistent ("oh, this one again?").
+    # Music taste keeps her opinions of a track consistent ("oh, this one
+    # again?").
     taste = music_taste_context(config) if event == "music_new_track" else []
-    system = personality_prompt(tone, prompt, config)
-    for note in taste:
-        system = f"{system}\n\n{note['content']}"
 
-    if config.local_first:
-        # WP-36: felt-llm first - no privacy check, nothing leaves the LAN.
-        # The cloud path below is only the fallback (felt-llm down or
-        # silent), and gets the privacy check exactly as before.
-        try:
-            async with metrics.timed("event_reaction", route="local", model=config.local_llm_model):
-                local_line = await local_reply(
-                    taste + [{"role": "user", "content": prompt}],
-                    config,
-                    include_facts=False,
-                    tone=tone,
-                )
-            local_line = local_line.strip(" \n\"'")
-            if local_line:
-                return local_line
-            logger.warning(
-                "event reaction %s: felt-llm returned nothing, using the old path", event
-            )
-        except local_llm.LocalLLMUnavailable:
-            logger.warning("event reaction %s: felt-llm unavailable, using the old path", event)
-        config = legacy_config(config)
-
-    use_cloud = bool(config.gemini_api_key)
-    if use_cloud and policy.privacy == "gated":
-        use_cloud = await is_safe_for_cloud(prompt, config)
-        logger.info(
-            "event reaction %s: privacy check %s",
-            event,
-            "passed" if use_cloud else "failed - local",
-        )
-
-    if use_cloud:
-        try:
-            async with metrics.timed(
-                "event_reaction", route="cloud", model=config.cloud_model_volume
-            ):
-                line = await cloud_generate(
-                    "event_reaction",
-                    system,
-                    [{"role": "user", "content": prompt}],
-                    config,
-                    max_tokens=300,
-                )
-            line = line.strip(" \n\"'")
-            if line:
-                return line
-            logger.warning(
-                "event reaction %s: cloud returned nothing usable, falling back to local", event
-            )
-        except Exception:
-            logger.exception("event reaction %s: cloud failed, falling back to local", event)
-
-    async with metrics.timed("event_reaction", route="local", model=local_model_label(config)):
+    async with metrics.timed("event_reaction", route="local", model=config.local_llm_model):
         # No facts (an event remark doesn't need them); local_reply adds
         # the personality prompt and the length cap.
         line = await local_reply(
@@ -442,7 +366,6 @@ async def react_to_event(
         logger.info("event reaction %s: no line (%s)", event, reason)
         return EventReaction(skipped=reason)
 
-    policy = table[event]
     lyric = _text(details, "lyric") or None
     if event == "music_new_track" and lyric is None:
         lyric = await _lyric_for(details, config)
@@ -455,14 +378,17 @@ async def react_to_event(
         return EventReaction(skipped="missing_details")
 
     try:
-        line = await _generate_line(event, prompt, policy, config, tone)
+        line = await _generate_line(event, prompt, config, tone)
         if event == "unhushed":
             line = cap_words(line, UNHUSHED_MAX_WORDS)
             if same_line(line, previous):
                 logger.info("event reaction %s: repeated the last line, asking once more", event)
                 line = cap_words(
-                    await _generate_line(event, prompt, policy, config, tone), UNHUSHED_MAX_WORDS
+                    await _generate_line(event, prompt, config, tone), UNHUSHED_MAX_WORDS
                 )
+    except local_llm.LocalLLMUnavailable:
+        logger.warning("event reaction %s: felt-llm unavailable", event)
+        raise
     except Exception:
         logger.exception("event reaction %s: line generation failed", event)
         return EventReaction(skipped="generation_failed")
@@ -474,4 +400,4 @@ async def react_to_event(
     save_event_reaction(config.db_path, session_id, event, key, line)
     save_message(config.db_path, session_id, "assistant", line)
     logger.info("event reaction %s: %r", event, line)
-    return EventReaction(line=line, emotion=policy.emotion)
+    return EventReaction(line=line, emotion=table[event].emotion)

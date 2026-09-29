@@ -1,6 +1,5 @@
 """WP-26: the diary's material gatherer - whitelisted event lines,
-dedupe/cap, event-data capping, and the privacy line (chat only as a
-whole safe window, facts never touched at all)."""
+dedupe/cap, event-data capping, and facts never touched at all."""
 
 import json
 
@@ -57,7 +56,7 @@ def test_cap_event_data_truncates_oversized_payloads():
     assert json.loads(encoded)["_truncated"] is True
 
 
-async def test_gather_material_excludes_unsafe_chat_and_never_touches_facts(tmp_path, monkeypatch):
+async def test_gather_material_includes_chat_windows_and_never_touches_facts(tmp_path):
     config = _config(tmp_path)
     save_fact(config.db_path, "Mario's home address is a private secret")
     save_message(config.db_path, "s1", "user", "safe banter about bread")
@@ -73,14 +72,9 @@ async def test_gather_material_excludes_unsafe_chat_and_never_touches_facts(tmp_
         "2026-09-20 12:00:00",
     )
 
-    async def fake_is_safe(text, cfg):
-        return "medical" not in text
-
-    monkeypatch.setattr(diary, "is_safe_for_cloud", fake_is_safe)
-
     material = await diary.gather_material(config, "2026-09-20")
 
     assert "bread" in material
-    assert "medical" not in material
+    assert "medical history" in material  # nothing leaves the LAN, no classifier gate
     assert "secret" not in material
     assert 'played "Song" by Artist' in material

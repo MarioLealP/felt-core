@@ -1,16 +1,16 @@
 """Client for felt-llm, the self-hosted llama.cpp server (WP-36).
 
-One OpenAI-compatible `/v1/chat/completions` call, used by every local
-path when `config.local_first` is on: chat (with native tool calling),
-screen reactions (image + json_schema), event lines, the privacy
-classifier and the diary. The server runs ONE slot with an 8K context, so
-callers keep their prompts bounded and requests simply queue server-side.
+One OpenAI-compatible `/v1/chat/completions` call, used by every model
+path: chat (with native tool calling), screen reactions (image +
+json_schema), event lines, the reaction-tag classifier and the diary. The
+server runs ONE slot with an 8K context, so callers keep their prompts
+bounded and requests simply queue server-side.
 
 Every transport-level problem - no URL configured, connection refused,
 timeout, an HTTP error, or a body that isn't the expected shape - is one
-exception, `LocalLLMUnavailable`, so a caller's fallback is a single
-`except`: chat() drops back to the router + cloud/Ollama path, screen
-reactions to the cloud call, and the privacy classifier to "PRIVATE".
+exception, `LocalLLMUnavailable`. There is no cloud or Ollama fallback
+(WP-36 D''): the API answers 503 "felt-llm offline" and the background
+loops log and skip.
 """
 
 import base64
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class LocalLLMUnavailable(Exception):
     """felt-llm couldn't produce a reply (down, timed out, 5xx, or a
-    malformed response). Callers fall back to their pre-WP-36 path."""
+    malformed response). The API maps it to a 503, background loops skip."""
 
 
 @dataclass
@@ -109,6 +109,19 @@ async def chat(
         prompt_n=timings.get("prompt_n"),
         cache_n=timings.get("cache_n"),
     )
+
+
+async def is_healthy(config: FeltConfig) -> bool:
+    """`GET {local_llm_url}/health` - True only on a 200 (llama.cpp answers
+    503 while the model is still loading)."""
+    if not config.local_llm_url:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(f"{config.local_llm_url.rstrip('/')}/health")
+    except httpx.HTTPError:
+        return False
+    return response.status_code == 200
 
 
 def parse_tool_arguments(tool_call: dict) -> tuple[str, dict]:

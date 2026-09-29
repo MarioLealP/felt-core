@@ -1,6 +1,6 @@
 """WP-26: the nightly writer's trigger (first day_start/afk_end after
 05:00 local, once per date, skipped with no material), its single
-cloud_generate call writing both the diary and self-memory halves, and
+felt-llm call writing both the diary and self-memory halves, and
 Sunday's weekly compression."""
 
 import json
@@ -8,12 +8,11 @@ from datetime import date, timedelta
 
 import felt_core.db as db
 import felt_core.diary as diary
-from felt_core.cloud import CloudUnavailable
 from felt_core.config import FeltConfig
+from felt_core.local_llm import LocalLLMUnavailable
 
 
 def _config(tmp_path, **kwargs):
-    kwargs.setdefault("gemini_api_key", "fake-key")
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
@@ -59,21 +58,17 @@ async def test_write_diary_for_date_skips_when_no_material(tmp_path):
     assert db.get_diary(config.db_path, "2026-09-22") is None
 
 
-async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_path, monkeypatch):
+async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(
+    tmp_path, monkeypatch, fake_llm
+):
     config = _config(tmp_path)
     db.save_event(
         config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
     )
 
-    calls = []
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        calls.append(purpose)
-        return _DAILY_JSON
-
+    fake_llm.default = _DAILY_JSON
     enqueued = []
 
-    monkeypatch.setattr(diary, "cloud_generate", fake_cloud_generate)
     monkeypatch.setattr(
         diary, "enqueue_proactive", lambda cfg, kind, text, **kw: enqueued.append((kind, text))
     )
@@ -83,7 +78,7 @@ async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_p
 
     assert first is True
     assert second is False  # already has a row - never overwrites
-    assert calls == ["summary"]  # one cloud call, no weekly compression (not a Sunday-ended week)
+    assert len(fake_llm.calls) == 1  # one call, no weekly compression (not a Sunday-ended week)
 
     row = db.get_diary(config.db_path, "2026-09-22")
     assert row is not None
@@ -96,16 +91,13 @@ async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_p
     assert any("endfield" in m["text"] for m in memories)
 
 
-async def test_write_diary_for_date_skips_on_cloud_unavailable(tmp_path, monkeypatch):
+async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path, fake_llm):
     config = _config(tmp_path)
     db.save_event(
         config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
     )
 
-    async def failing(*a, **kw):
-        raise CloudUnavailable("exhausted")
-
-    monkeypatch.setattr(diary, "cloud_generate", failing)
+    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
 
     written = await diary.write_diary_for_date(config, "2026-09-22")
 
@@ -113,16 +105,13 @@ async def test_write_diary_for_date_skips_on_cloud_unavailable(tmp_path, monkeyp
     assert db.get_diary(config.db_path, "2026-09-22") is None
 
 
-async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, monkeypatch):
+async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, fake_llm):
     config = _config(tmp_path)
     db.save_event(
         config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
     )
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        return "not json at all"
-
-    monkeypatch.setattr(diary, "cloud_generate", fake_cloud_generate)
+    fake_llm.default = "not json at all"
 
     written = await diary.write_diary_for_date(config, "2026-09-22")
 
@@ -133,31 +122,22 @@ async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, monke
 # -- on_event: the trigger wired to the writer -------------------------------
 
 
-async def test_on_event_writes_yesterday_once_then_never_again(tmp_path, monkeypatch):
+async def test_on_event_writes_yesterday_once_then_never_again(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
     db.save_event(
         config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
     )
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        return _DAILY_JSON
-
-    monkeypatch.setattr(diary, "cloud_generate", fake_cloud_generate)
+    fake_llm.default = _DAILY_JSON
     monkeypatch.setattr(diary, "enqueue_proactive", lambda *a, **kw: None)
 
     await diary.on_event(config, "day_start", "2026-09-23 08:00:00")
     assert db.get_diary(config.db_path, "2026-09-22") is not None
 
-    calls = []
-
-    async def counting(*a, **kw):
-        calls.append(1)
-        return "{}"
-
-    monkeypatch.setattr(diary, "cloud_generate", counting)
+    fake_llm.calls.clear()
     await diary.on_event(config, "day_start", "2026-09-23 09:00:00")
 
-    assert calls == []  # the date already has a row - the writer never runs again
+    assert fake_llm.calls == []  # the date already has a row - the writer never runs again
 
 
 # -- Sunday weekly compression ------------------------------------------------
@@ -169,7 +149,7 @@ def _next_sunday_on_or_after(d: date) -> date:
     return d
 
 
-async def test_sunday_write_triggers_weekly_compression(tmp_path, monkeypatch):
+async def test_sunday_write_triggers_weekly_compression(tmp_path, fake_llm):
     config = _config(tmp_path)
     sunday = _next_sunday_on_or_after(date(2026, 9, 1))
     for i in range(1, 7):
@@ -182,32 +162,23 @@ async def test_sunday_write_triggers_weekly_compression(tmp_path, monkeypatch):
         f"{sunday.isoformat()} 12:00:00",
     )
 
-    responses = iter(
-        [
-            json.dumps(
-                {
-                    "entry": "sunday funday.",
-                    "callbacks": [],
-                    "mood_word": "happy",
-                    "self_updates": [],
-                    "greeting": "",
-                }
-            ),
-            json.dumps({"summary": "a good week overall.", "callbacks": ["callback one"]}),
-        ]
-    )
-    calls = []
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        calls.append(purpose)
-        return next(responses)
-
-    monkeypatch.setattr(diary, "cloud_generate", fake_cloud_generate)
+    fake_llm.script = [
+        json.dumps(
+            {
+                "entry": "sunday funday.",
+                "callbacks": [],
+                "mood_word": "happy",
+                "self_updates": [],
+                "greeting": "",
+            }
+        ),
+        json.dumps({"summary": "a good week overall.", "callbacks": ["callback one"]}),
+    ]
 
     written = await diary.write_diary_for_date(config, sunday.isoformat())
 
     assert written is True
-    assert calls == ["summary", "summary"]  # the daily write, then the weekly compression
+    assert len(fake_llm.calls) == 2  # the daily write, then the weekly compression
     week_row = db.get_latest_diary_week(config.db_path)
     assert week_row is not None
     assert week_row["summary"] == "a good week overall."

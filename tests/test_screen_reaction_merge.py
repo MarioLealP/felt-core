@@ -52,29 +52,15 @@ def test_on_cooldown_is_per_session(tmp_path):
 
 def _config(tmp_path, **kwargs):
     kwargs.setdefault("screen_reaction_cooldown_s", 90)
-    return FeltConfig(
-        db_path=str(tmp_path / "felt.db"),
-        gemini_api_key="fake-key",
-        **kwargs,
-    )
+    return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
-async def test_both_entry_points_go_silent_on_the_same_cooldown_state(tmp_path, monkeypatch):
+async def test_both_entry_points_go_silent_on_the_same_cooldown_state(tmp_path, fake_llm):
     config = _config(tmp_path)
     session_id = "shared-cooldown-test"
-    calls = []
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        calls.append(purpose)
-        if purpose == "screen_reaction" and kwargs.get("json_mode"):
-            return json.dumps({"seen": "x", "line": "should not be reached", "emotion": "happy"})
-        return "should not be reached"
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        return True
-
-    monkeypatch.setattr(screen_reactions, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(screen_reactions, "is_safe_for_cloud", fake_is_safe_for_cloud)
+    fake_llm.default = json.dumps(
+        {"seen": "x", "line": "should not be reached", "emotion": "happy"}
+    )
 
     # Prime the cooldown exactly once, via whichever entry point - both read
     # the same screen_observations table through the same helper.
@@ -92,37 +78,22 @@ async def test_both_entry_points_go_silent_on_the_same_cooldown_state(tmp_path, 
     assert screen_result.animation_tag is None
     assert image_result.reply == ""
     assert image_result.animation_tag is None
-    assert calls == []  # neither entry point made a single model call
+    assert fake_llm.calls == []  # neither entry point made a single model call
 
 
-async def test_both_entry_points_react_once_cooldown_has_passed(tmp_path, monkeypatch):
+async def test_both_entry_points_react_once_cooldown_has_passed(tmp_path, fake_llm):
     config = _config(tmp_path, screen_reaction_cooldown_s=0)
-    calls = []
 
-    async def fake_cloud_generate_process(purpose, system, messages, cfg, **kwargs):
-        calls.append(("process", purpose))
-        return "a local-style reaction"
-
-    async def fake_cloud_generate_react(purpose, system, messages, cfg, **kwargs):
-        calls.append(("react", purpose))
-        return json.dumps({"seen": "x", "line": "nice!", "emotion": "happy"})
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        return True
-
-    monkeypatch.setattr(screen_reactions, "is_safe_for_cloud", fake_is_safe_for_cloud)
-
-    monkeypatch.setattr(screen_reactions, "cloud_generate", fake_cloud_generate_process)
+    fake_llm.script = ["a local-style reaction"]
     screen_result = await screen_reactions.process_screen_context(
         "new thing", config, session_id="s1"
     )
     assert screen_result.reply == "a local-style reaction"
 
-    monkeypatch.setattr(screen_reactions, "cloud_generate", fake_cloud_generate_react)
+    fake_llm.script = [json.dumps({"seen": "x", "line": "nice!", "emotion": "happy"})]
     image_result = await screen_reactions.react_to_screen(
         b"jpeg", "app.exe", "Title", config, session_id="s2"
     )
     assert image_result.reply == "nice!"
 
-    assert ("process", "screen_reaction") in calls
-    assert ("react", "screen_reaction") in calls
+    assert len(fake_llm.calls) == 2

@@ -23,16 +23,11 @@ that, enforced project-wide, not just here:
    interface (`src/felt_core/plugin.py`) — addable/removable without
    touching core code. New skill = new folder in `plugins/`.
 
-A consequence worth naming explicitly: **the local model is the default
-brain; cloud is opt-in per call.** Cloud delegation isn't a different
-"backend" swapped in by a router — it's just another tool the local model
-can choose to call. Nothing here should default to a cloud API for
-something the local model can already handle.
-
-Tool-calling itself is a manual parsing loop, not dependent on any
-particular model's native function-calling support — this deliberately
-decouples model choice from tool-calling capability, so the local model
-gets picked for chat quality (including non-English quality) first.
+A consequence worth naming explicitly: **felt-llm is the only brain, and
+nothing leaves the LAN** (WP-36 D''). There is no cloud model and no
+Ollama; when felt-llm is unreachable the model endpoints answer 503
+`{"detail": "felt-llm offline"}` and background loops skip. Tool calling is
+llama.cpp's native tool calling (`--jinja`).
 
 ## Quickstart
 
@@ -46,31 +41,19 @@ uv run felt-core
 
 No longer a scaffold — the full brain loop is built and running:
 
-- **Routing**: a small dedicated model (`router_model`, `qwen2.5:1.5b`,
-  temperature 0) decides tool-vs-chat per message; the main chat model
-  never sees tool-call instructions, it just converses (`router.py`,
-  `brain.py`).
+- **Tool calling**: one felt-llm call carries the persona, the history and
+  every skill as a native tool; a tool call runs the skill and a second call
+  phrases the result (`brain/orchestrator.py`, `local_llm.py`).
 - **Conversation memory**: session history is persisted to SQLite and
   loaded back in as real context on every reply, not just the current
   message in isolation (`db.py`).
-- **Personality**: every reply, local or cloud, carries a real system
+- **Personality**: every reply carries a real system
   prompt (`brain.py`'s `_PERSONALITY_PROMPT`) - Felt has an actual voice
   now (warm, playful, opinionated) instead of no framing at all, which
   read as flat/robotic in practice, especially over text chat.
-- **Cloud delegation for plain conversation**: local chat-model quality was
-  genuinely weak for banter, so a plain (no-skill) message can be routed to
-  Google's Gemini API directly (`gemini_api_key`/`gemini_chat_model` in
-  config) for a better reply - gated by `privacy.py`'s `is_safe_for_cloud()`,
-  a small dedicated fail-closed classifier that judges the *whole* recent
-  context window (not just the new message) before anything leaves the LAN.
-  Deliberately **not** routed through ninerouter/Antigravity - every `ag/`
-  model there carries Antigravity's own baked-in coding-agent identity that
-  no system prompt could override; Google's own free tier has no such
-  contamination. A tool-result reply always stays local regardless, since
-  tool output can carry real personal data.
 - **API surface**: `/v1/chat`, `/v1/voice-chat` (audio in, audio out via
   felt-voice), `/v1/text-chat` (typed input gets the same TTS + reaction-
-  animation treatment voice does), `/v1/history`, a WS chat endpoint, plus
+  animation treatment voice does), `/v1/history`, a WS chat endpoint, `/v1/reaction-tag` (picks the animation tag for a line), plus
   the shopping-list and settings routes. CORS-enabled, LAN-reachable.
 - 24 skills via the plugin system (weather, calendar, email, smart home,
   PoE2 price checks, image generation, and more) - see `plugins/`.

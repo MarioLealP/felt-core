@@ -1,6 +1,6 @@
 """2026-09-24 audit fixes to WP-04's latency metrics: cancelled stages
 aren't recorded, polling routes don't swamp `total`, and cloud screen
-reactions get their own `screen_reaction` stage again."""
+reactions get their own `screen_reaction` stage (route `local`)."""
 
 import asyncio
 
@@ -57,17 +57,13 @@ def test_polling_routes_do_not_record_a_total(tmp_path, monkeypatch):
     assert get_latency_rows(db_path, since_hours=1) == []
 
 
-async def test_cloud_screen_reaction_records_a_screen_reaction_stage(tmp_path, monkeypatch):
+async def test_screen_reaction_records_a_local_screen_reaction_stage(tmp_path, fake_llm):
     db_path = str(tmp_path / "felt.db")
-    config = FeltConfig(db_path=db_path, gemini_api_key="k", cloud_model_volume="volume-model")
+    config = FeltConfig(db_path=db_path)
     metrics.start_request("req-s", "/v1/react/screen", db_path)
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        return '{"seen": "a game", "line": "nice move", "emotion": "happy"}'
-
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
+    fake_llm.script = ['{"seen": "a game", "line": "nice move", "emotion": "happy"}']
 
     await brain.react_to_screen(b"jpeg", "game.exe", "Game", config, session_id="s")
 
     rows = get_latency_rows(db_path, since_hours=1)
-    assert [(r["stage"], r["route"]) for r in rows] == [("screen_reaction", "cloud")]
+    assert [(r["stage"], r["route"]) for r in rows] == [("screen_reaction", "local")]

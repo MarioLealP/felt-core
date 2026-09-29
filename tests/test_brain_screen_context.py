@@ -1,97 +1,74 @@
-import felt_core.brain.replies as brain_replies
+import pytest
+
 import felt_core.brain.screen_reactions as brain
 from felt_core.config import FeltConfig
 from felt_core.db import get_history
+from felt_core.local_llm import LocalLLMUnavailable
 
 
 def _config(tmp_path, **kwargs):
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
-async def test_cloud_path_receives_no_chat_history(tmp_path, monkeypatch):
-    # WP-05: the screen-reaction cloud path now goes through
-    # cloud_generate("screen_reaction", ...) directly, not _cloud_chat -
-    # "no chat history" means its `messages` list holds only the prompt,
-    # no prior turns.
-    config = _config(tmp_path, gemini_api_key="fake-key")
-    captured = {}
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        captured["purpose"] = purpose
-        captured["messages"] = messages
-        return "nice reaction"
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        return True
-
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
+async def test_screen_context_makes_one_plain_local_call(tmp_path, fake_llm):
+    config = _config(tmp_path)
+    fake_llm.script = ["nice reaction"]
 
     result = await brain.process_screen_context("a cat on the desk", config, session_id="wp02-test")
 
     assert result.reply == "nice reaction"
-    assert captured["purpose"] == "screen_reaction"
-    assert captured["messages"] == [{"role": "user", "content": brain._SCREEN_REACTION_PROMPT}]
+    assert len(fake_llm.calls) == 1
+    call = fake_llm.calls[0]
+    assert call["tools"] is None and call["json_schema"] is None
+    # The observation rides in the (merged) system message, the prompt is the last user turn.
+    assert "a cat on the desk" in call["messages"][0]["content"]
+    assert call["messages"][-1] == {"role": "user", "content": brain._SCREEN_REACTION_PROMPT}
 
 
-async def test_none_reply_triggers_exactly_one_local_retry(tmp_path, monkeypatch):
-    config = _config(tmp_path)  # no gemini key -> straight to the local path
-    calls = []
+async def test_screen_context_raises_when_felt_llm_is_down(tmp_path, fake_llm):
+    config = _config(tmp_path)
+    fake_llm.script = [LocalLLMUnavailable("down")]
 
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        calls.append(messages)
-        return "NONE" if len(calls) == 1 else "okay something real"
+    with pytest.raises(LocalLLMUnavailable):
+        await brain.process_screen_context("a cat", config, session_id="wp02-test")
 
-    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
+
+async def test_none_reply_triggers_exactly_one_local_retry(tmp_path, fake_llm):
+    config = _config(tmp_path)
+    fake_llm.script = ["NONE", "okay something real"]
 
     result = await brain.process_screen_context("something", config, session_id="wp02-test")
 
     assert result.reply == "okay something real"
-    assert len(calls) == 2
+    assert len(fake_llm.calls) == 2
 
 
-async def test_still_empty_after_retry_returns_silent_and_stops(tmp_path, monkeypatch):
+async def test_still_empty_after_retry_returns_silent_and_stops(tmp_path, fake_llm):
     config = _config(tmp_path)
-    calls = []
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        calls.append(messages)
-        return "NONE"
-
-    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
+    fake_llm.default = "NONE"
 
     result = await brain.process_screen_context("something", config, session_id="wp02-test")
 
     assert result.reply == ""
-    assert len(calls) == 2  # first attempt + exactly one retry, no more
+    assert len(fake_llm.calls) == 2  # first attempt + exactly one retry, no more
 
 
-async def test_second_call_inside_cooldown_makes_zero_model_calls(tmp_path, monkeypatch):
+async def test_second_call_inside_cooldown_makes_zero_model_calls(tmp_path, fake_llm):
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
-    calls = []
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        calls.append(messages)
-        return "reacted!"
-
-    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
+    fake_llm.default = "reacted!"
 
     first = await brain.process_screen_context("first thing", config, session_id="wp02-test")
     assert first.reply == "reacted!"
-    assert len(calls) == 1
+    assert len(fake_llm.calls) == 1
 
     second = await brain.process_screen_context("second thing", config, session_id="wp02-test")
     assert second.reply == ""
-    assert len(calls) == 1  # no new model call while on cooldown
+    assert len(fake_llm.calls) == 1  # no new model call while on cooldown
 
 
-async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_path, monkeypatch):
+async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_path, fake_llm):
     config = _config(tmp_path)
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "look at that"
-
-    monkeypatch.setattr(brain_replies, "_ollama_chat", fake_ollama_chat)
+    fake_llm.default = "look at that"
 
     result = await brain.process_screen_context(
         "something interesting", config, session_id="wp02-test"

@@ -4,6 +4,7 @@ never stored as a screen observation."""
 
 from urllib.parse import unquote
 
+import pytest
 from fastapi.testclient import TestClient
 
 import felt_core.api as api
@@ -16,24 +17,23 @@ from felt_core.db import (
     seconds_since_last_spoken_reaction,
     set_observation_reply,
 )
+from felt_core.local_llm import LocalLLMUnavailable
 
 _TRACK = {"title": "Song A", "artist": "Artist A", "album": "Album A"}
 
 
 def _config(tmp_path, **kwargs):
-    kwargs.setdefault("gemini_api_key", "fake-key")
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
-def _fake_cloud(monkeypatch, line="ooh, good pick"):
-    calls = []
+def _fake_llm(fake_llm, line="ooh, good pick"):
+    """Every felt-llm call answers `line`; returns the recorded calls."""
+    fake_llm.default = line
+    return fake_llm.calls
 
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        calls.append({"purpose": purpose, "system": system, "messages": messages})
-        return line
 
-    monkeypatch.setattr(events, "cloud_generate", fake_cloud_generate)
-    return calls
+def _system(call):
+    return call["messages"][0]["content"]
 
 
 # -- decide(): pure ------------------------------------------------------
@@ -114,9 +114,9 @@ def test_music_without_title_is_too_thin():
 # -- react_to_event --------------------------------------------------------
 
 
-async def test_music_event_speaks_then_cools_down_with_zero_model_calls(tmp_path, monkeypatch):
+async def test_music_event_speaks_then_cools_down_with_zero_model_calls(tmp_path, fake_llm):
     config = _config(tmp_path)
-    calls = _fake_cloud(monkeypatch)
+    calls = _fake_llm(fake_llm)
 
     first = await events.react_to_event("music_new_track", _TRACK, config, session_id="s")
     second = await events.react_to_event(
@@ -126,13 +126,13 @@ async def test_music_event_speaks_then_cools_down_with_zero_model_calls(tmp_path
     assert first.line == "ooh, good pick" and first.emotion == "happy"
     assert second.line == "" and second.skipped == "min_gap"
     assert len(calls) == 1
-    assert calls[0]["purpose"] == "event_reaction"
-    assert all(m["role"] == "user" for m in calls[0]["messages"])
+    assert calls[0]["tools"] is None
+    assert calls[0]["messages"][-1]["role"] == "user"
 
 
-async def test_event_is_never_a_screen_observation(tmp_path, monkeypatch):
+async def test_event_is_never_a_screen_observation(tmp_path, fake_llm):
     config = _config(tmp_path)
-    _fake_cloud(monkeypatch)
+    _fake_llm(fake_llm)
 
     result = await events.react_to_event("music_new_track", _TRACK, config, session_id="s")
 
@@ -146,9 +146,9 @@ async def test_event_is_never_a_screen_observation(tmp_path, monkeypatch):
     assert get_history(config.db_path, "s", exclude_remarks=True) == []
 
 
-async def test_a_recent_screen_remark_blocks_an_event_line(tmp_path, monkeypatch):
+async def test_a_recent_screen_remark_blocks_an_event_line(tmp_path, fake_llm):
     config = _config(tmp_path)
-    calls = _fake_cloud(monkeypatch)
+    calls = _fake_llm(fake_llm)
     obs = save_observation(config.db_path, "s", "a game")
     set_observation_reply(config.db_path, obs, "nice")
 
@@ -158,9 +158,9 @@ async def test_a_recent_screen_remark_blocks_an_event_line(tmp_path, monkeypatch
     assert calls == []
 
 
-async def test_unknown_event_makes_no_model_call(tmp_path, monkeypatch):
+async def test_unknown_event_makes_no_model_call(tmp_path, fake_llm):
     config = _config(tmp_path)
-    calls = _fake_cloud(monkeypatch)
+    calls = _fake_llm(fake_llm)
 
     result = await events.react_to_event("mash", {}, config)
 
@@ -168,49 +168,23 @@ async def test_unknown_event_makes_no_model_call(tmp_path, monkeypatch):
     assert calls == []
 
 
-async def test_game_events_go_through_the_privacy_check(tmp_path, monkeypatch):
-    import felt_core.brain.replies as brain
-    import felt_core.privacy as privacy
-
+async def test_game_events_speak_from_felt_llm_without_any_privacy_gate(tmp_path, fake_llm):
     config = _config(tmp_path)
-    calls = _fake_cloud(monkeypatch)
-    checked = []
-
-    async def fake_is_safe(text, cfg):
-        checked.append(text)
-        return False
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "game time, huh?"
-
-    monkeypatch.setattr(privacy, "is_safe_for_cloud", fake_is_safe)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    calls = _fake_llm(fake_llm, "game time, huh?")
 
     result = await events.react_to_event("game_start", {"name": "endfield.exe"}, config)
 
     assert result.line == "game time, huh?"
-    assert checked and "endfield" in checked[0]
-    assert calls == []  # PRIVATE -> never reached the cloud
+    assert len(calls) == 1
+    assert "endfield" in calls[0]["messages"][-1]["content"]
 
 
-async def test_cloud_failure_falls_back_to_local(tmp_path, monkeypatch):
-    import felt_core.brain.replies as brain
-    from felt_core.cloud import CloudUnavailable
-
+async def test_felt_llm_offline_propagates_instead_of_a_skip(tmp_path, fake_llm):
     config = _config(tmp_path)
+    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
 
-    async def failing_cloud(*args, **kwargs):
-        raise CloudUnavailable("exhausted")
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "welcome back!"
-
-    monkeypatch.setattr(events, "cloud_generate", failing_cloud)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-    result = await events.react_to_event("afk_end", {"duration_s": 3600}, config)
-
-    assert result.line == "welcome back!"
+    with pytest.raises(LocalLLMUnavailable):
+        await events.react_to_event("afk_end", {"duration_s": 3600}, config)
 
 
 # -- the endpoint: same contract as /v1/react/screen -------------------------
@@ -219,14 +193,13 @@ async def test_cloud_failure_falls_back_to_local(tmp_path, monkeypatch):
 def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_VOICE_URL", "http://voice.invalid")
-    monkeypatch.setenv("FELT_GEMINI_API_KEY", "fake-key")
     monkeypatch.delenv("FELT_SPOTIFY_REFRESH_TOKEN", raising=False)
     monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
     return TestClient(api.app)  # no lifespan - no background loops
 
 
-def test_endpoint_speaks_with_the_screen_reaction_contract(tmp_path, monkeypatch):
-    _fake_cloud(monkeypatch, line="this one again?")
+def test_endpoint_speaks_with_the_screen_reaction_contract(tmp_path, monkeypatch, fake_llm):
+    _fake_llm(fake_llm, line="this one again?")
     client = _client(tmp_path, monkeypatch)
 
     response = client.post("/v1/react/event", json={"event": "music_new_track", "details": _TRACK})
@@ -238,8 +211,8 @@ def test_endpoint_speaks_with_the_screen_reaction_contract(tmp_path, monkeypatch
     assert response.headers["X-Emotion"] == "happy"
 
 
-def test_endpoint_no_reaction_shape(tmp_path, monkeypatch):
-    _fake_cloud(monkeypatch)
+def test_endpoint_no_reaction_shape(tmp_path, monkeypatch, fake_llm):
+    _fake_llm(fake_llm)
     client = _client(tmp_path, monkeypatch)
 
     response = client.post("/v1/react/event", json={"event": "not_a_real_event", "details": {}})
@@ -250,8 +223,8 @@ def test_endpoint_no_reaction_shape(tmp_path, monkeypatch):
     assert response.headers["X-Reaction-Skipped"] == "unknown_event"
 
 
-def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monkeypatch):
-    calls = _fake_cloud(monkeypatch)
+def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monkeypatch, fake_llm):
+    calls = _fake_llm(fake_llm)
     client = _client(tmp_path, monkeypatch)
 
     response = client.post(
@@ -260,7 +233,17 @@ def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monke
     )
 
     assert response.status_code == 200
-    assert "Right now: sleepy and a bit grumpy" in calls[0]["system"]
+    assert "Right now: sleepy and a bit grumpy" in _system(calls[0])
+
+
+def test_endpoint_503_when_felt_llm_is_offline(tmp_path, monkeypatch, fake_llm):
+    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post("/v1/react/event", json={"event": "gpu_hot", "details": {"temp_c": 86}})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "felt-llm offline"}
 
 
 # -- unhushed: Mario lifting a hush (2026-09-26) -----------------------------
@@ -317,35 +300,27 @@ def test_same_line_ignores_case_and_punctuation():
 
 
 async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(
-    tmp_path, monkeypatch
+    tmp_path, fake_llm
 ):
     config = _config(tmp_path)
-    calls = _fake_cloud(monkeypatch, line="Couldn't last without me, huh?")
+    calls = _fake_llm(fake_llm, line="Couldn't last without me, huh?")
     obs = save_observation(config.db_path, "s", "a game")
     set_observation_reply(config.db_path, obs, "nice")
 
     result = await events.react_to_event("unhushed", _EARLY, config, session_id="s", tone="smug")
 
     assert result.line == "Couldn't last without me, huh?" and result.emotion == "amused"
-    assert calls[0]["purpose"] == "event_reaction"
-    assert "Right now: smug" in calls[0]["system"]
+    assert "Right now: smug" in _system(calls[0])
     assert (
         len(get_recent_observations(config.db_path, "s", limit=10)) == 1
     )  # only the one saved above
 
 
-async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, monkeypatch):
+async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fake_llm):
     import felt_core.db as db
 
     config = _config(tmp_path)
-    replies = iter(["Missed me already?", "missed me already!", "Freedom! Finally!"])
-    calls = []
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        calls.append(messages[0]["content"])
-        return next(replies)
-
-    monkeypatch.setattr(events, "cloud_generate", fake_cloud_generate)
+    fake_llm.script = ["Missed me already?", "missed me already!", "Freedom! Finally!"]
 
     first = await events.react_to_event("unhushed", _EARLY, config)
     # Past the 20 s cooldown without sleeping: age the first row.
@@ -357,10 +332,10 @@ async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, mon
 
     assert first.line == "Missed me already?"
     assert second.line == "Freedom! Finally!"  # the repeat was rejected and re-asked
-    assert '"Missed me already?"' in calls[1]
+    assert '"Missed me already?"' in fake_llm.calls[1]["messages"][-1]["content"]
 
 
-async def test_unhushed_gives_up_rather_than_repeat(tmp_path, monkeypatch):
+async def test_unhushed_gives_up_rather_than_repeat(tmp_path, fake_llm):
     import felt_core.db as db
 
     config = _config(tmp_path)
@@ -369,15 +344,15 @@ async def test_unhushed_gives_up_rather_than_repeat(tmp_path, monkeypatch):
     with conn:
         conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")
     conn.close()
-    _fake_cloud(monkeypatch, line="Missed me?")
+    _fake_llm(fake_llm, line="Missed me?")
 
     result = await events.react_to_event("unhushed", _EARLY, config)
 
     assert result.skipped == "generation_failed"  # felt-animation plays a fallback clip
 
 
-def test_endpoint_unhushed_returns_audio_and_text(tmp_path, monkeypatch):
-    _fake_cloud(monkeypatch, line="Oh, I'm allowed to talk now?")
+def test_endpoint_unhushed_returns_audio_and_text(tmp_path, monkeypatch, fake_llm):
+    _fake_llm(fake_llm, line="Oh, I'm allowed to talk now?")
     client = _client(tmp_path, monkeypatch)
 
     response = client.post(

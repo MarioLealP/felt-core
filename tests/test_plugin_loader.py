@@ -107,35 +107,3 @@ def test_malformed_manifest_is_skipped_not_fatal(tmp_path):
     # resilience principle as a single malformed skill.py above.
     assert "example_skill" in registry
     assert registry["example_skill"].default_tag is None
-
-
-def test_skill_gets_its_privacy_class_from_skills_manifest(tmp_path):
-    plugin_dir = tmp_path / "example_skill"
-    plugin_dir.mkdir()
-    (plugin_dir / "skill.py").write_text(_VALID_SKILL)
-    (tmp_path / "skills.json").write_text('{"example_skill": "public"}')
-
-    registry = load_plugins(str(tmp_path))
-
-    assert registry["example_skill"].privacy == "public"
-
-
-def test_skill_missing_from_skills_manifest_defaults_to_local(tmp_path):
-    plugin_dir = tmp_path / "example_skill"
-    plugin_dir.mkdir()
-    (plugin_dir / "skill.py").write_text(_VALID_SKILL)
-    (tmp_path / "skills.json").write_text('{"some_other_skill": "public"}')
-
-    registry = load_plugins(str(tmp_path))
-
-    assert registry["example_skill"].privacy == "local"
-
-
-def test_no_skills_manifest_defaults_to_local(tmp_path):
-    plugin_dir = tmp_path / "example_skill"
-    plugin_dir.mkdir()
-    (plugin_dir / "skill.py").write_text(_VALID_SKILL)
-
-    registry = load_plugins(str(tmp_path))
-
-    assert registry["example_skill"].privacy == "local"

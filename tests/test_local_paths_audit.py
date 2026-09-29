@@ -1,4 +1,4 @@
-"""2026-09-24 audit fixes to the local (Ollama) reply paths: every local
+"""2026-09-24 audit fixes to the local reply paths: every local
 call goes through brain.replies.local_reply (personality prompt + length
 cap), and the local screen path's "recent conversation" excludes her own
 earlier screen remarks."""
@@ -20,30 +20,23 @@ def _config(tmp_path, **kwargs):
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
-async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, monkeypatch):
+async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, fake_llm):
     config = _config(tmp_path)
     save_fact(config.db_path, "likes pizza")
-    captured = {}
+    fake_llm.script = ["local reply"]
 
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        captured["messages"] = messages
-        captured["kwargs"] = kwargs
-        return "local reply"
-
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-    reply = await brain._phrase_skill_result(
-        "find my notes", "found 3 notes", [], "local", config, tone="tired"
+    reply = await brain.phrase_skill_result(
+        "find my notes", "found 3 notes", [], config, tone="tired"
     )
 
+    call = fake_llm.calls[0]
     assert reply == "local reply"
-    assert captured["messages"][0]["role"] == "system"
-    assert brain.PERSONALITY_PROMPT in captured["messages"][0]["content"]
-    assert "tired" in captured["messages"][0]["content"]
-    assert any(
-        "likes pizza" in m["content"] for m in captured["messages"]
-    )  # local path keeps facts
-    assert captured["kwargs"]["max_tokens"] == brain._REPLY_MAX_TOKENS
+    assert call["messages"][0]["role"] == "system"
+    assert brain.PERSONALITY_PROMPT in call["messages"][0]["content"]
+    assert "tired" in call["messages"][0]["content"]
+    # facts ride along (merged into the one system message)
+    assert "likes pizza" in call["messages"][0]["content"]
+    assert call["max_tokens"] == brain._REPLY_MAX_TOKENS
 
 
 def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
@@ -65,47 +58,35 @@ def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
     ]
 
 
-async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_path, monkeypatch):
+async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_path, fake_llm):
     config = _config(tmp_path, screen_reaction_cooldown_s=0)
     save_message(config.db_path, "s", "user", "real question")
     save_message(config.db_path, "s", "assistant", "real answer")
     obs = save_observation(config.db_path, "s", "earlier thing")
     set_observation_reply(config.db_path, obs, "old screen remark")
     save_message(config.db_path, "s", "assistant", "old screen remark")
-    captured = {}
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        captured["messages"] = messages
-        return "new remark"
-
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    fake_llm.default = "new remark"
 
     await screen_reactions.process_screen_context("new thing", config, session_id="s")
 
-    contents = [m["content"] for m in captured["messages"]]
+    contents = [m["content"] for m in fake_llm.calls[0]["messages"]]
     assert "real question" in contents and "real answer" in contents
     assert "old screen remark" not in contents
 
 
-async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, monkeypatch):
+async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, monkeypatch, fake_llm):
     from felt_core.db import get_unresolved_pending_email, save_pending_email
 
-    config = _config(tmp_path)  # no Gemini key -> local path
+    config = _config(tmp_path)
     save_pending_email(config.db_path, "uid-1", "Ana", "Dinner")
-    captured = {}
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        captured["messages"] = messages
-        captured["kwargs"] = kwargs
-        return "Ana wants dinner Friday."
-
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    fake_llm.script = ["Ana wants dinner Friday."]
     monkeypatch.setattr(orchestrator, "fetch_email_body", lambda cfg, uid: "Dinner on Friday?")
 
     summary = await orchestrator._summarize_pending_email(config, "s", "yes")
 
     assert summary == "Ana wants dinner Friday."
-    assert captured["messages"][0]["role"] == "system"
-    assert brain.PERSONALITY_PROMPT in captured["messages"][0]["content"]
-    assert captured["kwargs"]["max_tokens"] == brain._REPLY_MAX_TOKENS
+    call = fake_llm.calls[0]
+    assert call["messages"][0]["role"] == "system"
+    assert brain.PERSONALITY_PROMPT in call["messages"][0]["content"]
+    assert call["max_tokens"] == brain._REPLY_MAX_TOKENS
     assert get_unresolved_pending_email(config.db_path) is None

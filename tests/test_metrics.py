@@ -36,21 +36,10 @@ async def test_timed_is_a_no_op_outside_a_request(tmp_path):
     assert metrics.server_timing_header() is None
 
 
-def test_server_timing_header_present_on_chat_request(tmp_path, monkeypatch):
+def test_server_timing_header_present_on_chat_request(tmp_path, monkeypatch, fake_llm):
     db_path = str(tmp_path / "felt.db")
     monkeypatch.setenv("FELT_DB_PATH", db_path)
-
-    import felt_core.brain.orchestrator as orchestrator
-    import felt_core.brain.replies as replies
-
-    async def fake_decide_tool(message, registry, cfg):
-        return None
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "a reply"
-
-    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
-    monkeypatch.setattr(replies, "_ollama_chat", fake_ollama_chat)
+    monkeypatch.setenv("FELT_PLUGINS_DIR", str(tmp_path / "none"))
 
     with TestClient(app) as client:
         response = client.post("/v1/chat", json={"message": "hi", "session_id": "wp04-test"})
@@ -58,12 +47,13 @@ def test_server_timing_header_present_on_chat_request(tmp_path, monkeypatch):
     assert response.status_code == 200
     server_timing = response.headers.get("server-timing")
     assert server_timing is not None
-    assert "router" in server_timing
+    assert "reply" in server_timing
+    assert 'desc="local"' in server_timing
     assert "total" in server_timing
 
     rows = get_latency_rows(db_path, since_hours=1, endpoint="/v1/chat")
     stages = {r["stage"] for r in rows}
-    assert "router" in stages
+    assert "reply" in stages
     assert "total" in stages
 
 

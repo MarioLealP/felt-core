@@ -1,8 +1,8 @@
 """WP-26: the diary (day-to-day continuity), combined with personality
 plan P4 self-memory (Mario, 2026-09-27: "do it along with the personality
 change since she will have memories on that side too"). One nightly
-cloud_generate("summary", ...) call reads one set of cloud-safe material
-about a day and writes both halves in a single JSON response: the diary
+felt-llm call reads one set of material about a day and writes both halves
+in a single JSON response: the diary
 (their shared record - `entry`/`callbacks`/`mood_word`) and self-memory
 (what SHE takes away - `self_updates`, felt_core.self_memory), plus one
 morning greeting line to enqueue via the WP-25 proactive channel.
@@ -13,10 +13,10 @@ Trigger: the first `day_start`/`afk_end` event after 05:00 local
 own event loop, so proactive.enqueue_proactive's audio pre-synthesis
 actually fires - WP-25's implementation note on why that matters).
 
-Privacy (WP-26's spec, restated): screen `seen` text, logged events, music
-and mood are cloud-safe as-is. Chat only goes in as a WHOLE session window
-that passes `is_safe_for_cloud`, never summarised locally instead; a
-window that fails is left out entirely. Facts are never read here at all.
+Privacy: nothing leaves the LAN (felt-llm is the only model, WP-36 D''), so
+chat goes in as whole session windows with no classifier gate. Facts are
+never read here at all. When felt-llm is unreachable the writer logs at
+INFO and skips (no fallback).
 """
 
 from __future__ import annotations
@@ -30,9 +30,7 @@ from typing import Any
 
 from felt_core import db, local_llm
 from felt_core.brain.persona import compile_persona
-from felt_core.cloud import CloudUnavailable, cloud_generate
 from felt_core.config import FeltConfig
-from felt_core.privacy import is_safe_for_cloud
 from felt_core.proactive import enqueue_proactive
 from felt_core.self_memory import LISBON, add_self_memory
 
@@ -199,10 +197,9 @@ def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
 
 
 async def gather_material(config: FeltConfig, date_str: str) -> str:
-    """Cloud-safe material for one Europe/Lisbon calendar date: screen
-    `seen` text plus her spoken replies, logged desktop events, and chat
-    ONLY as whole session windows that pass is_safe_for_cloud (a window
-    that fails is excluded entirely, never locally summarised instead)."""
+    """Material for one Europe/Lisbon calendar date: screen `seen` text
+    plus her spoken replies, logged desktop events, and chat as whole
+    session windows."""
     start, end = _lisbon_date_bounds_utc(date_str)
     seen = db.get_screen_observations_between(config.db_path, start, end)
     events = db.get_events_between(config.db_path, start, end)
@@ -213,13 +210,7 @@ async def gather_material(config: FeltConfig, date_str: str) -> str:
         window_text = "\n".join(f"{m['role']}: {m['content']}" for m in session)
         if not window_text.strip():
             continue
-        if await is_safe_for_cloud(window_text, config):
-            chat_windows.append(window_text[:500])
-        else:
-            logger.info(
-                "diary material for %s: excluding one chat window (failed the cloud privacy check)",
-                date_str,
-            )
+        chat_windows.append(window_text[:500])
 
     return compact_material(RawMaterial(seen=seen, events=events, chat_windows=chat_windows))
 
@@ -279,35 +270,22 @@ def _parse_writer_json(raw: str) -> dict | None:
 async def _generate_json(
     config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int
 ) -> str:
-    """WP-36: the nightly writers try felt-llm first and only go to the
-    cloud when it's unreachable or returns nothing. The material was
-    already privacy-gated by gather_material (unchanged), so both routes
-    carry the same cloud-safe text. Raises CloudUnavailable like a plain
-    cloud_generate call when the fallback is needed and also fails."""
-    if config.local_first:
-        try:
-            reply = await local_llm.chat(
-                [{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
-                max_tokens=max_tokens,
-                config=config,
-            )
-            if reply.text.strip():
-                return reply.text
-            logger.warning("diary: felt-llm returned nothing, falling back to the cloud")
-        except local_llm.LocalLLMUnavailable:
-            logger.warning("diary: felt-llm unavailable, falling back to the cloud")
-    return await cloud_generate(
-        "summary", system, [{"role": "user", "content": user_prompt}], config, json_mode=True
+    """One felt-llm call for the nightly writers. Raises LocalLLMUnavailable
+    when it's down; callers log and skip."""
+    reply = await local_llm.chat(
+        [{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
+        max_tokens=max_tokens,
+        config=config,
     )
+    return reply.text
 
 
 async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
-    """The nightly writer for one date - ONE cloud_generate("summary", ...)
-    call producing the diary entry, its callbacks/mood, up to 3 new
-    self-memories, and the morning greeting all at once. Returns whether
-    an entry was actually written - False if there was no material (Mario
-    was AFK/away the whole day), the cloud call was unavailable, or the
-    response didn't parse."""
+    """The nightly writer for one date - ONE felt-llm call producing the
+    diary entry, its callbacks/mood, up to 3 new self-memories, and the
+    morning greeting all at once. Returns whether an entry was actually
+    written - False if there was no material (Mario was AFK/away the whole
+    day), felt-llm was unavailable, or the response didn't parse."""
     if db.get_diary(config.db_path, date_str) is not None:
         return False
 
@@ -323,8 +301,8 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
 
     try:
         raw = await _generate_json(config, system, user_prompt, max_tokens=1200)
-    except CloudUnavailable:
-        logger.warning("diary: cloud unavailable, skipping the entry for %s", date_str)
+    except local_llm.LocalLLMUnavailable:
+        logger.info("diary: felt-llm unavailable, skipping the entry for %s", date_str)
         return False
 
     parsed = _parse_writer_json(raw)
@@ -394,8 +372,8 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
     system = compile_persona() + "\n\n" + _WEEKLY_INSTRUCTIONS
     try:
         raw = await _generate_json(config, system, material, max_tokens=600)
-    except CloudUnavailable:
-        logger.warning("diary: cloud unavailable, skipping weekly compression for %s", date_str)
+    except local_llm.LocalLLMUnavailable:
+        logger.info("diary: felt-llm unavailable, skipping weekly compression for %s", date_str)
         return
     parsed = _parse_writer_json(raw)
     if parsed is None:
@@ -447,10 +425,10 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
         return
     # The endpoint runs this as a background task after replying 204, so
     # felt-animation's 2 s post timeout never fires on the several-second
-    # cloud write and re-sends day_start. This guard also covers a genuine
+    # write and re-sends day_start. This guard also covers a genuine
     # duplicate (a buffered retry, an afk_end right after day_start):
     # without it, a second write could start before the first stored its row,
-    # meaning two cloud calls and two morning greetings.
+    # meaning two model calls and two morning greetings.
     if target_date in _writing:
         return
     _writing.add(target_date)

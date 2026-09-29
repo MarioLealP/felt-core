@@ -5,38 +5,19 @@ addresses) flows through here — env vars / .env, never hardcoded in code.
 See the project README for why this matters.
 """
 
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FeltConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FELT_", env_file=".env", extra="ignore")
 
-    # Local model backend (default brain — see decoupling principle in the README)
-    ollama_url: str = "http://localhost:11434"
-    # qwen2.5:3b since 2026-09-25: it shares the Nitro5's 6 GB card with
-    # felt-voice's Chatterbox-Turbo + GPU RVC (llama3.1:8b doesn't fit
-    # beside them). num_ctx is sent explicitly on every local chat call so
-    # the context (and so the KV-cache VRAM) never depends on Ollama's
-    # server-side default.
-    ollama_model: str = "qwen2.5:3b"
-    ollama_num_ctx: int = 4096
-
-    # Small, dedicated router model for tool-vs-chat decisions (2026-09-11
-    # finding: the chat model itself is unreliable at this under a mixed
-    # chat+tool-call prompt — a separate narrow classifier is more robust).
-    router_model: str = "qwen2.5:1.5b"
-
-    # WP-36: felt-llm, the self-hosted llama.cpp server (OpenAI-compatible,
-    # one model, native tool calling). `local_first` is the single switch:
-    # True = every local path (chat + tools, screen reactions, events,
-    # privacy check, diary) goes to felt-llm first and the old
-    # router/Ollama/cloud path is only the fallback when it's unreachable;
-    # False = exactly the pre-WP-36 behaviour, i.e. the rollback.
+    # felt-llm: the self-hosted llama.cpp server (OpenAI-compatible, one
+    # model, native tool calling). The only model backend: nothing here
+    # talks to a cloud API, and when felt-llm is unreachable the model
+    # endpoints answer 503 "felt-llm offline" (WP-36 D'').
     local_llm_url: str | None = "http://felt-llm:8080"
     local_llm_model: str = "felt"
     local_llm_timeout_s: float = 60
-    local_first: bool = True
 
     # Deterministic frequency limit for spoken screen-observation reactions
     # (WP-02, Mario: screen reactions are always spoken - the model never
@@ -98,48 +79,6 @@ class FeltConfig(BaseSettings):
     ntfy_publish_password: str | None = None
     ntfy_publish_topic: str | None = None
 
-    # Cloud delegation is a tool the model can call, not a router swap — see README
-    ninerouter_url: str | None = None
-    ninerouter_api_key: str | None = None
-
-    # Plain-chat cloud routing (2026-09-21, Mario: local conversation
-    # quality is weak, wire safe/banter-only replies to Gemini) — see
-    # privacy.py for the gate. Talks to Google's Gemini API directly, NOT
-    # via ninerouter/Antigravity — found live, 2026-09-21: every "ag/"
-    # model on ninerouter carries Antigravity's own baked-in coding-agent
-    # system identity ("Ready for work. What need fix?" for "how are you
-    # feeling"), which no client-supplied system prompt could override,
-    # even in total isolation with no other context. Google's own free
-    # tier (aistudio.google.com/apikey) has no such contamination. Unset
-    # means this is simply unavailable, same convention as everything else
-    # here.
-    gemini_api_key: str | None = None
-    # Legacy field, superseded by cloud_model_conversation below (WP-05
-    # split "the one cloud model" into a purpose-routed set) - kept only
-    # as a back-compat override in case an existing deployment already
-    # has FELT_GEMINI_CHAT_MODEL set to something specific. Unset (the
-    # normal case, confirmed 2026-09-22: nothing in this deployment's
-    # env sets it) means cloud_model_conversation's own default wins.
-    gemini_chat_model: str | None = None
-
-    # WP-05: felt-core's cloud (Gemini API) calls are purpose-routed
-    # across three free-tier models, not one - see felt_core/cloud.py.
-    # Real model ids confirmed 2026-09-22 via GET /v1beta/models against
-    # the actual configured API key.
-    cloud_model_conversation: str = "gemini-3.5-flash-lite"
-    cloud_model_overflow: str = "gemini-3.1-flash-lite"
-    cloud_model_volume: str = "gemma-4-26b-a4b-it"
-    # Optional JSON override of cloud.py's built-in RPM/RPD/TPM table,
-    # e.g. '{"gemma-4-26b-a4b-it": {"rpd": 1}}' - mainly for forcing a
-    # fallback path in testing without waiting for the real daily reset.
-    cloud_limits: str = ""
-
-    @model_validator(mode="after")
-    def _apply_legacy_gemini_chat_model(self) -> "FeltConfig":
-        if self.gemini_chat_model:
-            self.cloud_model_conversation = self.gemini_chat_model
-        return self
-
     # Zabbix — clockmost's existing monitoring, reused rather than building
     # a separate health-check path. Unset means the skill reports itself
     # unavailable, same pattern as everything else here.
@@ -165,12 +104,12 @@ class FeltConfig(BaseSettings):
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
     # ComfyUI (image generation) — the Nitro5's raw LAN address, same
-    # direct-not-through-SSO pattern as ollama_url (comfy.clockmost.com is
+    # direct-not-through-SSO pattern as local_llm_url (comfy.clockmost.com is
     # Authentik-gated for Mario's own browser use; a backend skill talks
-    # to the box directly, same as felt-core already does for Ollama).
+    # to the box directly, same as felt-core already does for felt-llm).
     # Unset = disabled, same convention as everything else here. Shares
-    # the Nitro5's one GPU with Ollama — Mario swaps them by hand, so
-    # this only actually works while ComfyUI is the one he's got running.
+    # the Nitro5's one GPU with other GPU work, so it only works while
+    # ComfyUI is what's running there.
     comfyui_url: str | None = None
     # The Authentik-fronted hostname, for the link shown back to Mario
     # (his browser already has an SSO session there; felt-core's own

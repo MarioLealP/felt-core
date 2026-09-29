@@ -1,9 +1,11 @@
+import json
 import time
 
 import felt_core.brain.background as background
 import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
 from felt_core.config import FeltConfig
+from felt_core.db import save_fact
 from felt_core.plugin import SkillResult
 from felt_core.plugin_loader import LoadedSkill
 
@@ -16,203 +18,85 @@ async def _unused_handle(params, ctx):
     raise AssertionError("not expected to be called in these tests")
 
 
-# -- _phrase_skill_result: the class -> route matrix -------------------
+def _skill(name):
+    return LoadedSkill(name=name, description="", parameters_schema={}, handle=_unused_handle)
 
 
-async def test_public_skill_routes_straight_to_cloud_no_privacy_check(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-    privacy_calls = []
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        privacy_calls.append(text)
-        return True
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        return "cloud reply"
-
-    monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-
-    reply = await brain._phrase_skill_result("weather?", "sunny 20C", [], "public", config)
-
-    assert reply == "cloud reply"
-    assert privacy_calls == []  # public never gates the tool output itself
+def _tool_call(name, args):
+    return {
+        "id": "call1",
+        "type": "function",
+        "function": {"name": name, "arguments": json.dumps(args)},
+    }
 
 
-async def test_google_ok_skill_routes_straight_to_cloud(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        assert purpose == "skill_phrasing"
-        return "cloud reply"
-
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-
-    reply = await brain._phrase_skill_result("cal?", "dentist tuesday 3pm", [], "google_ok", config)
-
-    assert reply == "cloud reply"
+# -- phrase_skill_result -------------------------------------------------
 
 
-async def test_gated_skill_goes_to_cloud_when_the_result_passes_privacy(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
+async def test_phrase_skill_result_is_one_plain_local_call_with_the_tool_output(tmp_path, fake_llm):
+    config = _config(tmp_path)
+    fake_llm.script = ["local reply"]
 
-    async def fake_is_safe_for_cloud(text, cfg):
-        assert text == "the shelf plug is on"
-        return True
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        return "cloud reply"
-
-    monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-
-    reply = await brain._phrase_skill_result(
-        "shelf plug?", "the shelf plug is on", [], "gated", config
-    )
-
-    assert reply == "cloud reply"
-
-
-async def test_gated_skill_stays_local_when_the_result_fails_privacy(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        return False
-
-    async def fake_cloud_generate(*args, **kwargs):
-        raise AssertionError("cloud must not be called when the gated check fails")
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "local reply"
-
-    monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-    reply = await brain._phrase_skill_result(
-        "shelf plug?", "the shelf plug is on", [], "gated", config
-    )
+    reply = await brain.phrase_skill_result("weather?", "sunny 20C", [], config)
 
     assert reply == "local reply"
+    assert len(fake_llm.calls) == 1
+    assert fake_llm.calls[0]["tools"] is None
+    assert fake_llm.calls[0]["max_tokens"] == brain._REPLY_MAX_TOKENS
+    assert "sunny 20C" in fake_llm.calls[0]["messages"][-1]["content"]
 
 
-async def test_local_skill_never_calls_cloud_even_if_everything_would_say_safe(
-    tmp_path, monkeypatch
-):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-
-    async def fake_is_safe_for_cloud(text, cfg):
-        return True  # would say SAFE if ever asked - must never be asked for "local"
-
-    async def fake_cloud_generate(*args, **kwargs):
-        raise AssertionError("cloud must never be called for a 'local' skill")
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "local reply"
-
-    monkeypatch.setattr(brain, "is_safe_for_cloud", fake_is_safe_for_cloud)
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-    reply = await brain._phrase_skill_result("find my notes", "found 3 notes", [], "local", config)
-
-    assert reply == "local reply"
-
-
-async def test_facts_never_appear_in_cloud_phrasing_messages(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-    captured = {}
-
-    async def fake_cloud_generate(purpose, system, messages, cfg, **kwargs):
-        captured["system"] = system
-        captured["messages"] = messages
-        return "cloud reply"
-
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-
-    from felt_core.db import save_fact
-
+async def test_phrase_skill_result_carries_facts_locally(tmp_path, fake_llm):
+    # Nothing leaves the LAN, so facts are fine in the prompt.
+    config = _config(tmp_path)
     save_fact(config.db_path, "likes pizza")
-    await brain._phrase_skill_result("weather?", "sunny", [], "public", config)
 
-    all_text = captured["system"] + " ".join(m["content"] for m in captured["messages"])
-    assert "likes pizza" not in all_text
+    await brain.phrase_skill_result("weather?", "sunny", [], config)
 
-
-async def test_cloud_error_falls_back_to_local(tmp_path, monkeypatch):
-    config = _config(tmp_path, gemini_api_key="fake-key")
-
-    async def fake_cloud_generate(*args, **kwargs):
-        raise RuntimeError("boom")
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "local fallback"
-
-    monkeypatch.setattr(brain, "cloud_generate", fake_cloud_generate)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-    reply = await brain._phrase_skill_result("weather?", "sunny", [], "public", config)
-
-    assert reply == "local fallback"
+    all_text = " ".join(str(m["content"]) for m in fake_llm.calls[0]["messages"])
+    assert "likes pizza" in all_text
 
 
 # -- voice_line preference, wired through chat() ------------------------
 
 
-async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch):
+async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    fake_registry = {
-        "dummy_skill": LoadedSkill(
-            name="dummy_skill",
-            description="",
-            parameters_schema={},
-            handle=_unused_handle,
-            privacy="public",
-        )
-    }
-
-    async def fake_decide_tool(message, registry, cfg):
-        return ("dummy_skill", {})
+    fake_registry = {"dummy_skill": _skill("dummy_skill")}
 
     async def fake_run_skill(name, params, registry, ctx):
         return SkillResult(text="the long full text form", voice_line="short spoken form")
 
-    captured = {}
-
-    async def fake_phrase_skill_result(
-        message, tool_output, history, skill_privacy, cfg, tone=None
-    ):
-        captured["tool_output"] = tool_output
-        return "phrased reply"
-
     monkeypatch.setattr(orchestrator, "load_plugins", lambda plugins_dir: fake_registry)
-    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
     monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
-    monkeypatch.setattr(orchestrator, "_phrase_skill_result", fake_phrase_skill_result)
+    fake_llm.script = [
+        {"text": "", "tool_calls": [_tool_call("dummy_skill", {})]},
+        "phrased reply",
+    ]
 
     result = await orchestrator.chat("do the thing", config, session_id="wp06-test")
 
-    assert captured["tool_output"] == "short spoken form"
+    tool_message = fake_llm.calls[1]["messages"][-1]
+    assert tool_message["role"] == "tool"
+    assert "short spoken form" in tool_message["content"]
+    assert "the long full text form" not in tool_message["content"]
     assert result.reply == "phrased reply"
 
 
 # -- weather fast path ----------------------------------------------------
 
 
-async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monkeypatch):
+async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-
-    async def fake_decide_tool(message, registry, cfg):
-        return ("get_weather", {"day": "now"})
+    monkeypatch.setattr(
+        orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")}
+    )
 
     async def explode(*args, **kwargs):
         raise AssertionError("must not be called on the weather fast path")
 
-    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
     monkeypatch.setattr(orchestrator, "run_skill", explode)
-    monkeypatch.setattr(brain, "cloud_generate", explode)
-    monkeypatch.setattr(brain, "_ollama_chat", explode)
-    monkeypatch.setattr(brain, "is_safe_for_cloud", explode)
+    fake_llm.script = [{"text": "", "tool_calls": [_tool_call("get_weather", {"day": "now"})]}]
 
     background._weather_precompute = {
         "line": "It's sunny, 20 degrees.",
@@ -228,26 +112,25 @@ async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monk
 
     assert result.reply == "It's sunny, 20 degrees."
     assert result.animation_tag == "reaction/weather/sun"
+    assert len(fake_llm.calls) == 1  # only the tool-picking turn, no phrasing call
 
 
-async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatch):
+async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-
-    async def fake_decide_tool(message, registry, cfg):
-        return ("get_weather", {"day": "now"})
-
+    monkeypatch.setattr(
+        orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")}
+    )
     called = []
 
     async def fake_run_skill(name, params, registry, ctx):
         called.append(name)
         return SkillResult(text="fresh weather text")
 
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "fresh phrased reply"
-
-    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
     monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
+    fake_llm.script = [
+        {"text": "", "tool_calls": [_tool_call("get_weather", {"day": "now"})]},
+        "fresh phrased reply",
+    ]
 
     background._weather_precompute = {
         "line": "stale line",

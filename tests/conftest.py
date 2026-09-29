@@ -135,10 +135,55 @@ def _stable_persona_examples(monkeypatch):
     monkeypatch.setattr(personality, "compile_persona", lambda *a, **k: stable)
 
 
-@pytest.fixture(autouse=True)
-def _local_first_off_by_default(monkeypatch):
-    """WP-36: `local_first` defaults to True in production, but every test
-    written before it exercises the Ollama/router/cloud path and would
-    otherwise try to reach felt-llm. Tests for the local-first path pass
-    `local_first=True` to FeltConfig explicitly (init kwargs beat env)."""
-    monkeypatch.setenv("FELT_LOCAL_FIRST", "false")
+class FakeLLM:
+    """Stands in for `local_llm.chat` (felt-llm). `script` is consumed one
+    entry per call: a str (the reply text), a LocalReply, a dict (raw
+    kwargs for LocalReply), or an Exception instance to raise. Once
+    exhausted, every further call returns `default`. Every call is
+    recorded in `calls` (messages, tools, json_schema, ...)."""
+
+    def __init__(self) -> None:
+        self.script: list = []
+        self.default = "a reply"
+        self.calls: list[dict] = []
+
+    async def chat(
+        self,
+        messages,
+        *,
+        max_tokens,
+        temperature=0.8,
+        tools=None,
+        json_schema=None,
+        config,
+    ):
+        from felt_core import local_llm
+
+        self.calls.append(
+            {
+                # As felt-llm receives them: system messages merged into one.
+                "messages": local_llm._merge_system_messages(messages),
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "tools": tools,
+                "json_schema": json_schema,
+            }
+        )
+        item = self.script.pop(0) if self.script else self.default
+        if isinstance(item, Exception):
+            raise item
+        if isinstance(item, local_llm.LocalReply):
+            return item
+        if isinstance(item, dict):
+            return local_llm.LocalReply(**item)
+        return local_llm.LocalReply(text=item)
+
+
+@pytest.fixture
+def fake_llm(monkeypatch):
+    """Replaces felt-llm for the test; see FakeLLM."""
+    from felt_core import local_llm
+
+    fake = FakeLLM()
+    monkeypatch.setattr(local_llm, "chat", fake.chat)
+    return fake

@@ -11,27 +11,11 @@ from urllib.parse import unquote
 from fastapi.testclient import TestClient
 
 import felt_core.api as api
-import felt_core.brain.orchestrator as orchestrator
-import felt_core.brain.replies as brain
 
 
-def _no_cloud(monkeypatch):
-    # Forces _phrase_skill_result's local fallback path (no real network
-    # call) - felt_presence is "public" (skills.json), which would
-    # otherwise try cloud_generate first. FeltConfig is a pydantic-settings
-    # BaseSettings with env_prefix="FELT_", so this is FELT_GEMINI_API_KEY,
-    # not the bare GEMINI_API_KEY name some other tooling uses.
-    monkeypatch.delenv("FELT_GEMINI_API_KEY", raising=False)
-
-    async def fake_ollama_chat(messages, model, cfg, **kwargs):
-        return "okay okay, I'll zip it"
-
-    monkeypatch.setattr(brain, "_ollama_chat", fake_ollama_chat)
-
-
-def test_v1_chat_carries_felt_presence_ui_action(tmp_path, monkeypatch):
+def test_v1_chat_carries_felt_presence_ui_action(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
-    _no_cloud(monkeypatch)
+    fake_llm.default = "okay okay, I'll zip it"
 
     with TestClient(api.app) as client:
         response = client.post("/v1/chat", json={"message": "shut up", "session_id": "wp09-test"})
@@ -41,9 +25,9 @@ def test_v1_chat_carries_felt_presence_ui_action(tmp_path, monkeypatch):
     assert body["ui_action"] == {"kind": "presence", "payload": {"action": "hush", "minutes": 10}}
 
 
-def test_v1_chat_unhush_phrasing(tmp_path, monkeypatch):
+def test_v1_chat_unhush_phrasing(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
-    _no_cloud(monkeypatch)
+    fake_llm.default = "okay okay, I'll zip it"
 
     with TestClient(api.app) as client:
         response = client.post(
@@ -54,10 +38,10 @@ def test_v1_chat_unhush_phrasing(tmp_path, monkeypatch):
     assert response.json()["ui_action"] == {"kind": "presence", "payload": {"action": "unhush"}}
 
 
-def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch):
+def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_VOICE_URL", "http://fake-voice")
-    _no_cloud(monkeypatch)
+    fake_llm.default = "okay okay, I'll zip it"
     monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"fake-wav-bytes")
 
     with TestClient(api.app) as client:
@@ -74,14 +58,9 @@ def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch):
     }
 
 
-def test_v1_chat_plain_message_has_no_ui_action(tmp_path, monkeypatch):
+def test_v1_chat_plain_message_has_no_ui_action(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
-    _no_cloud(monkeypatch)
-
-    async def fake_decide_tool(message, registry, cfg):
-        return None
-
-    monkeypatch.setattr(orchestrator, "decide_tool", fake_decide_tool)
+    fake_llm.default = "okay okay, I'll zip it"
 
     with TestClient(api.app) as client:
         response = client.post(

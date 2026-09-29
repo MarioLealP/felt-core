@@ -147,28 +147,6 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
-    # Per-stage request timing (WP-04, metrics.py) - one row per named
-    # stage per request (router, privacy, skill, reply, tts, ...), not one
-    # row per request, so a percentile query can group by stage without
-    # unpacking a blob. route/skill/model/chars are populated only for the
-    # stages that carry that tag (see metrics.timed's **tags).
-    # Per-model, per-purpose, per-Pacific-day call counts (WP-05,
-    # felt_core/cloud.py's governor) - the RPD half of the free-tier
-    # quota math. Persisted (unlike the in-memory RPM/TPM sliding windows
-    # cloud.py also keeps) because a daily count has to survive a
-    # felt-core restart mid-day, not just reset to 0 and risk blowing
-    # through the real Google-side limit.
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS cloud_usage (
-            model TEXT NOT NULL,
-            purpose TEXT NOT NULL,
-            pt_day TEXT NOT NULL,
-            count INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (model, purpose, pt_day)
-        )
-        """
-    )
     # WP-16 Part 2: one row per finished listen (a track that stopped
     # being "currently playing" - changed or playback stopped), classified
     # skip/full-play by music_taste.is_skip. music_taste_loop in api.py
@@ -690,57 +668,6 @@ def delete_old_latency_rows(db_path: str, older_than_days: int = 30) -> None:
     conn.close()
 
 
-def increment_cloud_usage(db_path: str, model: str, purpose: str, pt_day: str) -> int:
-    conn = _connect(db_path)
-    with conn:
-        conn.execute(
-            "INSERT INTO cloud_usage (model, purpose, pt_day, count) VALUES (?, ?, ?, 1) "
-            "ON CONFLICT(model, purpose, pt_day) DO UPDATE SET count = count + 1",
-            (model, purpose, pt_day),
-        )
-        count = conn.execute(
-            "SELECT count FROM cloud_usage WHERE model = ? AND purpose = ? AND pt_day = ?",
-            (model, purpose, pt_day),
-        ).fetchone()[0]
-    conn.close()
-    return count
-
-
-def get_model_usage_today(db_path: str, model: str, pt_day: str) -> int:
-    """Total calls across every purpose for this model today - what the
-    real per-model RPD limit is actually measured against."""
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT COALESCE(SUM(count), 0) FROM cloud_usage WHERE model = ? AND pt_day = ?",
-        (model, pt_day),
-    ).fetchone()
-    conn.close()
-    return row[0]
-
-
-def get_purpose_usage_today(db_path: str, model: str, purpose: str, pt_day: str) -> int:
-    """One purpose's share of a model's calls today - the soft
-    screen_reaction <= 60% of the volume model's RPD cap is checked
-    against this, not the model-wide total."""
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT COALESCE(count, 0) FROM cloud_usage WHERE model = ? AND purpose = ? AND pt_day = ?",
-        (model, purpose, pt_day),
-    ).fetchone()
-    conn.close()
-    return row[0] if row else 0
-
-
-def get_cloud_usage_today(db_path: str, pt_day: str) -> list[dict]:
-    conn = _connect(db_path)
-    rows = conn.execute(
-        "SELECT model, purpose, count FROM cloud_usage WHERE pt_day = ? ORDER BY model, purpose",
-        (pt_day,),
-    ).fetchall()
-    conn.close()
-    return [{"model": model, "purpose": purpose, "count": count} for model, purpose, count in rows]
-
-
 def record_music_play(
     db_path: str,
     track_id: str,
@@ -964,8 +891,8 @@ def get_screen_observations_between(db_path: str, start_utc: str, end_utc: str) 
 
 def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> list[list[dict]]:
     """Real conversation (not her own unprompted remarks) in the window,
-    grouped by session - the diary's material gatherer runs
-    `is_safe_for_cloud` over each session's text as a WHOLE window, so
+    grouped by session - the diary's material gatherer treats each
+    session's text as a WHOLE window, so
     sessions must come back separately, not pre-flattened. Correlated
     subqueries (not get_history's single-session-parameter exclusion SQL)
     since this spans every session in the window at once."""

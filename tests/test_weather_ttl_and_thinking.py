@@ -1,12 +1,10 @@
-"""2026-09-24 audit fixes for WP-06: the weather cache's split TTL (20 min
-for current conditions, 3 h for a daily forecast) and the skill_phrasing
-thinkingLevel that stops Gemma spending its whole output budget thinking."""
+"""2026-09-24 audit fix for WP-06: the weather cache's split TTL (20 min
+for current conditions, 3 h for a daily forecast)."""
 
 from datetime import date, timedelta
 
 from conftest import load_plugin_module
 
-import felt_core.cloud as cloud
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
 
@@ -89,68 +87,3 @@ async def test_todays_forecast_still_needs_current_freshness(monkeypatch, tmp_pa
 
     assert len(calls) == 2  # "Right now: ..." prefix needs fresh current data
     assert result.text.startswith("Right now: 22.0")
-
-
-# -- thinkingLevel on skill_phrasing ------------------------------------
-
-
-def _cfg(tmp_path):
-    return FeltConfig(
-        db_path=str(tmp_path / "felt.db"),
-        gemini_api_key="fake-key",
-        cloud_model_conversation="conv-model",
-        cloud_model_overflow="overflow-model",
-        cloud_model_volume="volume-model",
-    )
-
-
-def setup_function() -> None:
-    cloud._no_system_instruction.clear()
-    cloud._no_thinking_config.clear()
-    cloud._recent_calls.clear()
-    cloud._recent_tokens.clear()
-    cloud._exhausted_until.clear()
-
-
-async def test_skill_phrasing_asks_for_minimal_thinking(tmp_path, monkeypatch):
-    payloads = []
-
-    async def fake_post(model, payload, cfg):
-        payloads.append(payload)
-        return 200, {"candidates": [{"content": {"parts": [{"text": "sunny"}]}}]}
-
-    monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
-
-    await cloud.cloud_generate(
-        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path), max_tokens=100
-    )
-    await cloud.cloud_generate(
-        "conversation", "sys", [{"role": "user", "content": "hi"}], _cfg(tmp_path)
-    )
-
-    assert payloads[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"}
-    assert "thinkingConfig" not in payloads[1].get("generationConfig", {})
-
-
-async def test_thinking_config_rejection_retries_without_it_and_is_remembered(
-    tmp_path, monkeypatch
-):
-    payloads = []
-
-    async def fake_post(model, payload, cfg):
-        payloads.append(payload)
-        if "thinkingConfig" in payload.get("generationConfig", {}):
-            return 400, {"error": {"message": "Thinking level is not supported for this model."}}
-        return 200, {"candidates": [{"content": {"parts": [{"text": "sunny"}]}}]}
-
-    monkeypatch.setattr(cloud, "_post_generate_content", fake_post)
-
-    first = await cloud.cloud_generate(
-        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path)
-    )
-    second = await cloud.cloud_generate(
-        "skill_phrasing", "sys", [{"role": "user", "content": "w?"}], _cfg(tmp_path)
-    )
-
-    assert first == second == "sunny"
-    assert len(payloads) == 3  # rejected once, retried, then skipped straight to the plain form
