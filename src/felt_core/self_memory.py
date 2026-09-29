@@ -165,6 +165,13 @@ def _pick_callbacks(callbacks: list[dict], max_n: int = 2) -> tuple[list[str], l
     return picked_texts, updated
 
 
+MEMORY_FRAMING = (
+    "Your own memories, for background only. Let them colour how you talk, but "
+    "don't recite them or reuse their wording, and mention one only when it "
+    "actually fits what's happening now."
+)
+
+
 def _recently_block(config: FeltConfig, yesterday: str) -> str:
     diary_row = db.get_diary(config.db_path, yesterday)
     parts: list[str] = []
@@ -181,7 +188,7 @@ def _recently_block(config: FeltConfig, yesterday: str) -> str:
         parts.append(f"this week: {week_row['summary']}")
     if not parts:
         return ""
-    return "Recently (from your diary): " + "; ".join(parts) + "."
+    return "Recently: " + "; ".join(part.rstrip(". ") for part in parts) + "."
 
 
 def memory_block(
@@ -207,5 +214,8 @@ def memory_block(
     if len(block) > MAX_BLOCK_CHARS:
         block = block[:MAX_BLOCK_CHARS].rstrip()
     if block:
+        # Every model tried in the WP-36 blind test (cloud included) recited
+        # the diary word for word when it was presented as bare text.
+        block = f"{MEMORY_FRAMING}\n\n{block}"
         logger.debug("memory block (%d chars, ~%d tokens): %s", len(block), len(block) // 4, block)
     return block
