@@ -12,7 +12,7 @@ import logging
 
 import httpx
 
-from felt_core import metrics
+from felt_core import local_llm, metrics
 
 # Re-exported (not just used internally) so callers that already hold
 # `felt_core.brain.replies` - tests, mainly - can read the constant from
@@ -41,6 +41,19 @@ CLOUD_CONTEXT_MESSAGES = 6
 # half mid-word - the personality prompt's own "lead with the answer"
 # instruction is what keeps a capped reply from feeling chopped off.
 _REPLY_MAX_TOKENS = 160
+
+
+def legacy_config(config: FeltConfig) -> FeltConfig:
+    """WP-36: a copy of `config` with local_first off. What a local-first
+    call site continues with after LocalLLMUnavailable, so the whole
+    pre-WP-36 path (Ollama, the router, the privacy classifier, cloud)
+    runs as it always did instead of retrying felt-llm at every step."""
+    return config.model_copy(update={"local_first": False}) if config.local_first else config
+
+
+def local_model_label(config: FeltConfig) -> str:
+    """The `model` metrics label for a local-route stage."""
+    return config.local_llm_model if config.local_first else config.ollama_model
 
 
 async def _ollama_chat(
@@ -96,6 +109,19 @@ def music_taste_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": note}]
 
 
+def local_system_messages(message: str, config: FeltConfig, tone: str | None) -> list[dict]:
+    """The system context a plain-chat local turn carries: personality
+    (ranked against `message`), remembered facts, music taste - the same
+    trio local_reply(include_facts=True) builds. Used by chat()'s
+    local-first tool-calling turn (WP-36), which needs the messages
+    themselves rather than a finished reply."""
+    return (
+        [{"role": "system", "content": personality_prompt(tone, message, config)}]
+        + _facts_context(config)
+        + music_taste_context(config)
+    )
+
+
 async def local_reply(
     messages_tail: list[dict], config: FeltConfig, *, include_facts: bool, tone: str | None = None
 ) -> str:
@@ -121,6 +147,12 @@ async def local_reply(
         + taste
         + messages_tail
     )
+    if config.local_first:
+        # WP-36: felt-llm. Raises LocalLLMUnavailable when it's down - each
+        # caller decides its own fallback (cloud after a privacy check, or
+        # the old Ollama path via legacy_config), so it's not swallowed here.
+        reply = await local_llm.chat(messages, max_tokens=_REPLY_MAX_TOKENS, config=config)
+        return reply.text
     return await _ollama_chat(messages, config.ollama_model, config, max_tokens=_REPLY_MAX_TOKENS)
 
 
@@ -182,8 +214,8 @@ async def _chat_reply(
             return reply
         except Exception:
             logger.exception("cloud chat call failed, falling back to local")
-    logger.info("chat reply: local (%s)", config.ollama_model)
-    async with metrics.timed("reply", route="local", model=config.ollama_model):
+    logger.info("chat reply: local (%s)", local_model_label(config))
+    async with metrics.timed("reply", route="local", model=local_model_label(config)):
         return await local_reply(
             history + [{"role": "user", "content": message}], config, include_facts=True, tone=tone
         )
@@ -258,6 +290,26 @@ async def _phrase_skill_result(
     even if that text would otherwise read as SAFE. Falls back to the
     existing local path (facts included, unchanged) on CloudUnavailable
     or any other cloud error."""
+    if config.local_first:
+        # WP-36: phrase locally first - nothing leaves the LAN, so no
+        # privacy class or check applies. Only an unreachable felt-llm
+        # sends this down the old cloud-by-privacy-class path below.
+        try:
+            async with metrics.timed("reply", route="local", model=config.local_llm_model):
+                return await local_reply(
+                    history
+                    + [
+                        {"role": "user", "content": message},
+                        {"role": "user", "content": _tool_result_instruction(tool_output)},
+                    ],
+                    config,
+                    include_facts=True,
+                    tone=tone,
+                )
+        except local_llm.LocalLLMUnavailable:
+            logger.warning("local skill phrasing: felt-llm unavailable, using the old path")
+            config = legacy_config(config)
+
     route_cloud = skill_privacy in ("public", "google_ok")
     if skill_privacy == "gated":
         route_cloud = await is_safe_for_cloud(tool_output, config)
@@ -306,7 +358,7 @@ async def _phrase_skill_result(
 
     # WP-02: the shared local helper (personality + facts + music taste +
     # the length cap), not a hand-built copy of it.
-    async with metrics.timed("reply", route="local", model=config.ollama_model):
+    async with metrics.timed("reply", route="local", model=local_model_label(config)):
         return await local_reply(
             history
             + [

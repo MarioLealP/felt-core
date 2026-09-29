@@ -27,6 +27,17 @@ class FeltConfig(BaseSettings):
     # chat+tool-call prompt — a separate narrow classifier is more robust).
     router_model: str = "qwen2.5:1.5b"
 
+    # WP-36: felt-llm, the self-hosted llama.cpp server (OpenAI-compatible,
+    # one model, native tool calling). `local_first` is the single switch:
+    # True = every local path (chat + tools, screen reactions, events,
+    # privacy check, diary) goes to felt-llm first and the old
+    # router/Ollama/cloud path is only the fallback when it's unreachable;
+    # False = exactly the pre-WP-36 behaviour, i.e. the rollback.
+    local_llm_url: str | None = "http://felt-llm:8080"
+    local_llm_model: str = "felt"
+    local_llm_timeout_s: float = 60
+    local_first: bool = True
+
     # Deterministic frequency limit for spoken screen-observation reactions
     # (WP-02, Mario: screen reactions are always spoken - the model never
     # decides to stay silent, so this cooldown is what actually limits how

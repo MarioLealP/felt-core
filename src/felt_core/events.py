@@ -32,7 +32,7 @@ from pathlib import Path
 
 import httpx
 
-from felt_core import metrics
+from felt_core import local_llm, metrics
 from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
 from felt_core.db import (
@@ -337,7 +337,12 @@ async def _generate_line(
     # generation - this used to reach straight into brain.py's
     # underscore-prefixed (private-by-convention) internals instead.
     from felt_core.brain.personality import personality_prompt
-    from felt_core.brain.replies import local_reply, music_taste_context
+    from felt_core.brain.replies import (
+        legacy_config,
+        local_model_label,
+        local_reply,
+        music_taste_context,
+    )
     from felt_core.privacy import is_safe_for_cloud
 
     # Music taste is cloud-ok (see brain.replies.music_taste_context) and
@@ -346,6 +351,28 @@ async def _generate_line(
     system = personality_prompt(tone, prompt, config)
     for note in taste:
         system = f"{system}\n\n{note['content']}"
+
+    if config.local_first:
+        # WP-36: felt-llm first - no privacy check, nothing leaves the LAN.
+        # The cloud path below is only the fallback (felt-llm down or
+        # silent), and gets the privacy check exactly as before.
+        try:
+            async with metrics.timed("event_reaction", route="local", model=config.local_llm_model):
+                local_line = await local_reply(
+                    taste + [{"role": "user", "content": prompt}],
+                    config,
+                    include_facts=False,
+                    tone=tone,
+                )
+            local_line = local_line.strip(" \n\"'")
+            if local_line:
+                return local_line
+            logger.warning(
+                "event reaction %s: felt-llm returned nothing, using the old path", event
+            )
+        except local_llm.LocalLLMUnavailable:
+            logger.warning("event reaction %s: felt-llm unavailable, using the old path", event)
+        config = legacy_config(config)
 
     use_cloud = bool(config.gemini_api_key)
     if use_cloud and policy.privacy == "gated":
@@ -377,7 +404,7 @@ async def _generate_line(
         except Exception:
             logger.exception("event reaction %s: cloud failed, falling back to local", event)
 
-    async with metrics.timed("event_reaction", route="local", model=config.ollama_model):
+    async with metrics.timed("event_reaction", route="local", model=local_model_label(config)):
         # No facts (an event remark doesn't need them); local_reply adds
         # the personality prompt and the length cap.
         line = await local_reply(

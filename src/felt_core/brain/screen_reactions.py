@@ -23,9 +23,9 @@ import json
 import logging
 import re
 
-from felt_core import metrics
+from felt_core import local_llm, metrics
 from felt_core.brain.personality import personality_prompt
-from felt_core.brain.replies import local_reply
+from felt_core.brain.replies import legacy_config, local_model_label, local_reply
 from felt_core.brain.result import ChatResult
 from felt_core.cloud import cloud_generate
 from felt_core.config import FeltConfig
@@ -137,7 +137,7 @@ async def process_screen_context(
         # "Real" excludes her own earlier screen remarks (audit
         # 2026-09-24) - those are saved as assistant messages too.
         history_tail = get_history(config.db_path, session_id, exclude_remarks=True)[-4:]
-        async with metrics.timed("screen_reaction", route="local", model=config.ollama_model):
+        async with metrics.timed("screen_reaction", route="local", model=local_model_label(config)):
             return await local_reply(
                 [{"role": "system", "content": observations_block}]
                 + history_tail
@@ -147,31 +147,43 @@ async def process_screen_context(
                 tone=tone,
             )
 
-    if config.gemini_api_key and await is_safe_for_cloud(description, config):
+    reply_raw: str | None = None
+    if config.local_first:
+        # WP-36: felt-llm first, no privacy check (nothing leaves the LAN).
+        # The description only goes to the cloud below if felt-llm is down
+        # AND it passes the privacy check.
         try:
-            logger.info("screen context reaction: routed to cloud")
-            # No chat history at all on the cloud path (WP-02) - only
-            # personality + the observations block go in `system`, and the
-            # prompt is the sole message; WP-05's cloud_generate only
-            # accepts user/assistant roles in `messages`, so what used to
-            # be a "system"-tagged history entry now lives in `system`
-            # instead. Routes through the "screen_reaction" purpose (the
-            # volume/Gemma model), not "conversation".
-            async with metrics.timed(
-                "screen_reaction", route="cloud", model=config.cloud_model_volume
-            ):
-                reply_raw = await cloud_generate(
-                    "screen_reaction",
-                    f"{personality_prompt(tone, description, config)}\n\n{observations_block}",
-                    [{"role": "user", "content": instruction}],
-                    config,
-                )
-        except Exception:
-            logger.exception("cloud screen context failed, falling back to local")
             reply_raw = await _local_attempt()
-    else:
-        logger.info("screen context reaction: local")
-        reply_raw = await _local_attempt()
+        except local_llm.LocalLLMUnavailable:
+            logger.warning("screen context reaction: felt-llm unavailable, using the old path")
+            config = legacy_config(config)
+
+    if reply_raw is None:
+        if config.gemini_api_key and await is_safe_for_cloud(description, config):
+            try:
+                logger.info("screen context reaction: routed to cloud")
+                # No chat history at all on the cloud path (WP-02) - only
+                # personality + the observations block go in `system`, and the
+                # prompt is the sole message; WP-05's cloud_generate only
+                # accepts user/assistant roles in `messages`, so what used to
+                # be a "system"-tagged history entry now lives in `system`
+                # instead. Routes through the "screen_reaction" purpose (the
+                # volume/Gemma model), not "conversation".
+                async with metrics.timed(
+                    "screen_reaction", route="cloud", model=config.cloud_model_volume
+                ):
+                    reply_raw = await cloud_generate(
+                        "screen_reaction",
+                        f"{personality_prompt(tone, description, config)}\n\n{observations_block}",
+                        [{"role": "user", "content": instruction}],
+                        config,
+                    )
+            except Exception:
+                logger.exception("cloud screen context failed, falling back to local")
+                reply_raw = await _local_attempt()
+        else:
+            logger.info("screen context reaction: local")
+            reply_raw = await _local_attempt()
 
     reply_raw = reply_raw.strip(" \n\"'")
 
@@ -181,7 +193,11 @@ async def process_screen_context(
     # a reaction that Mario's rule says must be spoken.
     if not reply_raw or reply_raw.upper() == "NONE":
         logger.info("screen reaction empty/NONE, retrying once on the local path")
-        reply_raw = (await _local_attempt()).strip(" \n\"'")
+        try:
+            reply_raw = (await _local_attempt()).strip(" \n\"'")
+        except local_llm.LocalLLMUnavailable:
+            config = legacy_config(config)
+            reply_raw = (await _local_attempt()).strip(" \n\"'")
         if not reply_raw or reply_raw.upper() == "NONE":
             logger.warning("screen reaction still empty after local retry - returning silent")
             return ChatResult(reply="", animation_tag=None)
@@ -210,6 +226,55 @@ _SCREEN_REACT_INSTRUCTION = (
 )
 
 
+# WP-36: the same {seen, line, emotion} contract as _SCREEN_REACT_INSTRUCTION,
+# but enforced by llama.cpp's grammar (response_format json_schema) instead of
+# asked for in prose - emotion is constrained to the fixed set.
+_SCREEN_REACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "seen": {"type": "string"},
+        "line": {"type": "string"},
+        "emotion": {"type": "string", "enum": sorted(_EMOTION_VALUES)},
+    },
+    "required": ["seen", "line", "emotion"],
+    "additionalProperties": False,
+}
+
+
+async def _react_to_screen_local(
+    jpeg_bytes: bytes, system: str, user_text: str, config: FeltConfig
+) -> dict | None:
+    """WP-36: the local-first attempt - felt-llm with the JPEG as an image
+    part and the schema-constrained JSON reply. One retry on a parse
+    failure; None (felt-llm unreachable, or two unparseable replies) sends
+    the caller on to the cloud call."""
+    for attempt in (1, 2):
+        try:
+            reply = await local_llm.chat(
+                [
+                    {"role": "system", "content": system},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": user_text},
+                            local_llm.image_part(jpeg_bytes),
+                        ],
+                    },
+                ],
+                max_tokens=200,
+                json_schema=_SCREEN_REACT_SCHEMA,
+                config=config,
+            )
+        except local_llm.LocalLLMUnavailable:
+            logger.warning("screen reaction: felt-llm unavailable, using the cloud")
+            return None
+        parsed = _parse_screen_react_json(reply.text)
+        if parsed is not None:
+            return parsed
+        logger.warning("screen reaction: local JSON parse failed (attempt %d)", attempt)
+    return None
+
+
 def _parse_screen_react_json(raw: str) -> dict | None:
     if not raw:
         return None
@@ -235,7 +300,12 @@ async def react_to_screen(
     trigger: str = "focus",
     tone: str | None = None,
 ) -> ChatResult:
-    """WP-07's new per-window, image-based screen reaction path. The
+    """WP-36: with config.local_first the image goes to felt-llm first
+    (schema-constrained JSON, route "local"); the cloud call described
+    below is then only the fallback when felt-llm is unreachable or twice
+    returns unparseable JSON.
+
+    WP-07's new per-window, image-based screen reaction path. The
     ONLY model call is a single multimodal cloud_generate("screen_reaction",
     ..., images=[jpeg_bytes], json_mode=True) - images never reach the
     local Ollama here, since there's no local VLM on the server. Unlike
@@ -258,35 +328,52 @@ async def react_to_screen(
     context_line = f'App: {app} — "{title}"'
     recent = recent_lines_block(_recent_lines(config, session_id))
 
+    parsed: dict | None = None
+    if config.local_first:
+        async with metrics.timed("screen_reaction", route="local", model=config.local_llm_model):
+            parsed = await _react_to_screen_local(
+                jpeg_bytes, system, f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}", config
+            )
+
     # WP-04's screen_reaction stage (the model call(s), cloud route) -
     # WP-05 had left only the generic `cloud` stage here (audit 2026-09-24).
-    async with metrics.timed("screen_reaction", route="cloud", model=config.cloud_model_volume):
-        raw = await cloud_generate(
-            "screen_reaction",
-            system,
-            [{"role": "user", "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}"}],
-            config,
-            images=[jpeg_bytes],
-            json_mode=True,
-        )
-        parsed = _parse_screen_react_json(raw)
-
-        if parsed is None:
-            logger.warning("screen reaction: JSON parse failed on the first attempt, retrying once")
-            retry_raw = await cloud_generate(
+    # Under local_first this is only the fallback (felt-llm down, or two
+    # unparseable replies).
+    if parsed is None:
+        async with metrics.timed("screen_reaction", route="cloud", model=config.cloud_model_volume):
+            raw = await cloud_generate(
                 "screen_reaction",
                 system,
                 [
                     {
                         "role": "user",
-                        "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}\n\n"
-                        "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
+                        "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}",
                     }
                 ],
                 config,
                 images=[jpeg_bytes],
+                json_mode=True,
             )
-            parsed = _parse_screen_react_json(retry_raw)
+            parsed = _parse_screen_react_json(raw)
+
+            if parsed is None:
+                logger.warning(
+                    "screen reaction: JSON parse failed on the first attempt, retrying once"
+                )
+                retry_raw = await cloud_generate(
+                    "screen_reaction",
+                    system,
+                    [
+                        {
+                            "role": "user",
+                            "content": f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}\n\n"
+                            "Respond with ONLY that raw JSON object - no markdown, no code fences, no other text.",
+                        }
+                    ],
+                    config,
+                    images=[jpeg_bytes],
+                )
+                parsed = _parse_screen_react_json(retry_raw)
 
     if parsed is None:
         logger.warning("screen reaction: JSON parse failed twice - giving up, no reaction")

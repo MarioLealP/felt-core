@@ -133,3 +133,12 @@ def _stable_persona_examples(monkeypatch):
 
     stable = compile_persona(rng=random.Random(0))
     monkeypatch.setattr(personality, "compile_persona", lambda *a, **k: stable)
+
+
+@pytest.fixture(autouse=True)
+def _local_first_off_by_default(monkeypatch):
+    """WP-36: `local_first` defaults to True in production, but every test
+    written before it exercises the Ollama/router/cloud path and would
+    otherwise try to reach felt-llm. Tests for the local-first path pass
+    `local_first=True` to FeltConfig explicitly (init kwargs beat env)."""
+    monkeypatch.setenv("FELT_LOCAL_FIRST", "false")

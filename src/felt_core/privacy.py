@@ -18,6 +18,7 @@ gemini flash".
 
 import httpx
 
+from felt_core import local_llm
 from felt_core.config import FeltConfig
 
 _PRIVACY_PROMPT = (
@@ -82,6 +83,24 @@ _PRIVACY_PROMPT = (
 
 
 async def is_safe_for_cloud(message: str, config: FeltConfig) -> bool:
+    if config.local_first:
+        # WP-36: the classifier is felt-llm now (same prompt, greedy, a
+        # 4-token verdict). Same fail-closed rule: felt-llm being down
+        # reads as PRIVATE, never SAFE.
+        try:
+            reply = await local_llm.chat(
+                [
+                    {"role": "system", "content": _PRIVACY_PROMPT},
+                    {"role": "user", "content": message},
+                ],
+                max_tokens=4,
+                temperature=0,
+                config=config,
+            )
+        except local_llm.LocalLLMUnavailable:
+            return False
+        return reply.text.strip().upper().startswith("SAFE")
+
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(

@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from felt_core import db
+from felt_core import db, local_llm
 from felt_core.brain.persona import compile_persona
 from felt_core.cloud import CloudUnavailable, cloud_generate
 from felt_core.config import FeltConfig
@@ -276,6 +276,31 @@ def _parse_writer_json(raw: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+async def _generate_json(
+    config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int
+) -> str:
+    """WP-36: the nightly writers try felt-llm first and only go to the
+    cloud when it's unreachable or returns nothing. The material was
+    already privacy-gated by gather_material (unchanged), so both routes
+    carry the same cloud-safe text. Raises CloudUnavailable like a plain
+    cloud_generate call when the fallback is needed and also fails."""
+    if config.local_first:
+        try:
+            reply = await local_llm.chat(
+                [{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
+                max_tokens=max_tokens,
+                config=config,
+            )
+            if reply.text.strip():
+                return reply.text
+            logger.warning("diary: felt-llm returned nothing, falling back to the cloud")
+        except local_llm.LocalLLMUnavailable:
+            logger.warning("diary: felt-llm unavailable, falling back to the cloud")
+    return await cloud_generate(
+        "summary", system, [{"role": "user", "content": user_prompt}], config, json_mode=True
+    )
+
+
 async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     """The nightly writer for one date - ONE cloud_generate("summary", ...)
     call producing the diary entry, its callbacks/mood, up to 3 new
@@ -297,9 +322,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     user_prompt = _build_writer_prompt(material, active_memories, vetoed_texts)
 
     try:
-        raw = await cloud_generate(
-            "summary", system, [{"role": "user", "content": user_prompt}], config, json_mode=True
-        )
+        raw = await _generate_json(config, system, user_prompt, max_tokens=1200)
     except CloudUnavailable:
         logger.warning("diary: cloud unavailable, skipping the entry for %s", date_str)
         return False
@@ -370,9 +393,7 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
     material = "\n".join(f"{r['date']} ({r['mood_word']}): {r['entry']}" for r in rows)
     system = compile_persona() + "\n\n" + _WEEKLY_INSTRUCTIONS
     try:
-        raw = await cloud_generate(
-            "summary", system, [{"role": "user", "content": material}], config, json_mode=True
-        )
+        raw = await _generate_json(config, system, material, max_tokens=600)
     except CloudUnavailable:
         logger.warning("diary: cloud unavailable, skipping weekly compression for %s", date_str)
         return
