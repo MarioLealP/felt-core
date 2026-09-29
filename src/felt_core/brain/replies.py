@@ -9,10 +9,13 @@ import from directly instead of reaching into brain.py's private helpers
 public on purpose, not underscore-prefixed, for exactly that use)."""
 
 import logging
+import random
+from datetime import date
 
 import httpx
 
 from felt_core import local_llm, metrics
+from felt_core.brain.persona import compile_persona
 
 # Re-exported (not just used internally) so callers that already hold
 # `felt_core.brain.replies` - tests, mainly - can read the constant from
@@ -24,6 +27,7 @@ from felt_core.config import FeltConfig
 from felt_core.db import get_all_facts, get_music_taste_stats
 from felt_core.music_taste import summarize_taste
 from felt_core.privacy import is_safe_for_cloud
+from felt_core.self_memory import memory_block
 
 logger = logging.getLogger(__name__)
 
@@ -109,16 +113,45 @@ def music_taste_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": note}]
 
 
-def local_system_messages(message: str, config: FeltConfig, tone: str | None) -> list[dict]:
-    """The system context a plain-chat local turn carries: personality
-    (ranked against `message`), remembered facts, music taste - the same
-    trio local_reply(include_facts=True) builds. Used by chat()'s
-    local-first tool-calling turn (WP-36), which needs the messages
-    themselves rather than a finished reply."""
+def _daily_persona() -> str:
+    """The compiled persona with its example rotation seeded by the date
+    (WP-36): the same prompt all day, so felt-llm's prompt cache keeps it,
+    and a fresh sample tomorrow, so the examples still rotate."""
+    return compile_persona(rng=random.Random(date.today().toordinal()))
+
+
+def local_turn_messages(
+    message: str, history: list[dict], config: FeltConfig, tone: str | None
+) -> list[dict]:
+    """The cache-stable layout for a local-first chat turn (WP-36, measured
+    2026-09-29): felt-llm's template renders the tool declarations right
+    AFTER the system text, so anything per-turn in the system message
+    (tone, the memory block ranked on this message, facts, the current
+    screen) invalidated ~5K cached tokens, persona + 29 tools, every turn
+    (~20 s of prompt processing on the P104). The system message is now the
+    day's fixed persona only; everything that changes per turn rides on the
+    latest user message, after the history, where only it gets processed."""
+    context: list[str] = []
+    block = memory_block(config, message)
+    if block:
+        context.append(block)
+    context += [m["content"] for m in _facts_context(config) + music_taste_context(config)]
+    # chat() appends the fresh screen description as a system entry.
+    context += [m["content"] for m in history if m.get("role") == "system"]
+    if tone:
+        context.append(f"Right now: {tone}")
+    conversation = [m for m in history if m.get("role") != "system"]
+    user = message
+    if context:
+        joined = "\n\n".join(context)
+        user = (
+            f"[Background for this reply, not said by Mario]\n{joined}\n"
+            f"[End of background]\n\n{message}"
+        )
     return (
-        [{"role": "system", "content": personality_prompt(tone, message, config)}]
-        + _facts_context(config)
-        + music_taste_context(config)
+        [{"role": "system", "content": _daily_persona()}]
+        + conversation
+        + [{"role": "user", "content": user}]
     )
 
 

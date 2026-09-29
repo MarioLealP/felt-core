@@ -42,7 +42,7 @@ from felt_core.brain.replies import (
     legacy_config,
     local_model_label,
     local_reply,
-    local_system_messages,
+    local_turn_messages,
 )
 from felt_core.brain.result import ChatResult
 from felt_core.cloud import cloud_generate
@@ -270,11 +270,7 @@ async def _chat_local(
     caller then falls back to the whole old path); once a skill has run,
     a failed phrasing call degrades to _phrase_skill_result instead, so
     the skill is never executed twice."""
-    prefix = (
-        local_system_messages(message, config, tone)
-        + history
-        + [{"role": "user", "content": message}]
-    )
+    prefix = local_turn_messages(message, history, config, tone)
     tools = _skill_tools(registry)
 
     # The presence fast path skips the model entirely (WP-09): "shut up"
