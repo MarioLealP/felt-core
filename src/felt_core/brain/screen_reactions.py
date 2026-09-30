@@ -24,6 +24,7 @@ import logging
 import re
 
 from felt_core import local_llm, metrics
+from felt_core.brain import poe_reactions
 from felt_core.brain.personality import personality_prompt
 from felt_core.brain.replies import local_reply
 from felt_core.brain.result import ChatResult
@@ -199,7 +200,11 @@ _SCREEN_REACT_SCHEMA = {
 
 
 async def _react_to_screen_local(
-    jpeg_bytes: bytes, system: str, user_text: str, config: FeltConfig
+    jpeg_bytes: bytes,
+    system: str,
+    user_text: str,
+    config: FeltConfig,
+    schema: dict | None = None,
 ) -> dict | None:
     """felt-llm with the JPEG as an image part and the schema-constrained
     JSON reply. One retry on a parse failure; None after two unparseable
@@ -216,8 +221,8 @@ async def _react_to_screen_local(
                     ],
                 },
             ],
-            max_tokens=200,
-            json_schema=_SCREEN_REACT_SCHEMA,
+            max_tokens=260 if schema else 200,
+            json_schema=schema or _SCREEN_REACT_SCHEMA,
             config=config,
         )
         parsed = _parse_screen_react_json(reply.text)
@@ -271,9 +276,16 @@ async def react_to_screen(
     context_line = f'App: {app} — "{title}"'
     recent = recent_lines_block(_recent_lines(config, session_id))
 
+    # WP-29: in Path of Exile 2 she also reads item tooltips (and prices them below).
+    poe = poe_reactions.is_poe(app)
+    instruction = poe_reactions.POE_INSTRUCTION if poe else _SCREEN_REACT_INSTRUCTION
     async with metrics.timed("screen_reaction", route="local", model=config.local_llm_model):
         parsed = await _react_to_screen_local(
-            jpeg_bytes, system, f"{context_line}\n\n{_SCREEN_REACT_INSTRUCTION}{recent}", config
+            jpeg_bytes,
+            system,
+            f"{context_line}\n\n{instruction}{recent}",
+            config,
+            schema=poe_reactions.POE_SCHEMA if poe else None,
         )
 
     if parsed is None:
@@ -284,6 +296,15 @@ async def react_to_screen(
     line = str(parsed.get("line") or "").strip()
     emotion = parsed.get("emotion")
     emotion = emotion if emotion in _EMOTION_VALUES else "neutral"
+
+    if poe and isinstance(parsed.get("items"), list):
+        prices = await poe_reactions.price_items(parsed["items"], config)
+        if prices:
+            priced = await poe_reactions.priced_line(seen, prices, system, config)
+            if priced:
+                logger.info("poe reaction: priced %s -> %r", prices, priced)
+                line = priced
+                emotion = emotion if emotion != "neutral" else "excited"
 
     obs_id = save_observation(config.db_path, session_id, seen or f"(on screen: {app})")
 
