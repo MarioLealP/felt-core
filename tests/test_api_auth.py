@@ -39,3 +39,17 @@ def test_healthcheck_docs_and_preflight_stay_open(tmp_path, monkeypatch):
             headers={"Origin": "http://127.0.0.1:5173", "Access-Control-Request-Method": "GET"},
         )
         assert r.status_code == 200
+
+
+def test_websocket_needs_the_token_too(tmp_path, monkeypatch):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    with _client(tmp_path, monkeypatch, "s3cret") as c:
+        with pytest.raises(WebSocketDisconnect) as e, c.websocket_connect("/v1/chat/ws"):
+            pass
+        assert e.value.code == 1008
+        with c.websocket_connect("/v1/chat/ws?token=s3cret"):
+            pass
+        with c.websocket_connect("/v1/chat/ws", headers={"Authorization": "Bearer s3cret"}):
+            pass

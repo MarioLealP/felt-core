@@ -1003,8 +1003,22 @@ async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
     return {"id": item_id}
 
 
+def _ws_authorized(websocket: WebSocket) -> bool:
+    """WP-55: the HTTP auth middleware doesn't see websockets, and browsers
+    can't set headers on them - so a Bearer header or ?token= is checked here."""
+    token = load_config().api_token
+    if not token:
+        return True
+    given = websocket.headers.get("authorization", "")
+    given = given[7:] if given.startswith("Bearer ") else websocket.query_params.get("token", "")
+    return hmac.compare_digest(given.encode(), token.encode())
+
+
 @app.websocket("/v1/chat/ws")
 async def chat_ws(websocket: WebSocket) -> None:
+    if not _ws_authorized(websocket):
+        await websocket.close(code=1008)  # policy violation, before accept
+        return
     await websocket.accept()
     config = load_config()
     try:
