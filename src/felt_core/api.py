@@ -46,6 +46,7 @@ from felt_core.brain import (
     react_to_screen,
     weather_precompute_loop,
 )
+from felt_core.calendar_headsup import calendar_headsup_loop
 from felt_core.config import load_config
 from felt_core.db import (
     add_shopping_item,
@@ -102,6 +103,8 @@ async def lifespan(app: FastAPI):
     # WP-36 D'': primes felt-llm's prompt cache at startup and whenever it
     # comes back after being unreachable (checked every 60 s).
     warmup_task = asyncio.create_task(llm_warmup_loop(config))
+    # WP-31: T-30/T-10 min calendar heads-ups through the proactive channel.
+    calendar_task = asyncio.create_task(calendar_headsup_loop(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -126,6 +129,7 @@ async def lifespan(app: FastAPI):
     weather_task.cancel()
     music_taste_task.cancel()
     warmup_task.cancel()
+    calendar_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)

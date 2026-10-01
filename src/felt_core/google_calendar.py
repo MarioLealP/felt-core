@@ -91,6 +91,22 @@ async def list_events(
     return response.json().get("items", [])
 
 
+async def get_event(
+    client: httpx.AsyncClient, config: FeltConfig, calendar_id: str, event_id: str
+) -> dict | None:
+    """One event by id, or None if it's gone (404/410). A deleted event
+    can also come back with `status: "cancelled"` - callers check that."""
+    token = await _get_access_token(client, config)
+    response = await client.get(
+        f"{events_url(calendar_id)}/{quote(event_id, safe='')}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if response.status_code in (404, 410):
+        return None
+    response.raise_for_status()
+    return response.json()
+
+
 async def create_event(
     client: httpx.AsyncClient,
     config: FeltConfig,
