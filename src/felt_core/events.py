@@ -58,8 +58,8 @@ class EventPolicy:
 
 
 # WP-17's table: game_stop -> "finally done?", afk_end -> a greeting,
-# spoken only after a long absence; game_start (comfy pose), gpu_hot (fans
-# herself) and call_join_guess (a small wave) are mainly non-verbal on the
+# spoken only after a long absence; game_start (comfy pose), gpu_hot (a
+# cool-off drink from her water bottle) and call_join_guess (a small wave) are mainly non-verbal on the
 # desktop side, so their lines are kept rare (long cooldowns). Override
 # any field per deployment with FELT_EVENT_POLICIES (JSON).
 DEFAULT_POLICIES: dict[str, EventPolicy] = {
@@ -305,7 +305,7 @@ def build_prompt(
     if event == "gpu_hot":
         temp = _number(details, "temp_c")
         heat = f" - the GPU is at {round(temp)} degrees" if temp else ""
-        return f"Mario's PC is running hot{heat}. You're fanning yourself. {_EVENT_INSTRUCTION}"
+        return f"Mario's PC is running hot{heat}. You grab your water bottle to cool off. {_EVENT_INSTRUCTION}"
     if event == "call_join_guess":
         return f"Someone seems to have just joined Mario's voice call. A small, quiet hello. {_EVENT_INSTRUCTION}"
     return None
