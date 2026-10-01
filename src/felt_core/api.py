@@ -9,6 +9,7 @@ just about having *an* API surface at all, versioned so it can evolve).
 
 import asyncio
 import contextlib
+import hmac
 import json
 import logging
 import time
@@ -178,6 +179,31 @@ _UNTIMED_PATHS = (
 
 def _is_untimed(path: str) -> bool:
     return any(path.startswith(p) for p in _UNTIMED_PATHS)
+
+
+# WP-55: what stays reachable without the token - the container healthcheck
+# (/openapi.json, schema only, no data) and the docs page shell. CORS
+# preflights (OPTIONS) carry no credentials by design, so they pass too.
+_AUTH_EXEMPT = frozenset({"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"})
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """WP-55: with FELT_API_TOKEN set, every other route needs
+    `Authorization: Bearer <token>` (constant-time compare) or gets 401."""
+    token = load_config().api_token
+    if not token or request.method == "OPTIONS" or request.url.path in _AUTH_EXEMPT:
+        return await call_next(request)
+    given = request.headers.get("authorization", "")
+    if given.startswith("Bearer ") and hmac.compare_digest(given[7:].encode(), token.encode()):
+        return await call_next(request)
+    # The CORS middleware sits inside this one, so add its header here or the
+    # dashboard sees an opaque CORS error instead of the 401.
+    return JSONResponse(
+        status_code=401,
+        content={"detail": "unauthorized"},
+        headers={"WWW-Authenticate": "Bearer", "Access-Control-Allow-Origin": "*"},
+    )
 
 
 @app.middleware("http")

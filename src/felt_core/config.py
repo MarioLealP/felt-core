@@ -35,6 +35,10 @@ class FeltConfig(BaseSettings):
     # felt-voice — STT/TTS service. Unset means voice-chat simply isn't
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None
+    # WP-55: shared bearer token for every API route (FELT_API_TOKEN, sops on
+    # the server; the desktop clients send it). Unset = no auth (the old LAN
+    # posture) - set it only once every client sends it.
+    api_token: str | None = None
 
     # WP-54: /v1/voice-chat and /v1/text-chat answer with the first
     # sentence chunk's audio and synthesise the rest in the background
