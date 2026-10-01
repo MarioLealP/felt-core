@@ -140,6 +140,16 @@ def _event_line(kind: str, data: dict) -> str | None:
         return f"got hushed for {round(minutes)} min" if minutes else "got hushed"
     if kind == "ledge_sit":
         return "sat on a ledge for a while"
+    if kind == "hobby":
+        from felt_core.events import HOBBY_PHRASES
+
+        hobby = _text(data, "hobby")
+        if hobby not in HOBBY_PHRASES:
+            return None
+        minutes = _num(data, "minutes")
+        spent = f"spent about {round(minutes)} min " if minutes else "spent some time "
+        # The event prompt talks TO her ("your handheld"); the diary is hers.
+        return spent + HOBBY_PHRASES[hobby].replace("your", "my") + " while Mario was away"
     return None
 
 

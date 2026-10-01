@@ -127,6 +127,30 @@ def _game_name(details: dict) -> str:
     return name[:-4] if name.lower().endswith(".exe") else name
 
 
+# WP-30: felt-animation's hobby keys -> how she'd say them. Whitelisted like
+# every other detail here - an unknown key is simply not mentioned.
+HOBBY_PHRASES = {
+    "reading": "reading a book",
+    "gaming": "playing on your handheld",
+    "napping": "napping",
+    "tidying": "tidying up your stuff",
+    "stretching": "stretching and looking around",
+}
+
+
+def _hobbies_phrase(details: dict) -> str:
+    """ "reading a book (about 12 min) and napping" from details["hobbies"]."""
+    parts = []
+    for h in details.get("hobbies") or []:
+        if not isinstance(h, dict) or h.get("hobby") not in HOBBY_PHRASES:
+            continue
+        mins = _number(h, "minutes")
+        parts.append(HOBBY_PHRASES[h["hobby"]] + (f" (about {round(mins)} min)" if mins else ""))
+    if len(parts) > 1:
+        return ", ".join(parts[:-1]) + " and " + parts[-1]
+    return parts[0] if parts else ""
+
+
 def _spoken_duration(seconds: float) -> str:
     minutes = round(seconds / 60)
     if minutes < 90:
@@ -267,9 +291,16 @@ def build_prompt(
         )
     if event == "afk_end":
         duration = _number(details, "duration_s") or 0
+        hobbies = _hobbies_phrase(details)
+        pastime = (
+            f" While he was gone you spent the time {hobbies}; you can mention it in passing "
+            "with a small opinion (like 'finished two chapters, it was mid'), only if it fits."
+            if hobbies
+            else ""
+        )
         return (
             f"Mario just came back to his desk after being away for {_spoken_duration(duration)}. "
-            f"Greet him. {_EVENT_INSTRUCTION}"
+            f"Greet him.{pastime} {_EVENT_INSTRUCTION}"
         )
     if event == "gpu_hot":
         temp = _number(details, "temp_c")
