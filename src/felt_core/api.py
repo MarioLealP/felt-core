@@ -12,6 +12,7 @@ import contextlib
 import hmac
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import asdict
@@ -185,6 +186,22 @@ def _is_untimed(path: str) -> bool:
 # (/openapi.json, schema only, no data) and the docs page shell. CORS
 # preflights (OPTIONS) carry no credentials by design, so they pass too.
 _AUTH_EXEMPT = frozenset({"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"})
+# The /shopping-list phone page and exactly the calls it makes. A browser
+# can't hold the API token, so Caddy puts SSO in front of these paths
+# instead (Mario 2026-10-01: "SSO whenever possible"). Safe only because
+# Caddy is the sole way in: no host port since WP-55.
+_SSO_GATED = (
+    ("GET", re.compile(r"/shopping-list")),
+    ("GET", re.compile(r"/v1/shopping-list")),
+    ("POST", re.compile(r"/v1/shopping-list")),
+    ("DELETE", re.compile(r"/v1/shopping-list/checked")),
+    ("PATCH", re.compile(r"/v1/shopping-list/\d+")),
+    ("DELETE", re.compile(r"/v1/shopping-list/\d+")),
+)
+
+
+def _sso_gated(method: str, path: str) -> bool:
+    return any(method == m and rx.fullmatch(path) for m, rx in _SSO_GATED)
 
 
 @app.middleware("http")
@@ -192,7 +209,13 @@ async def auth_middleware(request: Request, call_next):
     """WP-55: with FELT_API_TOKEN set, every other route needs
     `Authorization: Bearer <token>` (constant-time compare) or gets 401."""
     token = load_config().api_token
-    if not token or request.method == "OPTIONS" or request.url.path in _AUTH_EXEMPT:
+    path = request.url.path
+    if (
+        not token
+        or request.method == "OPTIONS"
+        or path in _AUTH_EXEMPT
+        or _sso_gated(request.method, path)
+    ):
         return await call_next(request)
     given = request.headers.get("authorization", "")
     if given.startswith("Bearer ") and hmac.compare_digest(given[7:].encode(), token.encode()):

@@ -53,3 +53,17 @@ def test_websocket_needs_the_token_too(tmp_path, monkeypatch):
             pass
         with c.websocket_connect("/v1/chat/ws", headers={"Authorization": "Bearer s3cret"}):
             pass
+
+
+def test_shopping_list_paths_are_left_to_caddy_sso(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch, "s3cret") as c:
+        assert c.get("/shopping-list").status_code == 200
+        assert c.get("/v1/shopping-list").status_code == 200
+        item = c.post("/v1/shopping-list", json={"text": "milk"}).json()["id"]
+        assert c.patch(f"/v1/shopping-list/{item}?checked=true").status_code == 200
+        assert c.delete("/v1/shopping-list/checked").status_code == 200
+        assert c.delete(f"/v1/shopping-list/{item}").status_code == 200
+        # exact paths only: no prefix match, no other methods
+        assert c.get("/v1/shopping-list/1").status_code == 401
+        assert c.get("/v1/shopping-listx").status_code == 401
+        assert c.put("/v1/shopping-list/1").status_code == 401
