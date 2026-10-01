@@ -69,6 +69,9 @@ DEFAULT_POLICIES: dict[str, EventPolicy] = {
     "afk_end": EventPolicy(cooldown_s=30 * 60, min_duration_s=30 * 60, emotion="happy"),
     "gpu_hot": EventPolicy(cooldown_s=60 * 60, emotion="surprised"),
     "call_join_guess": EventPolicy(cooldown_s=20 * 60, emotion="happy"),
+    # WP-29 v2: Mario pressed Exiled Exchange 2's price-check key on an item.
+    # He asked, so no min gap; a few seconds against a double press only.
+    "poe_item": EventPolicy(cooldown_s=4, emotion="excited", bypass_min_gap=True),
     # Mario lifting a hush (felt-animation /unhush?announce=1, 2026-09-26:
     # "give her some snappy comments about being unmuted"). He triggered
     # it, so only a small anti-double-press cooldown and no min gap.
@@ -308,7 +311,35 @@ def build_prompt(
         return f"Mario's PC is running hot{heat}. You grab your water bottle to cool off. {_EVENT_INSTRUCTION}"
     if event == "call_join_guess":
         return f"Someone seems to have just joined Mario's voice call. A small, quiet hello. {_EVENT_INSTRUCTION}"
+    if event == "poe_item":
+        return _poe_item_prompt(details)
     return None
+
+
+def _poe_item_prompt(details: dict) -> str | None:
+    """Mario price-checked an item (details filled by react_to_event from the
+    item text: name, base, rarity, prices). Never invents a number."""
+    name = _text(details, "name")
+    if not name:
+        return None
+    rarity = _text(details, "rarity").lower()
+    base = _text(details, "base")
+    what = f"{name}" + (
+        f" ({rarity} {base})" if base and base != name else f" ({rarity})" if rarity else ""
+    )
+    prices = [str(p) for p in details.get("prices") or [] if str(p).strip()][:2]
+    if prices:
+        return (
+            f"Mario just price-checked {what} in Path of Exile 2. Live market: {' | '.join(prices)}. "
+            "Say ONE short spoken line (max ~20 words), in character, that names the item and its "
+            "price the way a person says it out loud (round it: 'like forty divines', 'a couple of "
+            "exalts'). Big value: loot-goblin hype. Worthless: tease him. No lists, no markdown."
+        )
+    return (
+        f"Mario just price-checked {what} in Path of Exile 2, but there's no market price for it "
+        "(rares and magic items are priced by their mods - his Exiled Exchange window shows those). "
+        f"Do NOT make up a price. {_EVENT_INSTRUCTION}"
+    )
 
 
 async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
@@ -347,6 +378,21 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
         return line
     chorus = find_chorus(lyrics["synced"])
     return chorus["text"] if chorus else None
+
+
+async def _poe_item_details(details: dict, config: FeltConfig) -> dict:
+    """The forwarded item text -> the whitelisted fields build_prompt reads,
+    priced (uniques and currency) with poe_price_check."""
+    from felt_core.brain import poe_reactions
+
+    # Raw, not _text(): that collapses whitespace, and the item text's lines matter.
+    item = poe_reactions.parse_item_text(str(details.get("text") or "")[:6000])
+    if item is None:
+        logger.info("event reaction poe_item: not a PoE item text")
+        return {}
+    prices = await poe_reactions.price_items([item], config)
+    logger.info("poe item: %s (%s) -> %s", item["name"], item["rarity"], prices or "no price")
+    return {**item, "prices": prices}
 
 
 async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str | None) -> str:
@@ -401,6 +447,8 @@ async def react_to_event(
     if event == "music_new_track" and lyric is None:
         lyric = await _lyric_for(details, config)
     previous = last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
+    if event == "poe_item":
+        details = await _poe_item_details(details, config)
     prompt = build_prompt(event, details, lyric, previous)
     if prompt is None:
         logger.info(

@@ -134,3 +134,46 @@ async def priced_line(seen: str, prices: list[str], system: str, config: FeltCon
         )
     line = (reply.text or "").strip().strip('"')
     return line or None
+
+
+# -- WP-29 v2: Exiled Exchange 2's price-check key ---------------------------
+# Mario 2026-10-01: vision couldn't read tooltip names off a 768 px frame
+# ("she pointed how much text it is, but not the price"), so the exact item
+# text now comes from his Exiled Exchange 2 fork (git.clockmost.com/Benylin/
+# exiled-exchange-2, branch felt): its copy-item hotkey reads the game's
+# Ctrl+C text and also forwards it to felt-animation -> event "poe_item".
+
+_KINDS = {"unique": "unique", "currency": "currency"}
+
+
+def parse_item_text(text: str) -> dict | None:
+    """PoE2's copied item text -> {"name", "base", "rarity", "kind", "item_class"},
+    or None if it isn't one. The header is: "Item Class: X", "Rarity: Y",
+    then the name, then (uniques, rares) the base type."""
+    lines = [ln.strip() for ln in text.replace("\r", "").split("\n")]
+    header = []
+    for ln in lines:
+        if ln.startswith("--------"):
+            break
+        if ln:
+            header.append(ln)
+    fields = dict(
+        ln.split(": ", 1)
+        for ln in header
+        if ": " in ln and ln.split(": ", 1)[0] in ("Item Class", "Rarity")
+    )
+    rarity = fields.get("Rarity", "").strip()
+    if not rarity:
+        return None
+    rest = [ln for ln in header if not ln.startswith(("Item Class: ", "Rarity: "))]
+    if not rest:
+        return None
+    name = rest[0]
+    base = rest[1] if len(rest) > 1 else ""
+    return {
+        "name": name,
+        "base": base,
+        "rarity": rarity,
+        "kind": _KINDS.get(rarity.lower(), "other"),
+        "item_class": fields.get("Item Class", "").strip(),
+    }
