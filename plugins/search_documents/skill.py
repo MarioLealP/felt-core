@@ -8,7 +8,7 @@ both). "You have the google drive locally, no need to fetch from it?" —
 right: drive-rag's ingest reads the desktop's local Drive sync folder
 directly, no Drive API/OAuth involved. This skill just calls the already-
 built index, same internal-service pattern as any other felt-core -> sibling
-container call (no Caddy route, no SSO gate — edge network only).
+container call (no Caddy route, no SSO gate — `felt` network only).
 """
 
 import httpx
@@ -39,7 +39,9 @@ async def handle(params, ctx):
     question = get_single_param(params, "question", "query")
     question = str(question or ctx.original_message).strip()
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    # drive-rag answers via felt-llm since WP-56 (local, one slot, ~40 s seen),
+    # so 60 s was too tight.
+    async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(f"{config.drive_rag_url}/api/ask", json={"question": question})
         response.raise_for_status()
         body = response.json()
