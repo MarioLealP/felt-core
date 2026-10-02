@@ -61,6 +61,13 @@ class FeltConfig(BaseSettings):
     # its own port/path convention (see printer_status/skill.py).
     hp_printer_host: str | None = None
 
+    # Plane — the WP board (WP-37). Felt only ever reads it (board_status
+    # refuses anything but GET); moving cards is Mario's or Claude's job.
+    plane_url: str = "https://plane.clockmost.com"
+    plane_api_token: str | None = None
+    plane_workspace: str = "clockmost"
+    plane_project: str = "FELT"
+
     # News/RSS digest — comma-separated feed URLs. Empty by default;
     # Mario hasn't specified which feeds he actually wants yet.
     news_feeds: str = ""
