@@ -16,6 +16,7 @@ loops log and skip.
 import base64
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 import httpx
@@ -37,6 +38,9 @@ class LocalReply:
     # "function": {"name": ..., "arguments": "<json string>"}}]. Kept raw so
     # chat() can echo them back in the assistant message of the follow-up.
     tool_calls: list[dict] = field(default_factory=list)
+    # True when the model hit max_tokens and the text was ended at its last
+    # full sentence (FELT-71).
+    truncated: bool = False
     prompt_n: int | None = None
     cache_n: int | None = None
 
@@ -45,6 +49,19 @@ def image_part(jpeg_bytes: bytes) -> dict:
     """An OpenAI `image_url` content part carrying the JPEG as a data URI."""
     encoded = base64.b64encode(jpeg_bytes).decode("ascii")
     return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded}"}}
+
+
+_SENTENCE_END = re.compile(r"[.!?…][\"')\]*~]*(?=\s|$)")
+
+
+def end_at_last_sentence(text: str) -> str:
+    """A reply cut off by max_tokens, ended at its last complete sentence so
+    it never stops mid-word (FELT-71). No complete sentence at all: the
+    fragment gets an ellipsis instead."""
+    ends = list(_SENTENCE_END.finditer(text))
+    if ends:
+        return text[: ends[-1].end()].rstrip()
+    return text.rstrip(" ,;:-—") + "…"
 
 
 def _merge_system_messages(messages: list[dict]) -> list[dict]:
@@ -94,8 +111,10 @@ async def chat(
             )
             response.raise_for_status()
             body = response.json()
-        message = body["choices"][0]["message"]
+        choice = body["choices"][0]
+        message = choice["message"]
         text = message.get("content") or ""
+        finish_reason = choice.get("finish_reason")
         tool_calls = message.get("tool_calls") or []
         timings = body.get("timings") or {}
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
@@ -103,9 +122,16 @@ async def chat(
 
     if not isinstance(text, str) or not isinstance(tool_calls, list):
         raise LocalLLMUnavailable("felt-llm returned an unexpected message shape")
+    truncated = finish_reason == "length" and json_schema is None and not tool_calls and bool(text)
+    if truncated:
+        logger.warning(
+            "felt-llm hit max_tokens=%d; ending the reply at its last sentence", max_tokens
+        )
+        text = end_at_last_sentence(text)
     return LocalReply(
         text=text,
         tool_calls=tool_calls,
+        truncated=truncated,
         prompt_n=timings.get("prompt_n"),
         cache_n=timings.get("cache_n"),
     )

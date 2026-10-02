@@ -23,13 +23,13 @@ from felt_core.music_taste import summarize_taste
 from felt_core.plugin_loader import LoadedSkill
 from felt_core.self_memory import memory_block
 
-# Every reply is spoken aloud, not read - a long reply means a long, rambly
-# TTS clip (2026-09-22 finding: a weather reply's ~0.8 MB WAV, 12s of TTS
-# alone out of a 33s turn). The generation-length cap, not a client-side
-# truncation that could cut a sentence in half mid-word - the personality
-# prompt's own "lead with the answer" instruction is what keeps a capped
-# reply from feeling chopped off.
-_REPLY_MAX_TOKENS = 160
+# A safety ceiling, not a length budget (FELT-71, Mario 10-02: "It's self
+# hosted, we dont need token cap"). Her persona keeps replies short on its own
+# (median 13 words over 1,100 replies); the old 160-token cap only ever cut
+# the rare long answer mid-sentence. 1024 still stops a runaway generation
+# from holding felt-llm's single slot, and local_llm.chat ends a reply that
+# does hit it at its last full sentence.
+_REPLY_MAX_TOKENS = 1024
 
 
 def skill_tools(registry: dict[str, LoadedSkill]) -> list[dict]:

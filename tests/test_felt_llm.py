@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 import felt_core.api as api
 import felt_core.brain.background as background
 import felt_core.brain.orchestrator as orchestrator
+import felt_core.brain.replies as replies
 import felt_core.brain.screen_reactions as screen
 import felt_core.diary as diary
 from felt_core import db, local_llm, metrics
@@ -123,6 +124,44 @@ async def test_chat_omits_optional_fields_and_raises_unavailable(tmp_path, monke
         await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
 
 
+async def test_chat_hitting_max_tokens_ends_at_last_sentence(tmp_path, monkeypatch):
+    # FELT-71: a reply cut off by the length cap must not stop mid-sentence.
+    config = _config(tmp_path)
+    cut = "Option three is nice. Option two feels like an office. But honestly, it feels a bit like"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": cut}, "finish_reason": "length"}]}
+        )
+
+    _mock_client(monkeypatch, handler)
+    reply = await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
+    assert reply.truncated
+    assert reply.text == "Option three is nice. Option two feels like an office."
+
+
+async def test_chat_complete_reply_is_left_alone(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "Done. On the list"}, "finish_reason": "stop"}]
+            },
+        )
+
+    _mock_client(monkeypatch, handler)
+    reply = await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
+    assert not reply.truncated
+    assert reply.text == "Done. On the list"
+
+
+def test_end_at_last_sentence_without_a_full_sentence_adds_an_ellipsis():
+    assert local_llm.end_at_last_sentence("It feels a bit like,") == "It feels a bit like…"
+    assert local_llm.end_at_last_sentence('She said "fine." Then she') == 'She said "fine."'
+
+
 async def test_chat_connection_error_and_no_url_are_unavailable(tmp_path, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
@@ -196,7 +235,7 @@ async def test_chat_local_reply_without_tool(tmp_path, monkeypatch, fake_llm):
     call = fake_llm.calls[0]
     assert call["messages"][0]["role"] == "system"
     assert call["messages"][-1] == {"role": "user", "content": "hi"}
-    assert call["max_tokens"] == 160
+    assert call["max_tokens"] == replies._REPLY_MAX_TOKENS
     assert [m["content"] for m in get_history(config.db_path, "s1")][-1] == "hello there"
 
 
