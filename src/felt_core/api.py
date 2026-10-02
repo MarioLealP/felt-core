@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from felt_core import diary, local_llm, metrics, reply_stream, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
+from felt_core.app_api import router as app_router
 from felt_core.brain import (
     chat,
     current_weather,
@@ -135,6 +136,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
+app.include_router(app_router)
 
 # LAN-only right now, no auth on this API yet (same posture as
 # felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
@@ -197,6 +199,11 @@ _SSO_GATED = (
     ("DELETE", re.compile(r"/v1/shopping-list/checked")),
     ("PATCH", re.compile(r"/v1/shopping-list/\d+")),
     ("DELETE", re.compile(r"/v1/shopping-list/\d+")),
+    # WP-42.2: the Felt app (app_api.py), which also refuses any request
+    # without Caddy's X-Authentik-Username header.
+    ("GET", re.compile(r"/v1/app/me")),
+    ("GET", re.compile(r"/v1/app/history")),
+    ("POST", re.compile(r"/v1/app/chat")),
 )
 
 
