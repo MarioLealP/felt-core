@@ -11,16 +11,29 @@ It shares the "dashboard" session with the tray window, so the phone and the
 desktop see one conversation.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from felt_core.app_history import history_page
 from felt_core.brain import chat
 from felt_core.config import load_config
+from felt_core.marks import maybe_mark
 
 SESSION = "dashboard"
 
 router = APIRouter(prefix="/v1/app")
+
+# background mark decisions, kept referenced so they aren't garbage-collected
+_pending: set[asyncio.Task] = set()
+
+
+def schedule_mark(config, session_id: str = SESSION) -> None:
+    """After a reply: maybe she marks his line (marks.py), off the hot path."""
+    task = asyncio.create_task(maybe_mark(config, session_id))
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
 
 
 def sso_user(x_authentik_username: str | None = Header(default=None)) -> str:
@@ -29,11 +42,19 @@ def sso_user(x_authentik_username: str | None = Header(default=None)) -> str:
     return x_authentik_username
 
 
+class MarkOut(BaseModel):
+    id: str
+    type: str
+    quote: str
+    note: str = ""
+
+
 class Message(BaseModel):
     id: int
     role: str
     content: str
     created_at: str
+    marks: list[MarkOut] = []
 
 
 class Me(BaseModel):
@@ -69,5 +90,6 @@ async def say(req: SayRequest, _user: str = Depends(sso_user)) -> SayResponse:
         raise HTTPException(status_code=422, detail="empty message")
     config = load_config()
     await chat(text, config, SESSION)
+    schedule_mark(config)
     rows = history_page(config.db_path, SESSION, limit=2)
     return SayResponse(messages=[Message(**r) for r in rows])

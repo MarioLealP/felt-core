@@ -39,7 +39,9 @@ from pydantic import BaseModel
 
 from felt_core import diary, local_llm, metrics, reply_stream, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
+from felt_core.app_api import SESSION as APP_SESSION
 from felt_core.app_api import router as app_router
+from felt_core.app_api import schedule_mark
 from felt_core.brain import (
     chat,
     current_weather,
@@ -539,6 +541,8 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
         )
 
     result = await chat(req.message, config, req.session_id, req.tone)
+    if req.session_id == APP_SESSION:
+        schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
     async with httpx.AsyncClient(timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
