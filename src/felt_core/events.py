@@ -318,7 +318,8 @@ def build_prompt(
 
 def _poe_item_prompt(details: dict) -> str | None:
     """Mario price-checked an item (details filled by react_to_event from the
-    item text: name, base, rarity, prices). Never invents a number."""
+    item text: name, base, rarity, prices). Only with a real price - she
+    never invents one; rares stay Exiled Exchange's job for now (WP-57)."""
     name = _text(details, "name")
     if not name:
         return None
@@ -335,11 +336,7 @@ def _poe_item_prompt(details: dict) -> str | None:
             "price the way a person says it out loud (round it: 'like forty divines', 'a couple of "
             "exalts'). Big value: loot-goblin hype. Worthless: tease him. No lists, no markdown."
         )
-    return (
-        f"Mario just price-checked {what} in Path of Exile 2, but there's no market price for it "
-        "(rares and magic items are priced by their mods - his Exiled Exchange window shows those). "
-        f"Do NOT make up a price. {_EVENT_INSTRUCTION}"
-    )
+    return None  # no price: she stays quiet (react_to_event skips "unpriced" first)
 
 
 async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
@@ -449,6 +446,9 @@ async def react_to_event(
     previous = last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
     if event == "poe_item":
         details = await _poe_item_details(details, config)
+        if not details.get("prices"):
+            logger.info("event reaction poe_item: no line (unpriced)")
+            return EventReaction(skipped="unpriced")
     prompt = build_prompt(event, details, lyric, previous)
     if prompt is None:
         logger.info(

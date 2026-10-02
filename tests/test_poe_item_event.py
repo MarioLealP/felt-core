@@ -47,7 +47,7 @@ def test_parse_unique_currency_rare():
     assert poe_reactions.parse_item_text("") is None
 
 
-def test_prompt_uses_the_price_and_never_invents_one():
+def test_prompt_needs_a_real_price():
     priced = events.build_prompt(
         "poe_item",
         {
@@ -59,11 +59,10 @@ def test_prompt_uses_the_price_and_never_invents_one():
     )
     assert priced is not None
     assert "40 divine" in priced and "Death Rush" in priced
-    unpriced = events.build_prompt(
-        "poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []}
+    assert (
+        events.build_prompt("poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []})
+        is None
     )
-    assert unpriced is not None
-    assert "Do NOT make up a price" in unpriced
     assert events.build_prompt("poe_item", {}) is None
 
 
