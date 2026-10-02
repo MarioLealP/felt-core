@@ -1,4 +1,4 @@
-"""WP-42.2: her marks on Mario's lines."""
+"""WP-42.2: her marks in the notebook, on his line or her own reply."""
 
 import json
 
@@ -14,12 +14,15 @@ def _config(tmp_path) -> FeltConfig:
 
 
 def _decision(**kw) -> str:
-    return json.dumps({"mark": True, "type": "circle", "quote": "bin bags", "note": "again?"} | kw)
+    return json.dumps(
+        {"mark": True, "line": "his", "type": "circle", "quote": "bin bags", "note": "again?"} | kw
+    )
 
 
 def test_parse_keeps_only_real_quotes():
-    line = "add oat milk and bin bags"
+    line = {"his": "add oat milk and bin bags"}
     assert marks.parse_decision(_decision(), line) == {
+        "line": "his",
         "type": "circle",
         "quote": "bin bags",
         "note": "again?",
@@ -32,7 +35,7 @@ def test_parse_keeps_only_real_quotes():
 
 def test_pacing_line_tells_her_when_she_last_marked():
     assert "never" in marks.pacing_line(None)
-    assert "3 of his lines ago" in marks.pacing_line(3)
+    assert "3 exchanges ago" in marks.pacing_line(3)
 
 
 async def test_mark_is_saved_and_shows_in_history(tmp_path, monkeypatch):
@@ -68,7 +71,49 @@ async def test_no_second_mark_on_the_same_line_and_she_is_told_how_long_ago(tmp_
     assert await marks.maybe_mark(config, "dashboard") is None  # same line
     save_message(config.db_path, "dashboard", "user", "more bin bags please")
     await marks.maybe_mark(config, "dashboard")
-    assert "1 of his lines ago" in prompts[-1]
+    assert "just before this one" in prompts[-1]
+
+
+def test_parse_allows_her_own_line_long_quotes_and_strikes():
+    lines = {
+        "his": "add oat milk and bin bags",
+        "mine": "Added. I'm not going to remind you about the bin bags a third time, I promise.",
+    }
+    struck = marks.parse_decision(
+        _decision(line="mine", type="strike-through", quote="I promise", note=""), lines
+    )
+    assert struck == {"line": "mine", "type": "strike-through", "quote": "I promise", "note": ""}
+    sentence = "I'm not going to remind you about the bin bags a third time"
+    assert marks.parse_decision(_decision(line="mine", type="underline", quote=sentence), lines)
+    # a quote from her reply doesn't count as his, and vice versa
+    assert marks.parse_decision(_decision(line="his", quote="I promise"), lines) is None
+    assert marks.parse_decision(_decision(line="theirs"), lines) is None
+
+
+def test_long_quotes_cant_be_circled():
+    line = {"his": "remind me to call the dentist tomorrow before lunch please"}
+    long = "call the dentist tomorrow before lunch"
+    assert marks.parse_decision(_decision(quote=long), line) is None
+    assert marks.parse_decision(_decision(quote=long, type="underline"), line)
+
+
+async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
+    save_message(config.db_path, "dashboard", "assistant", "Done, bin bags again.")
+    seen = {}
+
+    async def fake_chat(messages, **kw):
+        seen["prompt"] = messages[-1]["content"]
+        return local_llm.LocalReply(text=_decision(line="mine", quote="again", type="underline"))
+
+    monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
+    assert await marks.maybe_mark(config, "dashboard") is not None
+    assert "Your answer: Done, bin bags again." in seen["prompt"]
+    page = history_page(config.db_path, "dashboard")
+    assert page[0]["marks"] == [] and page[1]["marks"][0]["quote"] == "again"
+    # one mark per exchange: a mark on her reply also closes it
+    assert await marks.maybe_mark(config, "dashboard") is None
 
 
 async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
