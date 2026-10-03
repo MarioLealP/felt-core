@@ -32,6 +32,7 @@ from felt_core.brain.result import ChatResult
 from felt_core.config import FeltConfig
 from felt_core.db import (
     REMARK,
+    get_her_recent_lines,
     get_history,
     get_recent_observations,
     save_message,
@@ -77,8 +78,10 @@ def recent_lines_block(lines: list[str]) -> str:
 
 
 def _recent_lines(config: FeltConfig, session_id: str) -> list[str]:
-    rows = get_recent_observations(config.db_path, session_id, limit=RECENT_LINES_N)
-    return [r["spoken_reply"] for r in rows if r.get("spoken_reply")]
+    # Mario 10-03: every line she said on her own, not just screen remarks -
+    # a song or mail line she just said shouldn't come back as a remark.
+    rows = get_her_recent_lines(config.db_path, session_id, limit=RECENT_LINES_N)
+    return [r["content"] for r in rows]
 
 
 def _on_cooldown(config: FeltConfig, session_id: str) -> bool:

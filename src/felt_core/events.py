@@ -33,6 +33,7 @@ from felt_core.asides import schedule_pick
 from felt_core.config import FeltConfig
 from felt_core.db import (
     EVENT,
+    get_her_recent_lines,
     last_event_reaction_line,
     save_event_reaction,
     save_message,
@@ -457,6 +458,13 @@ async def react_to_event(
             "event reaction %s: details too thin to say anything (%s)", event, sorted(details)
         )
         return EventReaction(skipped="missing_details")
+    # Mario 10-03: she knows what she already said on her own, so a song
+    # line doesn't echo the remark she made a minute ago
+    from felt_core.brain.screen_reactions import RECENT_LINES_N, recent_lines_block
+
+    prompt += recent_lines_block(
+        [r["content"] for r in get_her_recent_lines(config.db_path, session_id, RECENT_LINES_N)]
+    )
 
     try:
         line = await _generate_line(event, prompt, config, tone)

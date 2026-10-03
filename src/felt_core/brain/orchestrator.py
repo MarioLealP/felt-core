@@ -36,6 +36,7 @@ from felt_core.brain.result import ChatResult
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_current_screen_description,
+    get_her_recent_lines,
     get_history,
     get_unresolved_pending_email,
     mark_email_resolved,
@@ -325,6 +326,17 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
     return summary
 
 
+HER_LINES_N = 6
+
+
+def her_lines_note(lines: list[dict]) -> str:
+    listed = "\n".join(f"- {line['content']}" for line in lines)
+    return (
+        "Things you said on your own recently, outside this conversation (he may "
+        "bring them up; don't repeat them or reuse their opening words):\n" + listed
+    )
+
+
 async def chat(
     message: str,
     config: FeltConfig,
@@ -341,7 +353,15 @@ async def chat(
         return ChatResult(reply=summary)
 
     registry = load_plugins(config.plugins_dir)
-    history = get_history(config.db_path, session_id)
+    # Only the conversation itself (Mario 10-03): with a remark every couple
+    # of minutes at the desk, her own screen chatter used to push the real
+    # back-and-forth out of the 20 lines. Her recent unprompted lines come
+    # in as one note instead, so he can bring them up and she doesn't
+    # repeat them.
+    history = get_history(config.db_path, session_id, exclude_remarks=True)
+    her_lines = get_her_recent_lines(config.db_path, session_id, limit=HER_LINES_N)
+    if her_lines:
+        history = history + [{"role": "system", "content": her_lines_note(her_lines)}]
 
     # WP-02: "what do you think of this?" needs something to refer to.
     # Only when fresh enough to still be "current" - a stale observation

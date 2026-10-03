@@ -470,6 +470,25 @@ def get_history(
     return [{"role": role, "content": content} for role, content in reversed(rows)]
 
 
+def get_her_recent_lines(
+    db_path: str, session_id: str, limit: int = 8, max_age: str = "-6 hours"
+) -> list[dict]:
+    """Her own unprompted lines (remarks, event lines, pushes, mail; not
+    alarms, which are his own labels), newest `limit` within `max_age`,
+    oldest first. Fed back to her so she knows what she already said
+    outside the conversation and stops repeating it (Mario 10-03)."""
+    kinds = ",".join(f"'{k}'" for k in ASIDE_KINDS)
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT content, created_at FROM messages WHERE session_id = ? AND role = 'assistant'"
+        f" AND kind IN ({kinds}) AND created_at >= datetime('now', ?)"
+        " ORDER BY id DESC LIMIT ?",
+        (session_id, max_age, limit),
+    ).fetchall()
+    conn.close()
+    return [{"content": c, "created_at": t} for c, t in reversed(rows)]
+
+
 def save_observation(db_path: str, session_id: str, description: str) -> int:
     conn = _connect(db_path)
     with conn:
