@@ -58,6 +58,24 @@ def test_only_remarks_since_his_last_line_and_the_newest_two_by_default(tmp_path
     assert got["asides"][0]["created_at"].endswith("Z")
 
 
+def test_asides_older_than_six_hours_stop_waiting(tmp_path):
+    import sqlite3
+
+    db = str(tmp_path / "felt.db")
+    _remark(db, "last night")
+    _remark(db, "this morning")
+    conn = sqlite3.connect(db)
+    with conn:
+        conn.execute(
+            "UPDATE messages SET created_at = datetime('now', '-7 hours') WHERE content = ?",
+            ("last night",),
+        )
+    conn.close()
+    got = asides.current_asides(db)
+    assert [a["content"] for a in got["asides"]] == ["this morning"] and got["more"] == 0
+    assert "last night" in [m["content"] for m in _all(db)]  # still stored
+
+
 def test_parse_picks_keeps_valid_distinct_positions():
     assert asides.parse_picks('{"picks": [3, 1]}', 5) == [3, 1]
     assert asides.parse_picks('{"picks": [2, 2, 9, 0]}', 5) == [2]
@@ -87,6 +105,15 @@ async def test_her_pick_is_stored_and_shown(tmp_path, monkeypatch):
     # his next line starts a new batch: the old pick no longer applies
     save_message(config.db_path, "dashboard", "user", "back")
     assert asides.current_asides(config.db_path) == {"asides": [], "more": 0}
+    # and the next pick clears the old one out of the table
+    for line in ["a", "b", "c"]:
+        _remark(config.db_path, line)
+    await asides.pick(config)
+    import sqlite3
+
+    conn = sqlite3.connect(config.db_path)
+    assert conn.execute("SELECT COUNT(*) FROM aside_picks").fetchone()[0] == 1
+    conn.close()
 
 
 async def test_two_or_fewer_need_no_call(tmp_path, monkeypatch):

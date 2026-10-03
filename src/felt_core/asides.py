@@ -15,6 +15,11 @@ comparative call in the background after each new remark, never in the remark
 prompt itself. Two or fewer remarks need no call; a remark arriving mid-pick
 reruns it once at the end instead of stacking calls on a tight box.
 
+Asides older than six hours stop waiting (Mario 10-03: yes to "should old
+asides expire?"), so a morning doesn't open on last night's remarks. Only the
+Talk view expires: the remarks stay in the database for the diary, her
+memory and the Margins page.
+
 When he answers one, the link is kept (`answered_remarks`) so the transcript
 can show her remark above his reply.
 """
@@ -32,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 APP_SESSION = "dashboard"
 SHOWN = 2
+MAX_AGE = "-6 hours"  # SQLite datetime modifier
 # a whole day away can leave hundreds; she compares the newest of them
 PICK_WINDOW = 30
 _LINE_CHARS = 300
@@ -83,12 +89,12 @@ def _last_user_id(conn: sqlite3.Connection, session_id: str) -> int:
 
 
 def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> list[tuple]:
-    """(id, content, created_at) of her remarks after message `after_id`, oldest first."""
+    """(id, content, created_at) of her remarks after message `after_id` and
+    younger than MAX_AGE, oldest first."""
     return conn.execute(
-        "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ? AND "
-        + _IS_REMARK_SQL
-        + " ORDER BY id",
-        (session_id, after_id, session_id, session_id),
+        "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"
+        " AND created_at >= datetime('now', ?) AND " + _IS_REMARK_SQL + " ORDER BY id",
+        (session_id, after_id, MAX_AGE, session_id, session_id),
     ).fetchall()
 
 
@@ -166,7 +172,8 @@ async def pick(config: FeltConfig, session_id: str = APP_SESSION) -> list[int]:
     conn = _connect(config.db_path)
     try:
         with conn:
-            conn.execute("DELETE FROM aside_picks WHERE after_user_id = ?", (after,))
+            # earlier batches are never read again
+            conn.execute("DELETE FROM aside_picks")
             conn.executemany(
                 "INSERT OR REPLACE INTO aside_picks (message_id, after_user_id) VALUES (?, ?)",
                 [(i, after) for i in ids],
