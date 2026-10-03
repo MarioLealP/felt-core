@@ -267,6 +267,7 @@ async def watch(config) -> None:
             promoted = await asyncio.to_thread(promote_due, config.db_path)
             if promoted:
                 logger.info("incidents: %s now open (no RESOLVED in time)", promoted)
+                await asyncio.to_thread(responder.wake, config.db_path)
             missed = await asyncio.to_thread(responder.mark_missed, config.db_path)
             if missed:
                 logger.warning("incidents: Claude didn't get to %s in time", missed)

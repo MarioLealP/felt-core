@@ -15,7 +15,7 @@ import logging
 
 import httpx
 
-from felt_core import incidents
+from felt_core import incidents, responder
 from felt_core.config import FeltConfig
 from felt_core.db import save_ntfy_event
 
@@ -68,6 +68,8 @@ async def listen(config: FeltConfig) -> None:
                                 event.get("message", ""),
                                 ntfy_event_id=event_id,
                             )
+                            # WP-58: if it's Claude's, wake the responder now
+                            responder.wake(config.db_path)
                         except Exception:
                             logger.exception("incident intake failed for %r", event.get("title"))
                         logger.info("ntfy event saved: %s", event.get("message"))

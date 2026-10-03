@@ -71,27 +71,42 @@ def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path
     assert real_incident["state"] == "open" and real_incident["session_id"] == "s2"
 
 
-def test_one_claude_doesnt_get_to_is_missed(tmp_path):
+def test_one_claude_doesnt_get_to_is_missed_sooner_the_more_urgent(tmp_path):
     db = str(tmp_path / "f.db")
-    unclaimed = _in(db, "HONEYPOT: ssh touched")
-    claimed = _in(db, "Trivy: weekly scan")
-    reported = _in(db, "backup full FAILED")
-    assert responder.claim_next(db, _at(1))["id"] == unclaimed  # ty: ignore[not-subscriptable]
-    assert responder.claim_next(db, _at(1))["id"] == reported  # ty: ignore[not-subscriptable]
-    responder.save_report(db, reported, REPORT, "s1")
-    assert responder.mark_missed(db, _at(10)) == []
-    # unclaimed for 15 min -> missed; claimed without a report for 20 -> missed
-    assert responder.mark_missed(db, _at(16)) == [claimed]
-    assert responder.mark_missed(db, _at(22)) == [unclaimed]
-    assert responder.claim_next(db, _at(23)) is None  # missed ones aren't handed later
+    honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent: claim 2, report 8
+    trivy = _in(db, "Trivy: weekly scan")  # default: claim 5
+    backup = _in(db, "backup full FAILED")  # urgent, reported in time
+    assert responder.claim_next(db, _at(1))["id"] == honeypot  # ty: ignore[not-subscriptable]
+    assert responder.claim_next(db, _at(1))["id"] == backup  # ty: ignore[not-subscriptable]
+    responder.save_report(db, backup, REPORT, "s1")
+    assert responder.mark_missed(db, _at(4)) == []
+    assert responder.mark_missed(db, _at(5)) == [trivy]  # never claimed
+    assert responder.mark_missed(db, _at(9)) == [honeypot]  # claimed, no report
+    assert responder.claim_next(db, _at(10)) is None  # missed ones aren't handed later
+
+
+def test_an_urgent_one_nobody_claims_is_missed_after_two_minutes(tmp_path):
+    db = str(tmp_path / "f.db")
+    honeypot = _in(db, "HONEYPOT: ssh touched")
+    assert responder.mark_missed(db, _at(1)) == []
+    assert responder.mark_missed(db, _at(2)) == [honeypot]
 
 
 def test_a_self_fixing_one_counts_from_when_it_opened(tmp_path):
     db = str(tmp_path / "f.db")
-    caddy = _in(db, "clockmost High: Caddy: an upstream is unhealthy")  # waits 10 min
+    caddy = _in(db, "clockmost High: Caddy: an upstream is unhealthy")  # high, waits 10 min
     incidents.promote_due(db, _at(11))
-    assert responder.mark_missed(db, _at(20)) == []
-    assert responder.mark_missed(db, _at(26)) == [caddy]
+    assert responder.mark_missed(db, _at(12)) == []
+    assert responder.mark_missed(db, _at(13)) == [caddy]
+
+
+def test_the_doorbell_rings_only_when_something_waits(tmp_path):
+    db = str(tmp_path / "f.db")
+    bell = tmp_path / responder.WAKE_FILE
+    _in(db, "clockmost: update deployed")  # Felt's, not Claude's
+    assert not responder.wake(db) and not bell.exists()
+    _in(db, "HONEYPOT: ssh touched")
+    assert responder.wake(db) and bell.exists()
 
 
 def test_her_follow_up_comes_after_her_first_line(tmp_path):
