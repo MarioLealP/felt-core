@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from felt_core import diary, local_llm, metrics, reply_stream, tts_cache
+from felt_core import diary, incidents, local_llm, metrics, reply_stream, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.app_api import SESSION as APP_SESSION
 from felt_core.app_api import router as app_router
@@ -110,6 +110,8 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(llm_warmup_loop(config))
     # WP-31: T-30/T-10 min calendar heads-ups through the proactive channel.
     calendar_task = asyncio.create_task(calendar_headsup_loop(config))
+    # WP-44: self-fixing alerts that didn't fix themselves become open
+    incidents_task = asyncio.create_task(incidents.watch(config.db_path))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -135,6 +137,7 @@ async def lifespan(app: FastAPI):
     music_taste_task.cancel()
     warmup_task.cancel()
     calendar_task.cancel()
+    incidents_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)

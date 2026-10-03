@@ -680,14 +680,16 @@ def mark_email_resolved(db_path: str, email_id: int) -> None:
     conn.close()
 
 
-def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> None:
+def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> int:
     conn = _connect(db_path)
     with conn:
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO ntfy_events (title, message, priority) VALUES (?, ?, ?)",
             (title, message, priority),
         )
+        event_id = _require_lastrowid(cursor)
     conn.close()
+    return event_id
 
 
 def get_recent_ntfy_events(db_path: str, limit: int = 10) -> list[dict]:

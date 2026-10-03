@@ -15,6 +15,7 @@ import logging
 
 import httpx
 
+from felt_core import incidents
 from felt_core.config import FeltConfig
 from felt_core.db import save_ntfy_event
 
@@ -52,12 +53,23 @@ async def listen(config: FeltConfig) -> None:
                         event = json.loads(line)
                         if event.get("event") != "message":
                             continue
-                        save_ntfy_event(
+                        event_id = save_ntfy_event(
                             config.db_path,
                             event.get("title"),
                             event.get("message", ""),
                             event.get("priority"),
                         )
+                        # WP-44: she's the first responder - every alert
+                        # becomes (or joins) an incident
+                        try:
+                            incidents.intake(
+                                config.db_path,
+                                event.get("title"),
+                                event.get("message", ""),
+                                ntfy_event_id=event_id,
+                            )
+                        except Exception:
+                            logger.exception("incident intake failed for %r", event.get("title"))
                         logger.info("ntfy event saved: %s", event.get("message"))
         except Exception:
             logger.exception("ntfy listener error, reconnecting in 10s")
