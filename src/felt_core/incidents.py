@@ -68,8 +68,17 @@ def _ts(at: datetime) -> str:
     return at.astimezone(UTC).strftime(_FMT)
 
 
+# added by step 2 (alert_lines.py): her line, when, and her "it's back"
+_LINE_COLUMNS = (("line", "TEXT"), ("line_at", "TEXT"), ("back_line", "TEXT"))
+
+
 def _ensure(conn) -> None:
     conn.executescript(_SCHEMA)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(incidents)")}
+    for name, kind in _LINE_COLUMNS:
+        if name not in have:
+            conn.execute(f"ALTER TABLE incidents ADD COLUMN {name} {kind}")
+    conn.commit()
 
 
 def _first_state(alert_type: AlertType) -> str:
@@ -125,8 +134,10 @@ def _file(conn, parsed: Parsed, title: str, message: str, now: datetime) -> int:
     # a repeat: same alert again within the fold window, whatever its state
     # (a flapping check that resolved and fired again is still one problem)
     row = conn.execute(
+        # an expected run she already told him about is closed: the next
+        # update is news of its own
         "SELECT id, state FROM incidents WHERE key = ? AND state != 'dropped' AND last_at >= ?"
-        " ORDER BY id DESC LIMIT 1",
+        " AND NOT (state = 'noted' AND line IS NOT NULL) ORDER BY id DESC LIMIT 1",
         (parsed.key, _ts(now - timedelta(seconds=alert_type.fold_s))),
     ).fetchone()
     if row:

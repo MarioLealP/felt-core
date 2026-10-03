@@ -106,3 +106,11 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
 
 def test_long_replies_are_clipped():
     assert len(alert_lines._clip(" ".join(["word"] * 80)).split()) == alert_lines.MAX_WORDS
+
+
+def test_after_her_line_the_next_update_is_its_own_news(tmp_path):
+    db = str(tmp_path / "f.db")
+    first = _incident(db, "clockmost: update deployed", "immich", at=_at(0))["id"]
+    assert _incident(db, "clockmost: update deployed", "caddy", at=_at(5))["id"] == first
+    alert_lines.store(db, first, "Updated immich and caddy.", back=False)
+    assert _incident(db, "clockmost: update deployed", "felt-core", at=_at(20))["id"] != first

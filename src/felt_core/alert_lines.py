@@ -22,6 +22,7 @@ from felt_core import local_llm
 from felt_core.alert_types import by_name
 from felt_core.config import FeltConfig
 from felt_core.db import ALERT, APP_SESSION, _connect, save_message
+from felt_core.incidents import _ensure
 
 logger = logging.getLogger(__name__)
 
@@ -156,15 +157,6 @@ async def line_for(config: FeltConfig, incident: dict, *, back: bool = False) ->
 
 # -- which incidents are due a line ------------------------------------------
 
-_COLUMNS = (("line", "TEXT"), ("line_at", "TEXT"), ("back_line", "TEXT"))
-
-
-def _ensure(conn) -> None:
-    have = {r[1] for r in conn.execute("PRAGMA table_info(incidents)")}
-    for name, kind in _COLUMNS:
-        if name not in have:
-            conn.execute(f"ALTER TABLE incidents ADD COLUMN {name} {kind}")
-
 
 def due(db_path: str, now: datetime | None = None) -> list[tuple[int, bool]]:
     """(incident id, is it the "it's back" line) for every incident owed a
@@ -173,11 +165,7 @@ def due(db_path: str, now: datetime | None = None) -> list[tuple[int, bool]]:
     settled = ((now or datetime.now(UTC)) - SETTLE).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
     try:
-        from felt_core.incidents import _ensure as ensure_incidents
-
-        ensure_incidents(conn)
         _ensure(conn)
-        conn.commit()
         rows = conn.execute(
             "SELECT id, 0 FROM incidents WHERE line IS NULL AND (state = 'open'"
             " OR (state = 'noted' AND last_at <= ?))"
