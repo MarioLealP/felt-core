@@ -93,6 +93,26 @@ def _row(r: sqlite3.Row | dict) -> dict:
     }
 
 
+def _her_lines(conn, ids: list[int]) -> dict[int, int]:
+    """incident id -> the id of her newest line about it (what "ask Felt"
+    answers in Talk)."""
+    if not ids:
+        return {}
+    try:
+        rows = conn.execute(
+            "SELECT source_ref, MAX(id) FROM messages WHERE kind = 'alert'"
+            " AND source_ref LIKE 'incident:%' GROUP BY source_ref"
+        ).fetchall()
+    except sqlite3.OperationalError:  # no messages table yet (a fresh database)
+        return {}
+    newest: dict[int, int] = {}
+    for ref, msg_id in rows:
+        incident_id = int(ref.split(":")[1])
+        if incident_id in ids:
+            newest[incident_id] = max(msg_id, newest.get(incident_id, 0))
+    return newest
+
+
 def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
     """The areas (from every live incident) and one page of history,
     newest first. Dropped noise never shows."""
@@ -108,8 +128,11 @@ def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
             "SELECT * FROM incidents WHERE state != 'dropped' AND id < ? ORDER BY id DESC LIMIT ?",
             (before or 2**62, limit),
         ).fetchall()
+        her = _her_lines(conn, [r["id"] for r in rows] + [i["id"] for i in live])
     finally:
         conn.close()
+    for item in live:
+        item["line_message_id"] = her.get(item["id"])
     areas = []
     for name in AREAS:
         mine = [i for i in live if i["area"] == name and i["status"] != "fine"]
@@ -127,7 +150,7 @@ def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
     return {
         "areas": areas,
         "circled": needing[0]["id"] if needing else None,
-        "incidents": [_row(r) for r in rows],
+        "incidents": [{**_row(r), "line_message_id": her.get(r["id"])} for r in rows],
     }
 
 
@@ -144,7 +167,38 @@ def details(db_path: str, incident_id: int) -> dict | None:
     out["handled_at"] = incident.get("handled_at")
     out["handled_by"] = incident.get("handled_by")
     out["links"] = LINKS
+    conn = _connect(db_path)
+    try:
+        out["line_message_id"] = _her_lines(conn, [incident_id]).get(incident_id)
+    finally:
+        conn.close()
     return out
+
+
+def context_for(db_path: str, incident_id: int) -> str:
+    """What she knows about an incident when Mario asks her about it: the
+    alert, its state, and Claude's conclusion if he has one."""
+    incident = get(db_path, incident_id)
+    if incident is None:
+        return ""
+    lines = [
+        f"(That was about a server alert: {incident['title']}",
+        f"first seen {incident['first_at']} UTC, fired {incident['count']} time(s),"
+        f" now {incident['state']}.",
+    ]
+    report = json.loads(incident["report"]) if incident.get("report") else None
+    if report:
+        lines.append(f"Claude looked into it and concluded: {report.get('verdict')}.")
+        lines.append(f"His summary: {report.get('summary', '')[:1200]}")
+        if report.get("for_mario"):
+            lines.append(f"What he said Mario could do: {report['for_mario'][:600]}")
+        if report.get("proposed_fix"):
+            lines.append(f"His proposed fix: {report['proposed_fix'][:600]}")
+    elif incident.get("missed_at"):
+        lines.append("Claude couldn't look at it.")
+    elif incident["handler"] == "claude":
+        lines.append("Claude hasn't reported yet.")
+    return " ".join(lines) + ")"
 
 
 def mark_handled(db_path: str, incident_id: int) -> bool:

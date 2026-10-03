@@ -5,8 +5,9 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from felt_core import incidents, responder, systems
+from felt_core import alert_lines, incidents, responder, systems
 from felt_core.api import app
+from felt_core.asides import remark_text
 
 SSO = {"X-Authentik-Username": "mario"}
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
@@ -92,3 +93,19 @@ def test_routes_need_the_sso_header(tmp_path, monkeypatch):
         assert c.post(f"/v1/app/incidents/{backup}/handled").status_code == 401
         assert c.post(f"/v1/app/incidents/{backup}/handled", headers=SSO).json() == {"ok": True}
         assert c.post(f"/v1/app/incidents/{backup}/handled", headers=SSO).status_code == 409
+
+
+def test_ask_felt_answers_her_alert_line_with_what_claude_found(tmp_path):
+    db = str(tmp_path / "f.db")
+    honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned")
+    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    responder.claim_next(db, T0)
+    responder.save_report(db, honeypot, REPORT, "s1")
+    alert_lines.store(db, honeypot, "Claude wants you to look at it.", "followup")
+    line_id = systems.page(db)["incidents"][0]["line_message_id"]
+    assert line_id is not None
+    text = remark_text(db, line_id)
+    assert text is not None
+    assert text.startswith("Claude wants you to look at it.")
+    assert "HONEYPOT: 192.168.10.201 banned" in text and "needs-mario" in text
+    assert "Someone touched the honeypot." in text

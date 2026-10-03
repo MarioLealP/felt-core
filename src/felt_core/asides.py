@@ -31,7 +31,7 @@ import sqlite3
 
 from felt_core import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import APP_SESSION, ASIDE_KINDS, _connect
+from felt_core.db import ALERT, APP_SESSION, ASIDE_KINDS, _connect
 
 logger = logging.getLogger(__name__)
 
@@ -208,18 +208,35 @@ def schedule_pick(config: FeltConfig, session_id: str) -> None:
     _running[session_id] = asyncio.create_task(_pick_loop(config, session_id))
 
 
+# what Mario can answer from the app: her remarks, and her alert lines
+# ("ask Felt" on the Systems page, WP-42.5)
+_ANSWERABLE = (*ASIDE_KINDS, ALERT)
+
+
 def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> str | None:
-    """The text of one of her remarks in this session, or None if that id
-    isn't one (so a client can't pass off any message as her remark)."""
+    """The text of one of her remarks (or alert lines) in this session, or
+    None if that id isn't one (so a client can't pass off any message as
+    hers). An alert line comes with the incident's facts and Claude's
+    conclusion, so she can answer questions about it."""
     conn = _connect(db_path)
     try:
         row = conn.execute(
-            "SELECT content FROM messages WHERE id = ? AND session_id = ? AND " + _IS_REMARK_SQL,
-            (remark_id, session_id),
+            "SELECT content, kind, source_ref FROM messages WHERE id = ? AND session_id = ?"
+            f" AND kind IN ({', '.join('?' * len(_ANSWERABLE))})",
+            (remark_id, session_id, *_ANSWERABLE),
         ).fetchone()
     finally:
         conn.close()
-    return row[0] if row else None
+    if row is None:
+        return None
+    content, kind, source_ref = row
+    if kind == ALERT and (source_ref or "").startswith("incident:"):
+        from felt_core.systems import context_for
+
+        context = context_for(db_path, int(source_ref.split(":")[1]))
+        if context:
+            return f"{content}\n\n{context}"
+    return content
 
 
 def link_answer(db_path: str, user_message_id: int, remark_id: int) -> None:
