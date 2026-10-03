@@ -14,6 +14,7 @@ States:
   cleared  - resolved before it counted
   noted    - an expected event: told, never acted on (Mario 10-03)
   dropped  - shouldn't be sent at all (WP-41 noise)
+  handled  - Claude looked and it needs nothing from Mario (WP-58)
 
 Fixed rules only. Step 2 adds her line, WP-58 Claude's report, 42.5 the
 Systems page.
@@ -68,14 +69,25 @@ def _ts(at: datetime) -> str:
     return at.astimezone(UTC).strftime(_FMT)
 
 
-# added by step 2 (alert_lines.py): her line, when, and her "it's back"
-_LINE_COLUMNS = (("line", "TEXT"), ("line_at", "TEXT"), ("back_line", "TEXT"))
+_ADDED_COLUMNS = (
+    # step 2 (alert_lines.py): her line, when, and her "it's back"
+    ("line", "TEXT"),
+    ("line_at", "TEXT"),
+    ("back_line", "TEXT"),
+    # WP-58 (responder.py): handed to Claude, his report (JSON) and session,
+    # or the time she gave up waiting; then her follow-up line
+    ("handed_at", "TEXT"),
+    ("report", "TEXT"),
+    ("session_id", "TEXT"),
+    ("missed_at", "TEXT"),
+    ("followup", "TEXT"),
+)
 
 
 def _ensure(conn) -> None:
     conn.executescript(_SCHEMA)
     have = {r[1] for r in conn.execute("PRAGMA table_info(incidents)")}
-    for name, kind in _LINE_COLUMNS:
+    for name, kind in _ADDED_COLUMNS:
         if name not in have:
             conn.execute(f"ALTER TABLE incidents ADD COLUMN {name} {kind}")
     conn.commit()
@@ -243,14 +255,18 @@ PROMOTE_EVERY_S = 60.0
 
 async def watch(config) -> None:
     """Background task: turns pending incidents whose wait ran out into
-    open ones, then writes the lines she owes (alert_lines.py)."""
-    from felt_core import alert_lines
+    open ones, marks the ones Claude didn't get to (responder.py), then
+    writes the lines she owes (alert_lines.py)."""
+    from felt_core import alert_lines, responder
 
     while True:
         try:
             promoted = await asyncio.to_thread(promote_due, config.db_path)
             if promoted:
                 logger.info("incidents: %s now open (no RESOLVED in time)", promoted)
+            missed = await asyncio.to_thread(responder.mark_missed, config.db_path)
+            if missed:
+                logger.warning("incidents: Claude didn't get to %s in time", missed)
             await alert_lines.write_due(config)
         except Exception:
             logger.exception("incidents: round failed")

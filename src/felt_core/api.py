@@ -80,6 +80,7 @@ from felt_core.db import (
 )
 from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
+from felt_core.incident_api import router as incident_router
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
@@ -143,6 +144,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
 app.include_router(app_router)
+app.include_router(incident_router)
 
 # LAN-only right now, no auth on this API yet (same posture as
 # felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
@@ -223,6 +225,14 @@ def _sso_gated(method: str, path: str) -> bool:
     return any(method == m and rx.fullmatch(path) for m, rx in _SSO_GATED)
 
 
+# WP-58: the only routes the responder's own token opens
+_RESPONDER_ROUTES = re.compile(r"/v1/incidents/(handoff|\d+/report)")
+
+
+def _token_ok(given: str, token: str | None) -> bool:
+    return bool(token) and hmac.compare_digest(given.encode(), token.encode())
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """WP-55: with FELT_API_TOKEN set, every other route needs
@@ -237,7 +247,14 @@ async def auth_middleware(request: Request, call_next):
     ):
         return await call_next(request)
     given = request.headers.get("authorization", "")
-    if given.startswith("Bearer ") and hmac.compare_digest(given[7:].encode(), token.encode()):
+    given = given[7:] if given.startswith("Bearer ") else ""
+    if _token_ok(given, token):
+        return await call_next(request)
+    if (
+        request.method == "POST"
+        and _RESPONDER_ROUTES.fullmatch(path)
+        and _token_ok(given, load_config().responder_token)
+    ):
         return await call_next(request)
     # The CORS middleware sits inside this one, so add its header here or the
     # dashboard sees an opaque CORS error instead of the 401.

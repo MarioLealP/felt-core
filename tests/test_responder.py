@@ -1,0 +1,164 @@
+"""WP-58: the handoff to the felt-responder - claim, report, missed - her
+follow-up line, and the responder token that only opens its two routes."""
+
+import json
+from datetime import UTC, datetime, timedelta
+
+from fastapi.testclient import TestClient
+
+from felt_core import alert_lines, incidents, responder
+from felt_core.api import app
+
+T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
+REPORT = {
+    "verdict": "expected",
+    "summary": "The deploy of commit abc123 changed caddy's config.",
+    "for_mario": "",
+}
+
+
+def _at(minutes):
+    return T0 + timedelta(minutes=minutes)
+
+
+def _in(db, title, *, at=T0):
+    incident_id = incidents.intake(db, title, at=at)
+    assert incident_id is not None
+    return incident_id
+
+
+def _get(db, incident_id):
+    incident = incidents.get(db, incident_id)
+    assert incident is not None
+    return incident
+
+
+def test_claims_the_most_urgent_first_and_only_once(tmp_path):
+    db = str(tmp_path / "f.db")
+    trivy = _in(db, "Trivy: 3 new HIGH vulnerabilities")  # default tier
+    _in(db, "clockmost: update deployed")  # expected, Felt's
+    honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent
+    first = responder.claim_next(db, _at(1))
+    assert first is not None and first["id"] == honeypot
+    second = responder.claim_next(db, _at(1))
+    assert second is not None and second["id"] == trivy
+    assert responder.claim_next(db, _at(1)) is None
+
+
+def test_the_daily_cap_holds_until_the_next_day(tmp_path):
+    db = str(tmp_path / "f.db")
+    for n in range(3):
+        _in(db, f"HONEYPOT: probe {n}")
+    assert responder.claim_next(db, _at(1), cap=2) is not None
+    assert responder.claim_next(db, _at(2), cap=2) is not None
+    assert responder.claim_next(db, _at(3), cap=2) is None
+    assert responder.claim_next(db, _at(24 * 60), cap=2) is not None
+
+
+def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path):
+    db = str(tmp_path / "f.db")
+    fine = _in(db, "Trivy: weekly scan")
+    real = _in(db, "HONEYPOT: smb touched")
+    assert not responder.save_report(db, fine, REPORT, "s1")  # never handed over
+    responder.claim_next(db, _at(1))
+    responder.claim_next(db, _at(1))
+    assert responder.save_report(db, fine, REPORT, "s1")
+    assert not responder.save_report(db, fine, REPORT, "s1")  # only once
+    assert responder.save_report(db, real, {**REPORT, "verdict": "needs-mario"}, "s2")
+    assert _get(db, fine)["state"] == "handled"
+    real_incident = _get(db, real)
+    assert real_incident["state"] == "open" and real_incident["session_id"] == "s2"
+
+
+def test_one_claude_doesnt_get_to_is_missed(tmp_path):
+    db = str(tmp_path / "f.db")
+    unclaimed = _in(db, "HONEYPOT: ssh touched")
+    claimed = _in(db, "Trivy: weekly scan")
+    reported = _in(db, "backup full FAILED")
+    assert responder.claim_next(db, _at(1))["id"] == unclaimed  # ty: ignore[not-subscriptable]
+    assert responder.claim_next(db, _at(1))["id"] == reported  # ty: ignore[not-subscriptable]
+    responder.save_report(db, reported, REPORT, "s1")
+    assert responder.mark_missed(db, _at(10)) == []
+    # unclaimed for 15 min -> missed; claimed without a report for 20 -> missed
+    assert responder.mark_missed(db, _at(16)) == [claimed]
+    assert responder.mark_missed(db, _at(22)) == [unclaimed]
+    assert responder.claim_next(db, _at(23)) is None  # missed ones aren't handed later
+
+
+def test_a_self_fixing_one_counts_from_when_it_opened(tmp_path):
+    db = str(tmp_path / "f.db")
+    caddy = _in(db, "clockmost High: Caddy: an upstream is unhealthy")  # waits 10 min
+    incidents.promote_due(db, _at(11))
+    assert responder.mark_missed(db, _at(20)) == []
+    assert responder.mark_missed(db, _at(26)) == [caddy]
+
+
+def test_her_follow_up_comes_after_her_first_line(tmp_path):
+    db = str(tmp_path / "f.db")
+    honeypot = _in(db, "HONEYPOT: ssh touched")
+    responder.claim_next(db, _at(1))
+    responder.save_report(
+        db, honeypot, {**REPORT, "verdict": "needs-mario", "for_mario": "check the NAS"}, "s1"
+    )
+    assert alert_lines.due(db, _at(2)) == [(honeypot, "line")]
+    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    assert alert_lines.due(db, _at(2)) == [(honeypot, "followup")]
+    facts = alert_lines.followup_facts(_get(db, honeypot))
+    assert "it needs Mario" in facts and "check the NAS" in facts and "join Claude" in facts
+    alert_lines.store(db, honeypot, "It was the NAS, have a look.", "followup")
+    assert alert_lines.due(db, _at(3)) == []
+
+
+def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
+    db = str(tmp_path / "f.db")
+    unclaimed = _in(db, "HONEYPOT: ssh touched")
+    alert_lines.store(db, unclaimed, "Honeypot, Claude's on it.")
+    responder.mark_missed(db, _at(16))
+    facts = alert_lines.followup_facts(_get(db, unclaimed))
+    assert "didn't get to it" in facts and "look himself" in facts
+    assert alert_lines.due(db, _at(17)) == [(unclaimed, "followup")]
+
+
+def _client(tmp_path, monkeypatch):
+    monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
+    monkeypatch.setenv("FELT_API_TOKEN", "main")
+    monkeypatch.setenv("FELT_RESPONDER_TOKEN", "resp")
+    return TestClient(app)
+
+
+def test_the_responder_token_opens_its_two_routes_and_nothing_else(tmp_path, monkeypatch):
+    resp = {"Authorization": "Bearer resp"}
+    with _client(tmp_path, monkeypatch) as c:
+        assert c.post("/v1/incidents/handoff").status_code == 401
+        assert c.post("/v1/incidents/handoff", headers=resp).json() == {"incident": None}
+        assert c.get("/v1/history", headers=resp).status_code == 401
+        assert (
+            c.post("/v1/incidents/handoff", headers={"Authorization": "Bearer main"}).status_code
+            == 200
+        )
+
+
+def test_handoff_and_report_over_http(tmp_path, monkeypatch):
+    resp = {"Authorization": "Bearer resp"}
+    with _client(tmp_path, monkeypatch) as c:
+        incident_id = _in(str(tmp_path / "felt.db"), "HONEYPOT: ssh touched", at=datetime.now(UTC))
+        claimed = c.post("/v1/incidents/handoff", headers=resp).json()["incident"]
+        assert (
+            claimed["id"] == incident_id
+            and claimed["alerts"][0]["title"] == "HONEYPOT: ssh touched"
+        )
+        body = {"report": {**REPORT, "verdict": "maybe"}, "session_id": "s1"}
+        assert (
+            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
+            == 422
+        )
+        body["report"]["verdict"] = "expected"
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {
+            "ok": True
+        }
+        assert (
+            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
+            == 409
+        )
+        stored = _get(str(tmp_path / "felt.db"), incident_id)
+        assert json.loads(stored["report"])["summary"].startswith("The deploy")

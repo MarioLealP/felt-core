@@ -39,6 +39,9 @@ class FeltConfig(BaseSettings):
     # the server; the desktop clients send it). Unset = no auth (the old LAN
     # posture) - set it only once every client sends it.
     api_token: str | None = None
+    # WP-58: the felt-responder's own token, accepted only on /v1/incidents/*
+    # (FELT_RESPONDER_TOKEN). Unset = the responder can't get in.
+    responder_token: str | None = None
 
     # WP-54: /v1/voice-chat and /v1/text-chat answer with the first
     # sentence chunk's audio and synthesise the rest in the background

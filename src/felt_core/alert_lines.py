@@ -9,12 +9,15 @@ means, so it can't invent a cause or a task.
 
 When: an incident that counts (open) gets a line; an expected one (noted)
 gets one once its run has settled, so a burst of deploys is one line; one
-that counted and then came back gets a short "it's back" line. Lines are
+that counted and then came back gets a short "it's back" line; one Claude
+looked into (WP-58, responder.py) gets a follow-up with his outcome - or
+with "Claude couldn't look", so nothing is dropped quietly. Lines are
 stored on the incident and in her log as kind ALERT - never in the Margins
 with her chatter (WP-42 2.8). Delivering them (notifications everywhere,
 the Systems page) is 42.5.
 """
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -98,6 +101,24 @@ _INSTRUCTION = (
     "causes, don't invent steps, don't add numbers, names or files that aren't there. "
     "Plain words, no jargon unless it's in the facts. No emojis."
 )
+_FOLLOWUP = (
+    "Earlier you told Mario that Claude was looking into a server alert. Claude has "
+    "reported back. Write ONE short message (max ~35 words), in character, casual, "
+    "telling Mario the outcome in your own words: what it turned out to be, and "
+    "whether there's anything for him to do. Use ONLY the facts below - don't add "
+    "causes, steps, numbers, names or files that aren't there. No emojis."
+)
+_MISSED = (
+    "Earlier you told Mario that Claude was looking into a server alert, but Claude "
+    "couldn't. Write ONE short message (max ~30 words), in character, telling him so "
+    "and that he may want to look himself. Use ONLY the facts below. No emojis."
+)
+_VERDICTS = {
+    "expected": "it was expected - something on our side",
+    "fixed-itself": "it fixed itself",
+    "needs-mario": "it needs Mario",
+    "unknown": "Claude couldn't tell for sure",
+}
 _BACK = (
     "A server problem you told Mario about earlier is fixed now. Write ONE very short "
     "message (max ~15 words), in character, saying it's back to normal. Use ONLY the "
@@ -142,15 +163,43 @@ def facts(incident: dict) -> str:
     return "\n".join(lines)
 
 
+def followup_facts(incident: dict) -> str:
+    """The facts of her follow-up: Claude's outcome, or that he couldn't look."""
+    about, _ = MEANINGS.get(incident["type"], MEANINGS["unknown"])
+    lines = [f"What the alert was about: {about}.", f"The alert: {incident['title']}"]
+    if incident.get("report"):
+        report = json.loads(incident["report"])
+        verdict = _VERDICTS.get(report.get("verdict", ""), _VERDICTS["unknown"])
+        todo = str(report.get("for_mario") or "nothing")
+        lines += [
+            f"What Claude concluded: {verdict}.",
+            f"What Claude found: {str(report.get('summary', ''))[:_MESSAGE_CHARS]}",
+            f"Anything for Mario to do: {todo[:_MESSAGE_CHARS]}.",
+        ]
+        if report.get("verdict") in ("needs-mario", "unknown"):
+            lines.append("He can join Claude's investigation to go through it together.")
+    elif incident.get("handed_at"):
+        lines.append("Claude started looking but didn't finish in time.")
+    else:
+        lines.append("Claude didn't get to it (he's offline or today's limit is used up).")
+    if not incident.get("report"):
+        lines.append("Anything for Mario to do: have a look himself, or ask Claude directly.")
+    return "\n".join(lines)
+
+
 def _clip(text: str) -> str:
     words = text.strip(" \n\"'").split()
     return " ".join(words[:MAX_WORDS])
 
 
-async def line_for(config: FeltConfig, incident: dict, *, back: bool = False) -> str:
+async def line_for(config: FeltConfig, incident: dict, kind: str = "line") -> str:
     from felt_core.brain.replies import local_reply
 
-    prompt = f"{_BACK if back else _INSTRUCTION}\n\nFacts:\n{facts(incident)}"
+    if kind == "followup":
+        instruction = _FOLLOWUP if incident.get("report") else _MISSED
+        prompt = f"{instruction}\n\nFacts:\n{followup_facts(incident)}"
+    else:
+        prompt = f"{_BACK if kind == 'back' else _INSTRUCTION}\n\nFacts:\n{facts(incident)}"
     reply = await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)
     return _clip(reply)
 
@@ -158,32 +207,39 @@ async def line_for(config: FeltConfig, incident: dict, *, back: bool = False) ->
 # -- which incidents are due a line ------------------------------------------
 
 
-def due(db_path: str, now: datetime | None = None) -> list[tuple[int, bool]]:
-    """(incident id, is it the "it's back" line) for every incident owed a
-    line: open ones, settled expected runs, and ones that counted, got a line
-    and have since resolved."""
+def due(db_path: str, now: datetime | None = None) -> list[tuple[int, str]]:
+    """(incident id, which line) for every incident owed one: "line" for open
+    ones and settled expected runs, "back" for ones that counted, got a line
+    and have since resolved, "followup" once Claude reported or was missed
+    (always after her first line)."""
     settled = ((now or datetime.now(UTC)) - SETTLE).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
     try:
         _ensure(conn)
         rows = conn.execute(
-            "SELECT id, 0 FROM incidents WHERE line IS NULL AND (state = 'open'"
+            "SELECT id, 'line' FROM incidents WHERE line IS NULL AND (state = 'open'"
             " OR (state = 'noted' AND last_at <= ?))"
-            " UNION ALL SELECT id, 1 FROM incidents WHERE state = 'resolved'"
-            " AND line IS NOT NULL AND back_line IS NULL ORDER BY 1",
+            " UNION ALL SELECT id, 'back' FROM incidents WHERE state = 'resolved'"
+            " AND line IS NOT NULL AND back_line IS NULL"
+            " UNION ALL SELECT id, 'followup' FROM incidents WHERE line IS NOT NULL"
+            " AND followup IS NULL AND (report IS NOT NULL OR missed_at IS NOT NULL)"
+            " ORDER BY 1",
             (settled,),
         ).fetchall()
     finally:
         conn.close()
-    return [(i, bool(back)) for i, back in rows]
+    return [(i, kind) for i, kind in rows]
 
 
-def store(db_path: str, incident_id: int, text: str, *, back: bool) -> None:
+_COLUMNS = {"line": "line", "back": "back_line", "followup": "followup"}
+
+
+def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None:
     conn = _connect(db_path)
     try:
         _ensure(conn)
         with conn:
-            column = "back_line" if back else "line"
+            column = _COLUMNS[kind]
             conn.execute(
                 f"UPDATE incidents SET {column} = ?, line_at = datetime('now') WHERE id = ?",
                 (text, incident_id),
@@ -196,7 +252,7 @@ def store(db_path: str, incident_id: int, text: str, *, back: bool) -> None:
         "assistant",
         text,
         kind=ALERT,
-        source_ref=f"incident:{incident_id}{':back' if back else ''}",
+        source_ref=f"incident:{incident_id}{'' if kind == 'line' else ':' + kind}",
     )
 
 
@@ -206,18 +262,18 @@ async def write_due(config: FeltConfig) -> int:
     from felt_core.incidents import get
 
     written = 0
-    for incident_id, back in due(config.db_path):
+    for incident_id, kind in due(config.db_path):
         incident = get(config.db_path, incident_id)
         if incident is None:
             continue
         try:
-            text = await line_for(config, incident, back=back)
+            text = await line_for(config, incident, kind)
         except local_llm.LocalLLMUnavailable:
             logger.info("alert lines: felt-llm unavailable, retrying next round")
             break
         if not text:
             continue
-        store(config.db_path, incident_id, text, back=back)
+        store(config.db_path, incident_id, text, kind)
         logger.info("alert line for incident %d (%s): %r", incident_id, incident["type"], text)
         written += 1
     return written

@@ -51,21 +51,21 @@ def test_which_incidents_are_owed_a_line(tmp_path):
     update = _incident(db, "clockmost: update deployed", at=_at(0))["id"]
     _incident(db, 'clockmost Average: Windows: "AppXSvc" is not running', at=_at(0))  # dropped
     # pending caddy isn't owed one; the update run hasn't settled yet
-    assert alert_lines.due(db, _at(5)) == [(backup, False)]
-    assert alert_lines.due(db, _at(15)) == [(backup, False), (update, False)]
+    assert alert_lines.due(db, _at(5)) == [(backup, "line")]
+    assert alert_lines.due(db, _at(15)) == [(backup, "line"), (update, "line")]
     incidents.promote_due(db, _at(11))
-    assert (caddy, False) in alert_lines.due(db, _at(15))
-    alert_lines.store(db, caddy, "Caddy's sulking.", back=False)
+    assert (caddy, "line") in alert_lines.due(db, _at(15))
+    alert_lines.store(db, caddy, "Caddy's sulking.")
     incidents.intake(db, "clockmost RESOLVED: Caddy: an upstream is unhealthy", at=_at(30))
-    assert (caddy, True) in alert_lines.due(db, _at(31))
-    alert_lines.store(db, caddy, "Caddy's back.", back=True)
+    assert (caddy, "back") in alert_lines.due(db, _at(31))
+    alert_lines.store(db, caddy, "Caddy's back.", "back")
     assert all(i != caddy for i, _ in alert_lines.due(db, _at(32)))
 
 
 def test_lines_go_to_her_log_as_alerts_not_the_margins(tmp_path):
     db = str(tmp_path / "f.db")
     backup = _incident(db, "backup full FAILED", at=_at(0))["id"]
-    alert_lines.store(db, backup, "Backup failed, Claude's on it.", back=False)
+    alert_lines.store(db, backup, "Backup failed, Claude's on it.")
     conn = _connect(db)
     rows = conn.execute("SELECT kind, source_ref, content FROM messages").fetchall()
     conn.close()
@@ -85,7 +85,7 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
 
     said = []
 
-    async def fake_line(config, incident, back=False):
+    async def fake_line(config, incident, kind="line"):
         said.append(incident["type"])
         return f"line about {incident['type']}"
 
@@ -96,7 +96,7 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
 
     from felt_core import local_llm
 
-    async def down(config, incident, back=False):
+    async def down(config, incident, kind="line"):
         raise local_llm.LocalLLMUnavailable("down")
 
     _incident(db, "HONEYPOT: x", at=datetime.now(UTC))
@@ -112,5 +112,5 @@ def test_after_her_line_the_next_update_is_its_own_news(tmp_path):
     db = str(tmp_path / "f.db")
     first = _incident(db, "clockmost: update deployed", "immich", at=_at(0))["id"]
     assert _incident(db, "clockmost: update deployed", "caddy", at=_at(5))["id"] == first
-    alert_lines.store(db, first, "Updated immich and caddy.", back=False)
+    alert_lines.store(db, first, "Updated immich and caddy.")
     assert _incident(db, "clockmost: update deployed", "felt-core", at=_at(20))["id"] != first
