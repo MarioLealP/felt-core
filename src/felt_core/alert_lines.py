@@ -181,7 +181,7 @@ def followup_facts(incident: dict) -> str:
     elif incident.get("handed_at"):
         lines.append("Claude started looking but didn't finish in time.")
     else:
-        lines.append("Claude didn't get to it (he's offline or today's limit is used up).")
+        lines.append("Claude didn't get to it (he's offline or his usage limit is reached).")
     if not incident.get("report"):
         lines.append("Anything for Mario to do: have a look himself, or ask Claude directly.")
     return "\n".join(lines)

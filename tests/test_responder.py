@@ -38,6 +38,7 @@ def test_claims_the_most_urgent_first_and_only_once(tmp_path):
     trivy = _in(db, "Trivy: 3 new HIGH vulnerabilities")  # default tier
     _in(db, "clockmost: update deployed")  # expected, Felt's
     honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent
+    assert responder.waiting(db) == 2
     first = responder.claim_next(db, _at(1))
     assert first is not None and first["id"] == honeypot
     second = responder.claim_next(db, _at(1))
@@ -130,6 +131,8 @@ def test_the_responder_token_opens_its_two_routes_and_nothing_else(tmp_path, mon
     resp = {"Authorization": "Bearer resp"}
     with _client(tmp_path, monkeypatch) as c:
         assert c.post("/v1/incidents/handoff").status_code == 401
+        assert c.get("/v1/incidents/waiting", headers=resp).json() == {"waiting": 0}
+        assert c.post("/v1/incidents/waiting", headers=resp).status_code == 401
         assert c.post("/v1/incidents/handoff", headers=resp).json() == {"incident": None}
         assert c.get("/v1/history", headers=resp).status_code == 401
         assert (

@@ -15,8 +15,10 @@ from datetime import UTC, datetime, timedelta
 from felt_core.db import _connect
 from felt_core.incidents import _ensure, _ts, get
 
-# investigations per UTC day, so a noisy night can't burn the subscription
-DAILY_CAP = 20
+# investigations per UTC day: only a safety net against a runaway loop. The
+# real limit is the runner's: it skips when Claude's usage is past 70% of the
+# 5-hour window or 85% of the week (Mario 10-03: "both numbers look good")
+DAILY_CAP = 50
 # an incident nobody claimed this long after it opened is missed
 CLAIM_WITHIN = timedelta(minutes=15)
 # a claimed one with no report this long after is missed (the run caps at 10)
@@ -29,6 +31,17 @@ _DONE = ("expected", "fixed-itself")
 # Claude's turn: open, his to handle, not yet claimed or given up on
 _WAITING = "handler = 'claude' AND state = 'open' AND handed_at IS NULL AND missed_at IS NULL"
 _TIERS = "CASE tier WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'default' THEN 2 ELSE 3 END"
+
+
+def waiting(db_path: str) -> int:
+    """How many incidents are waiting for Claude - so the runner only checks
+    the usage limits when there's work."""
+    conn = _connect(db_path)
+    try:
+        _ensure(conn)
+        return conn.execute(f"SELECT COUNT(*) FROM incidents WHERE {_WAITING}").fetchone()[0]
+    finally:
+        conn.close()
 
 
 def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:

@@ -226,7 +226,10 @@ def _sso_gated(method: str, path: str) -> bool:
 
 
 # WP-58: the only routes the responder's own token opens
-_RESPONDER_ROUTES = re.compile(r"/v1/incidents/(handoff|\d+/report)")
+_RESPONDER_ROUTES = (
+    ("GET", re.compile(r"/v1/incidents/waiting")),
+    ("POST", re.compile(r"/v1/incidents/(handoff|\d+/report)")),
+)
 
 
 def _token_ok(given: str, token: str | None) -> bool:
@@ -250,10 +253,8 @@ async def auth_middleware(request: Request, call_next):
     given = given[7:] if given.startswith("Bearer ") else ""
     if _token_ok(given, token):
         return await call_next(request)
-    if (
-        request.method == "POST"
-        and _RESPONDER_ROUTES.fullmatch(path)
-        and _token_ok(given, load_config().responder_token)
+    if any(request.method == m and rx.fullmatch(path) for m, rx in _RESPONDER_ROUTES) and _token_ok(
+        given, load_config().responder_token
     ):
         return await call_next(request)
     # The CORS middleware sits inside this one, so add its header here or the

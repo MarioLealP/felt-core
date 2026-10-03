@@ -2,8 +2,8 @@
 
 The responder (a headless Claude in a sandbox on the server) authenticates
 with its own token, FELT_RESPONDER_TOKEN, which api.py accepts on these
-routes only - so a leaked responder token can claim and report incidents,
-nothing else. The main API token works here too.
+routes only - so a leaked responder token can see whether incidents wait,
+claim and report them, nothing else. The main API token works here too.
 """
 
 import asyncio
@@ -16,6 +16,12 @@ from felt_core import responder
 from felt_core.config import load_config
 
 router = APIRouter(prefix="/v1/incidents")
+
+
+@router.get("/waiting")
+async def waiting() -> dict:
+    """How many incidents wait for Claude, without claiming any."""
+    return {"waiting": await asyncio.to_thread(responder.waiting, load_config().db_path)}
 
 
 @router.post("/handoff")
