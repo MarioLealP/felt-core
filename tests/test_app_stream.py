@@ -47,6 +47,30 @@ async def test_new_lines_picks_and_marks_become_notices(tmp_path):
     assert _parse(await anext(stream)) == ("marks", {})
 
 
+async def test_list_and_incident_changes_become_notices(tmp_path):
+    from felt_core import incidents, systems
+    from felt_core.db import add_shopping_item, set_shopping_item_checked
+
+    db = str(tmp_path / "felt.db")
+    save_message(db, "dashboard", "user", "hi")
+    item = add_shopping_item(db, "milk")
+    backup = incidents.intake(db, "backup full FAILED")
+    assert backup is not None
+    rounds = 0
+
+    async def gone() -> bool:
+        return rounds >= 4
+
+    stream = notices(db, "dashboard", gone, poll_s=0, keepalive_s=10)
+    assert _parse(await anext(stream))[0] == "hello"
+    set_shopping_item_checked(db, item, True)  # she crossed it off by voice
+    rounds += 1
+    assert _parse(await anext(stream)) == ("lists", {})
+    systems.mark_handled(db, backup)
+    rounds += 1
+    assert _parse(await anext(stream)) == ("systems", {})
+
+
 async def test_a_quiet_stream_sends_keepalives_and_ends_when_the_client_goes(tmp_path):
     db = str(tmp_path / "felt.db")
     calls = 0
