@@ -6,6 +6,7 @@ same way get_history(exclude_remarks=True) does. Unlike get_history it returns
 ids and times and pages backwards, for a long-running scroll.
 """
 
+from felt_core.asides import answered
 from felt_core.db import _REMARK_EXCLUSION_SQL, _connect
 from felt_core.marks import marks_for
 
@@ -16,8 +17,9 @@ def history_page(
     db_path: str, session_id: str, *, before_id: int | None = None, limit: int = 50
 ) -> list[dict]:
     """Up to `limit` messages older than `before_id` (newest page when None),
-    oldest first. Each row: id, role, content, created_at (UTC, ISO-8601) and
-    marks (her marks on that message, see marks.py)."""
+    oldest first. Each row: id, role, content, created_at (UTC, ISO-8601),
+    marks (her marks on that message, see marks.py) and answering (the aside
+    of hers his line answers, see asides.py, else None)."""
     limit = max(1, min(limit, MAX_PAGE))
     before = "AND id < ? " if before_id is not None else ""
     params: tuple = (session_id,)
@@ -37,6 +39,7 @@ def history_page(
     finally:
         conn.close()
     marks = marks_for(db_path, [r[0] for r in rows])
+    answers = answered(db_path, [r[0] for r in rows if r[1] == "user"])
     return [
         {
             "id": i,
@@ -44,6 +47,7 @@ def history_page(
             "content": content,
             "created_at": created.replace(" ", "T") + "Z",
             "marks": marks.get(i, []),
+            "answering": answers.get(i),
         }
         for i, role, content, created in reversed(rows)
     ]

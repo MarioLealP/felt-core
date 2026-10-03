@@ -24,6 +24,7 @@ import logging
 import re
 
 from felt_core import local_llm, metrics
+from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
 from felt_core.brain.personality import personality_prompt
 from felt_core.brain.replies import local_reply
@@ -162,6 +163,7 @@ async def process_screen_context(
 
     set_observation_reply(config.db_path, obs_id, reply_raw)
     save_message(config.db_path, session_id, "assistant", reply_raw)
+    schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=reply_raw, animation_tag=None)
 
 
@@ -314,4 +316,5 @@ async def react_to_screen(
 
     set_observation_reply(config.db_path, obs_id, line)
     save_message(config.db_path, session_id, "assistant", line)
+    schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=line, animation_tag=None, emotion=emotion)

@@ -45,7 +45,7 @@ def test_history_pages_backwards_with_ids_and_times(tmp_path, monkeypatch):
 
 
 def test_chat_returns_the_stored_pair(tmp_path, monkeypatch):
-    async def fake_chat(text, config, session_id):
+    async def fake_chat(text, config, session_id, **kw):
         save_message(config.db_path, session_id, "user", text)
         save_message(config.db_path, session_id, "assistant", "Done. On the list.")
 

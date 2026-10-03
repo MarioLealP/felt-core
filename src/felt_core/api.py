@@ -205,6 +205,7 @@ _SSO_GATED = (
     # without Caddy's X-Authentik-Username header.
     ("GET", re.compile(r"/v1/app/me")),
     ("GET", re.compile(r"/v1/app/history")),
+    ("GET", re.compile(r"/v1/app/asides")),
     ("POST", re.compile(r"/v1/app/chat")),
 )
 

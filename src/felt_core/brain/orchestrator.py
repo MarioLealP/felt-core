@@ -326,7 +326,11 @@ async def _summarize_pending_email(config: FeltConfig, session_id: str, message:
 
 
 async def chat(
-    message: str, config: FeltConfig, session_id: str = "default", tone: str | None = None
+    message: str,
+    config: FeltConfig,
+    session_id: str = "default",
+    tone: str | None = None,
+    answering: str | None = None,
 ) -> ChatResult:
     # Checked before anything else, including history/facts loading — a
     # bare "yes" answering the proactive "want me to summarize it?" ping
@@ -346,6 +350,16 @@ async def chat(
     if current_screen:
         history = history + [
             {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}
+        ]
+
+    # WP-42.2: he tapped one of her asides in the app to answer it; without
+    # this, a reply like "a bit, yeah" lands with nothing to refer to.
+    if answering:
+        history = history + [
+            {
+                "role": "system",
+                "content": f'Mario is answering this remark you made earlier: "{answering}"',
+            }
         ]
 
     save_message(config.db_path, session_id, "user", message)

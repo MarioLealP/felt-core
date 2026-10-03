@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from felt_core.app_history import history_page
+from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
 from felt_core.config import load_config
 from felt_core.marks import maybe_mark
@@ -49,12 +50,25 @@ class MarkOut(BaseModel):
     note: str = ""
 
 
+class Remark(BaseModel):
+    id: int
+    content: str
+    created_at: str
+
+
 class Message(BaseModel):
     id: int
     role: str
     content: str
     created_at: str
     marks: list[MarkOut] = []
+    # his line answering one of her asides: her remark, shown above it
+    answering: Remark | None = None
+
+
+class Asides(BaseModel):
+    asides: list[Remark]
+    more: int
 
 
 class Me(BaseModel):
@@ -63,6 +77,8 @@ class Me(BaseModel):
 
 class SayRequest(BaseModel):
     message: str
+    # id of the aside he tapped to answer (GET /asides)
+    answering: int | None = None
 
 
 class SayResponse(BaseModel):
@@ -83,13 +99,28 @@ async def history(
     return history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
+@router.get("/asides", response_model=Asides)
+async def asides(_user: str = Depends(sso_user)) -> dict:
+    return current_asides(load_config().db_path, SESSION)
+
+
 @router.post("/chat", response_model=SayResponse)
 async def say(req: SayRequest, _user: str = Depends(sso_user)) -> SayResponse:
     text = req.message.strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty message")
     config = load_config()
-    await chat(text, config, SESSION)
-    schedule_mark(config)
+    remark = None
+    if req.answering is not None:
+        remark = remark_text(config.db_path, req.answering, SESSION)
+        if remark is None:
+            raise HTTPException(status_code=422, detail="not one of her remarks")
+    await chat(text, config, SESSION, answering=remark)
     rows = history_page(config.db_path, SESSION, limit=2)
+    if req.answering is not None:
+        mine = [r["id"] for r in rows if r["role"] == "user"]
+        if mine:
+            link_answer(config.db_path, mine[-1], req.answering)
+            rows = history_page(config.db_path, SESSION, limit=2)
+    schedule_mark(config)
     return SayResponse(messages=[Message(**r) for r in rows])
