@@ -141,3 +141,23 @@ async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
 
     monkeypatch.setattr(marks.local_llm, "chat", down)
     assert await marks.maybe_mark(config, "dashboard") is None
+
+
+def test_ink_is_seen_once_across_devices(tmp_path):
+    from felt_core.db import _connect
+
+    db = str(tmp_path / "felt.db")
+    msg = save_message(db, "dashboard", "user", "add oat milk and bin bags")
+    conn = _connect(db)
+    marks._ensure(conn)
+    with conn:
+        conn.execute(
+            "INSERT INTO message_marks (id, message_id, type, quote)"
+            " VALUES ('mk1', ?, 'circle', 'bin')",
+            (msg,),
+        )
+    conn.close()
+    assert history_page(db, "dashboard")[0]["marks"][0]["seen"] is False
+    assert marks.mark_seen(db, ["mk1", "nope"]) == 1
+    assert marks.mark_seen(db, ["mk1"]) == 0  # already seen
+    assert history_page(db, "dashboard")[0]["marks"][0]["seen"] is True

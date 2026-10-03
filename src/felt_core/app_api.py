@@ -25,7 +25,7 @@ from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
 from felt_core.config import load_config
 from felt_core.db import APP_SESSION
-from felt_core.marks import maybe_mark
+from felt_core.marks import mark_seen, maybe_mark
 
 SESSION = APP_SESSION
 
@@ -53,6 +53,8 @@ class MarkOut(BaseModel):
     type: str
     quote: str
     note: str = ""
+    # drawn on some screen already: show it inked, don't animate
+    seen: bool = False
 
 
 class Remark(BaseModel):
@@ -150,6 +152,15 @@ async def margins_mark(req: MarkRequest, _user: str = Depends(sso_user)) -> Mark
         load_config().db_path, req.ids, req.action, hours=req.hours, session_id=SESSION
     )
     return MarkResult(changed=changed)
+
+
+class SeenRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=200)
+
+
+@router.post("/marks/seen", response_model=MarkResult)
+async def marks_seen(req: SeenRequest, _user: str = Depends(sso_user)) -> MarkResult:
+    return MarkResult(changed=mark_seen(load_config().db_path, req.ids))
 
 
 @router.get("/stream")

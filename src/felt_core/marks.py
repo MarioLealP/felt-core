@@ -85,6 +85,15 @@ def _ensure(conn: sqlite3.Connection) -> None:
         " created_at TEXT NOT NULL DEFAULT (datetime('now')))"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS message_marks_msg ON message_marks (message_id)")
+    # WP-42.3: ink plays once across devices (Mario: "Ink should only hit
+    # once"), so "seen" lives here, not in one browser's storage
+    have = {row[1] for row in conn.execute("PRAGMA table_info(message_marks)")}
+    if "seen_at" not in have:
+        try:
+            conn.execute("ALTER TABLE message_marks ADD COLUMN seen_at TEXT")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column" not in str(exc):
+                raise
 
 
 def marks_for(db_path: str, message_ids: list[int]) -> dict[int, list[dict]]:
@@ -96,16 +105,37 @@ def marks_for(db_path: str, message_ids: list[int]) -> dict[int, list[dict]]:
         _ensure(conn)
         q = ",".join("?" * len(message_ids))
         rows = conn.execute(
-            "SELECT id, message_id, type, quote, note FROM message_marks"
+            "SELECT id, message_id, type, quote, note, seen_at FROM message_marks"
             f" WHERE message_id IN ({q})",
             message_ids,
         ).fetchall()
     finally:
         conn.close()
     out: dict[int, list[dict]] = {}
-    for mid, msg, kind, quote, note in rows:
-        out.setdefault(msg, []).append({"id": mid, "type": kind, "quote": quote, "note": note})
+    for mid, msg, kind, quote, note, seen_at in rows:
+        out.setdefault(msg, []).append(
+            {"id": mid, "type": kind, "quote": quote, "note": note, "seen": seen_at is not None}
+        )
     return out
+
+
+def mark_seen(db_path: str, mark_ids: list[str]) -> int:
+    """Her ink has been drawn on some screen: never animate these again."""
+    if not mark_ids:
+        return 0
+    conn = _connect(db_path)
+    try:
+        _ensure(conn)
+        q = ",".join("?" * len(mark_ids))
+        with conn:
+            cursor = conn.execute(
+                "UPDATE message_marks SET seen_at = datetime('now')"
+                f" WHERE seen_at IS NULL AND id IN ({q})",
+                mark_ids,
+            )
+    finally:
+        conn.close()
+    return cursor.rowcount
 
 
 def _since_last(conn: sqlite3.Connection, session_id: str) -> int | None:
