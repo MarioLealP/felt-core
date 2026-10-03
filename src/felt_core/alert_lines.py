@@ -194,6 +194,26 @@ def followup_facts(incident: dict) -> str:
     return "\n".join(lines)
 
 
+def plain_line(incident: dict, kind: str) -> str:
+    """Her line without her model, when felt-llm is down: the same fixed
+    facts, plainly put. Only for the levels that pop, so a felt-llm outage
+    never silences an urgent alert (WP-42.5)."""
+    about, todo = MEANINGS.get(incident["type"], MEANINGS["unknown"])
+    report = json.loads(incident["report"]) if incident.get("report") else None
+    if kind in ("followup", "both") and report:
+        verdict = _VERDICTS.get(report.get("verdict", ""), _VERDICTS["unknown"])
+        text = f"{about.capitalize()}. Claude: {verdict}. {str(report.get('summary', ''))[:220]}"
+    elif kind in ("followup", "both"):
+        text = f"{about.capitalize()}. Claude couldn't look at it - you may want to check."
+    elif kind == "back":
+        text = f"Back to normal: {about}."
+    else:
+        alert_type = by_name(incident["type"])
+        whose = "Claude is looking into it" if alert_type.handler == "claude" else "I'm watching it"
+        text = f"{about.capitalize()}. {todo.capitalize() + '. ' if todo else ''}{whose}."
+    return _clip(text)
+
+
 def _clip(text: str) -> str:
     words = text.strip(" \n\"'").split()
     return " ".join(words[:MAX_WORDS])
@@ -284,8 +304,12 @@ async def write_due(config: FeltConfig) -> int:
         try:
             text = await line_for(config, incident, kind)
         except local_llm.LocalLLMUnavailable:
-            logger.info("alert lines: felt-llm unavailable, retrying next round")
-            break
+            if incident["tier"] not in ("urgent", "high"):
+                logger.info("alert lines: felt-llm unavailable, retrying next round")
+                continue
+            # one that pops can't wait for her model to come back
+            text = plain_line(incident, kind)
+            logger.warning("alert lines: felt-llm unavailable, plain line for %d", incident_id)
         if not text:
             continue
         store(config.db_path, incident_id, text, kind)

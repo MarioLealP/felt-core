@@ -99,9 +99,15 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
     async def down(config, incident, kind="line"):
         raise local_llm.LocalLLMUnavailable("down")
 
-    _incident(db, "HONEYPOT: x", at=datetime.now(UTC))
+    _incident(db, "Trivy weekly: 1 critical", at=datetime.now(UTC))  # default level
     monkeypatch.setattr(alert_lines, "line_for", down)
     assert asyncio.run(alert_lines.write_due(Config())) == 0  # ty: ignore[invalid-argument-type]
+    # one that pops can't wait for her model: a plain line, same facts
+    honeypot = _incident(db, "HONEYPOT: x", at=datetime.now(UTC))
+    assert asyncio.run(alert_lines.write_due(Config())) == 1  # ty: ignore[invalid-argument-type]
+    line = incidents.get(db, honeypot["id"])["line"]  # ty: ignore[not-subscriptable]
+    assert line.startswith("Something on the network touched the honeypot trap")
+    assert "Claude is looking into it" in line
 
 
 def test_long_replies_are_clipped():

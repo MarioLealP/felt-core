@@ -82,6 +82,7 @@ from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
 from felt_core.incident_api import router as incident_router
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
+from felt_core.notices_api import router as notices_router
 from felt_core.ntfy_listener import listen as ntfy_listen
 from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 from felt_core.proactive import clamp_timeout, enqueue_proactive, proactive_audio, wait_for_next
@@ -147,6 +148,7 @@ app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
 app.include_router(app_router)
 app.include_router(incident_router)
 app.include_router(systems_router)
+app.include_router(notices_router)
 
 # LAN-only right now, no auth on this API yet (same posture as
 # felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
