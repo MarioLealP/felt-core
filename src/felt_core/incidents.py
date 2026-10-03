@@ -14,7 +14,8 @@ States:
   cleared  - resolved before it counted
   noted    - an expected event: told, never acted on (Mario 10-03)
   dropped  - shouldn't be sent at all (WP-41 noise)
-  handled  - Claude looked and it needs nothing from Mario (WP-58)
+  handled  - Claude looked and it needs nothing from Mario (WP-58), or
+             Mario marked it handled in the app (WP-42.5)
 
 Fixed rules only. Step 2 adds her line, WP-58 Claude's report, 42.5 the
 Systems page.
@@ -81,6 +82,8 @@ _ADDED_COLUMNS = (
     ("session_id", "TEXT"),
     ("missed_at", "TEXT"),
     ("followup", "TEXT"),
+    # WP-42.5 (systems.py): who closed it ("mario" from the app)
+    ("handled_by", "TEXT"),
 )
 
 

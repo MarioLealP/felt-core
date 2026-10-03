@@ -40,6 +40,8 @@ class Report(BaseModel):
     proposed_fix: str = Field(default="", max_length=4000)
     confidence: Literal["high", "medium", "low"] = "low"
     couldnt_check: list[str] = Field(default_factory=list, max_length=50)
+    # WP-42.5: his investigation, step by step, for the incident details
+    trail: list[dict] = Field(default_factory=list, max_length=200)
 
 
 class ReportIn(BaseModel):

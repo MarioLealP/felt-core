@@ -87,6 +87,7 @@ from felt_core.poe_trade_cache import watch as poe_trade_cache_watch
 from felt_core.proactive import clamp_timeout, enqueue_proactive, proactive_audio, wait_for_next
 from felt_core.speech import speech_chunks, strip_for_tts, tts_request_body
 from felt_core.spotify_client import format_track_name, get_currently_playing
+from felt_core.systems_api import router as systems_router
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
 app.include_router(app_router)
 app.include_router(incident_router)
+app.include_router(systems_router)
 
 # LAN-only right now, no auth on this API yet (same posture as
 # felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
@@ -218,6 +220,10 @@ _SSO_GATED = (
     ("GET", re.compile(r"/v1/app/stream")),
     ("POST", re.compile(r"/v1/app/marks/seen")),
     ("POST", re.compile(r"/v1/app/chat")),
+    # WP-42.5: the Systems page (systems_api.py)
+    ("GET", re.compile(r"/v1/app/systems")),
+    ("GET", re.compile(r"/v1/app/incidents/\d+")),
+    ("POST", re.compile(r"/v1/app/incidents/\d+/handled")),
 )
 
 
