@@ -217,3 +217,33 @@ def test_one_mario_closed_himself_gets_no_line(tmp_path):
     responder.save_report(db, honeypot, {**REPORT, "verdict": "needs-mario"}, "s1")
     systems.mark_handled(db, honeypot)
     assert alert_lines.due(db, _at(1)) == []
+
+
+def test_the_kill_switch_stops_handing_over_and_she_says_why(tmp_path):
+    from felt_core import controls
+
+    db = str(tmp_path / "f.db")
+    honeypot = _in(db, "HONEYPOT: ssh touched")
+    controls.set_claude_alerts(db, False)
+    assert responder.waiting(db) == 0
+    assert responder.claim_next(db, _at(0)) is None
+    assert responder.mark_missed(db, _at(0)) == [honeypot]  # at once, not after the wait
+    incident = _get(db, honeypot)
+    assert incident["missed_why"] == "off"
+    assert "switched off" in alert_lines.followup_facts(incident)
+    controls.set_claude_alerts(db, True)
+    late = _in(db, "Trivy weekly: 1 critical")
+    assert responder.waiting(db) == 1
+    assert responder.mark_missed(db, _at(6)) == [late]
+    assert _get(db, late)["missed_why"] == "late"
+
+
+def test_the_switch_from_the_app(tmp_path, monkeypatch):
+    monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
+    monkeypatch.setenv("FELT_API_TOKEN", "main")
+    sso = {"X-Authentik-Username": "mario"}
+    with TestClient(app) as c:
+        assert c.get("/v1/app/settings").status_code == 401
+        assert c.get("/v1/app/settings", headers=sso).json() == {"claude_alerts": True}
+        off = c.post("/v1/app/settings", headers=sso, json={"claude_alerts": False})
+        assert off.json() == {"claude_alerts": False}

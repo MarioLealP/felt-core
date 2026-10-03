@@ -84,6 +84,8 @@ _ADDED_COLUMNS = (
     ("followup", "TEXT"),
     # WP-42.5 (systems.py): who closed it ("mario" from the app)
     ("handled_by", "TEXT"),
+    # WP-58: why Claude didn't look - "late" or "off" (the kill switch)
+    ("missed_why", "TEXT"),
 )
 
 

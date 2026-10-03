@@ -21,6 +21,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from felt_core.controls import claude_alerts
 from felt_core.db import _connect
 from felt_core.incidents import _ensure, _ts, get
 
@@ -67,7 +68,9 @@ def wake(db_path: str) -> bool:
 
 def waiting(db_path: str) -> int:
     """How many incidents are waiting for Claude - so the runner only checks
-    the usage limits when there's work."""
+    the usage limits when there's work. None while he's switched off."""
+    if not claude_alerts(db_path):
+        return 0
     conn = _connect(db_path)
     try:
         _ensure(conn)
@@ -79,6 +82,8 @@ def waiting(db_path: str) -> int:
 def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:
     """The next incident for Claude (most urgent, then oldest), marked as
     handed over; None when there's none or today's cap is spent."""
+    if not claude_alerts(db_path):
+        return None  # the kill switch: nothing is handed over
     now = now or datetime.now(UTC)
     day = _ts(now.replace(hour=0, minute=0, second=0, microsecond=0))
     conn = _connect(db_path)
@@ -122,12 +127,23 @@ def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -
 
 def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
     """Incidents Claude didn't get to in time, by tier: never claimed within
-    CLAIM_WITHIN of opening, or claimed with no report within REPORT_WITHIN."""
+    CLAIM_WITHIN of opening, or claimed with no report within REPORT_WITHIN.
+    While he's switched off, every waiting one is missed at once ("off")."""
     stamp = _ts(now or datetime.now(UTC))
+    switched_off = not claude_alerts(db_path)
+    off: list[int] = []
     conn = _connect(db_path)
     try:
         _ensure(conn)
         with conn:
+            if switched_off:
+                off = [r[0] for r in conn.execute(f"SELECT id FROM incidents WHERE {_WAITING}")]
+                if off:
+                    q = ",".join("?" * len(off))
+                    conn.execute(
+                        f"UPDATE incidents SET missed_at = ?, missed_why = 'off' WHERE id IN ({q})",
+                        [stamp, *off],
+                    )
             ids = [
                 r[0]
                 for r in conn.execute(
@@ -140,7 +156,10 @@ def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
             ]
             if ids:
                 q = ",".join("?" * len(ids))
-                conn.execute(f"UPDATE incidents SET missed_at = ? WHERE id IN ({q})", [stamp, *ids])
+                conn.execute(
+                    f"UPDATE incidents SET missed_at = ?, missed_why = 'late' WHERE id IN ({q})",
+                    [stamp, *ids],
+                )
     finally:
         conn.close()
-    return ids
+    return off + ids

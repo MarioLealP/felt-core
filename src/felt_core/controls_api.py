@@ -66,6 +66,24 @@ async def app_set_control(req: SetControl, _user: str = Depends(sso_user)) -> di
     return await _page(config)
 
 
+class Settings(BaseModel):
+    claude_alerts: bool
+
+
+@router.get("/v1/app/settings")
+async def app_settings(_user: str = Depends(sso_user)) -> dict:
+    db = load_config().db_path
+    return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
+
+
+@router.post("/v1/app/settings")
+async def app_set_settings(req: Settings, _user: str = Depends(sso_user)) -> dict:
+    """WP-58's kill switch: whether the server's Claude looks into alerts."""
+    db = load_config().db_path
+    await asyncio.to_thread(controls.set_claude_alerts, db, req.claude_alerts)
+    return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
+
+
 @router.get("/v1/controls")
 async def desktop_controls() -> dict:
     """The tray: what the switches say, to apply to felt-animation."""

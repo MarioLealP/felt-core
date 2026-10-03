@@ -71,6 +71,19 @@ def quiet(db_path: str, now: datetime | None = None) -> bool:
     return state(db_path, now)["quiet"]["on"]
 
 
+# -- the WP-58 kill switch -------------------------------------------------------
+
+
+def claude_alerts(db_path: str) -> bool:
+    """Whether the server's Claude looks into alerts (WP-58's kill switch,
+    in the app's settings). On unless Mario turned it off."""
+    return get_setting(db_path, "claude_alerts", "1") != "0"
+
+
+def set_claude_alerts(db_path: str, on: bool) -> None:
+    set_setting(db_path, "claude_alerts", "1" if on else "0")
+
+
 # -- what the desktop reports ---------------------------------------------------
 
 

@@ -187,6 +187,8 @@ def followup_facts(incident: dict) -> str:
             lines.append("He can join Claude's investigation to go through it together.")
     elif incident.get("handed_at"):
         lines.append("Claude started looking but didn't finish in time.")
+    elif incident.get("missed_why") == "off":
+        lines.append("Mario has Claude switched off for alerts, so he didn't look.")
     else:
         lines.append("Claude didn't get to it (he's offline or his usage limit is reached).")
     if not incident.get("report"):

@@ -231,6 +231,9 @@ _SSO_GATED = (
     # WP-42.5: the controls (controls_api.py)
     ("GET", re.compile(r"/v1/app/controls")),
     ("POST", re.compile(r"/v1/app/controls")),
+    # WP-58's kill switch lives in the app's settings
+    ("GET", re.compile(r"/v1/app/settings")),
+    ("POST", re.compile(r"/v1/app/settings")),
 )
 
 
