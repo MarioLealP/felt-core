@@ -206,6 +206,9 @@ _SSO_GATED = (
     ("GET", re.compile(r"/v1/app/me")),
     ("GET", re.compile(r"/v1/app/history")),
     ("GET", re.compile(r"/v1/app/asides")),
+    ("GET", re.compile(r"/v1/app/margins")),
+    ("GET", re.compile(r"/v1/app/margins/count")),
+    ("POST", re.compile(r"/v1/app/margins/mark")),
     ("POST", re.compile(r"/v1/app/chat")),
 )
 

@@ -12,10 +12,12 @@ desktop see one conversation.
 """
 
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from felt_core import margins
 from felt_core.app_history import history_page
 from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
@@ -103,6 +105,49 @@ async def history(
 @router.get("/asides", response_model=Asides)
 async def asides(_user: str = Depends(sso_user)) -> dict:
     return current_asides(load_config().db_path, SESSION)
+
+
+class MarginLine(BaseModel):
+    id: int
+    kind: str
+    source: str
+    content: str
+    created_at: str
+    read: bool
+
+
+class Unread(BaseModel):
+    unread: int
+
+
+class MarkRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    action: Literal["read", "dismiss", "snooze"]
+    hours: float | None = None
+
+
+class MarkResult(BaseModel):
+    changed: int
+
+
+@router.get("/margins", response_model=list[MarginLine])
+async def margins_page(
+    before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)
+) -> list[dict]:
+    return margins.page(load_config().db_path, SESSION, before_id=before, limit=limit)
+
+
+@router.get("/margins/count", response_model=Unread)
+async def margins_count(_user: str = Depends(sso_user)) -> Unread:
+    return Unread(unread=margins.unread(load_config().db_path, SESSION))
+
+
+@router.post("/margins/mark", response_model=MarkResult)
+async def margins_mark(req: MarkRequest, _user: str = Depends(sso_user)) -> MarkResult:
+    changed = margins.mark(
+        load_config().db_path, req.ids, req.action, hours=req.hours, session_id=SESSION
+    )
+    return MarkResult(changed=changed)
 
 
 @router.post("/chat", response_model=SayResponse)

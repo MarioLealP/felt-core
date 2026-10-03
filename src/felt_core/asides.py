@@ -84,7 +84,9 @@ def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> 
     younger than MAX_AGE, oldest first."""
     return conn.execute(
         "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"
-        " AND created_at >= datetime('now', ?) AND " + _IS_REMARK_SQL + " ORDER BY id",
+        " AND created_at >= datetime('now', ?) AND dismissed_at IS NULL AND "
+        + _IS_REMARK_SQL
+        + " ORDER BY id",
         (session_id, after_id, MAX_AGE),
     ).fetchall()
 
