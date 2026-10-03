@@ -451,3 +451,36 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
 
 
 _writing: set[str] = set()
+
+
+# -- any sign of him ---------------------------------------------------------
+
+# Mario 10-03: she lives on the server, so the day starts with any sign of
+# him (a message from any device, an app window opening), not only the
+# desktop character's day_start. Each date is tried at most once per
+# RETRY_S, so a busy morning of messages doesn't re-gather material on every
+# line when there's nothing to write.
+RETRY_S = 15 * 60
+_tried: dict[str, float] = {}
+_tasks: set = set()
+
+
+def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
+    """Fire-and-forget day-start trigger; a no-op before 05:00 local, once
+    yesterday's entry exists, or when that date was tried recently."""
+    import asyncio
+
+    at = (now or datetime.now(UTC)).astimezone(UTC)
+    at_str = at.strftime("%Y-%m-%d %H:%M:%S")
+    target = _target_date_for_trigger("day_start", at_str)
+    if target is None or target in _writing:
+        return
+    last = _tried.get(target)
+    if last is not None and at.timestamp() - last < RETRY_S:
+        return
+    _tried[target] = at.timestamp()
+    if db.get_diary(config.db_path, target) is not None:
+        return
+    task = asyncio.get_running_loop().create_task(on_event(config, "day_start", at_str))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)

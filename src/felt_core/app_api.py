@@ -25,6 +25,7 @@ from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
 from felt_core.config import load_config
 from felt_core.db import APP_SESSION
+from felt_core.diary import he_is_here
 from felt_core.marks import mark_seen, maybe_mark
 
 SESSION = APP_SESSION
@@ -165,9 +166,12 @@ async def marks_seen(req: SeenRequest, _user: str = Depends(sso_user)) -> MarkRe
 
 @router.get("/stream")
 async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingResponse:
-    """Live notices for the open app (app_stream.py)."""
+    """Live notices for the open app (app_stream.py). An app window opening
+    is a sign of him, so it can start her day (diary.py)."""
+    config = load_config()
+    he_is_here(config)
     return StreamingResponse(
-        notices(load_config().db_path, SESSION, request.is_disconnected),
+        notices(config.db_path, SESSION, request.is_disconnected),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

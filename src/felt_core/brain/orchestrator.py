@@ -383,5 +383,9 @@ async def chat(
         ]
 
     save_message(config.db_path, session_id, "user", message)
+    # any message from him, on any device, can start her day (diary.py)
+    from felt_core.diary import he_is_here
+
+    he_is_here(config)
 
     return await _chat_local(message, config, session_id, tone, registry, history)
