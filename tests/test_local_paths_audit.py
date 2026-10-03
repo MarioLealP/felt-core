@@ -45,7 +45,7 @@ def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
     save_message(db, "s", "assistant", "hey mario")
     obs = save_observation(db, "s", "a spreadsheet")
     set_observation_reply(db, obs, "spreadsheets again?")
-    save_message(db, "s", "assistant", "spreadsheets again?")
+    save_message(db, "s", "assistant", "spreadsheets again?", kind="remark")
 
     assert [m["content"] for m in get_history(db, "s")] == [
         "hey felt",
@@ -64,7 +64,7 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     save_message(config.db_path, "s", "assistant", "real answer")
     obs = save_observation(config.db_path, "s", "earlier thing")
     set_observation_reply(config.db_path, obs, "old screen remark")
-    save_message(config.db_path, "s", "assistant", "old screen remark")
+    save_message(config.db_path, "s", "assistant", "old screen remark", kind="remark")
     fake_llm.default = "new remark"
 
     await screen_reactions.process_screen_context("new thing", config, session_id="s")
@@ -72,6 +72,9 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     contents = [m["content"] for m in fake_llm.calls[0]["messages"]]
     assert "real question" in contents and "real answer" in contents
     assert "old screen remark" not in contents
+    # and the new remark is itself stored as one (WP-42.3: kind, not text matching)
+    chat = [m["content"] for m in get_history(config.db_path, "s", exclude_remarks=True)]
+    assert chat == ["real question", "real answer"]
 
 
 async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, monkeypatch, fake_llm):

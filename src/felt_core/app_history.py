@@ -2,12 +2,12 @@
 
 The app's Talk page shows only the real back-and-forth (Mario 10-02: "only
 feed, keep actual chat clean"), so her unprompted remarks are left out the
-same way get_history(exclude_remarks=True) does. Unlike get_history it returns
+by kind, the same way get_history(exclude_remarks=True) does. Unlike get_history it returns
 ids and times and pages backwards, for a long-running scroll.
 """
 
 from felt_core.asides import answered
-from felt_core.db import _REMARK_EXCLUSION_SQL, _connect
+from felt_core.db import CHAT_ONLY_SQL, _connect
 from felt_core.marks import marks_for
 
 MAX_PAGE = 200
@@ -25,14 +25,14 @@ def history_page(
     params: tuple = (session_id,)
     if before_id is not None:
         params += (before_id,)
-    params += (session_id, session_id, limit)
+    params += (limit,)
     conn = _connect(db_path)
     try:
         rows = conn.execute(
             "SELECT id, role, content, created_at FROM messages "
             "WHERE session_id = ? AND content NOT LIKE '[System Observation%' "
             + before
-            + _REMARK_EXCLUSION_SQL
+            + CHAT_ONLY_SQL
             + " ORDER BY id DESC LIMIT ?",
             params,
         ).fetchall()

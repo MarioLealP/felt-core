@@ -31,6 +31,7 @@ from felt_core.brain.replies import local_reply
 from felt_core.brain.result import ChatResult
 from felt_core.config import FeltConfig
 from felt_core.db import (
+    REMARK,
     get_history,
     get_recent_observations,
     save_message,
@@ -162,7 +163,14 @@ async def process_screen_context(
             return ChatResult(reply="", animation_tag=None)
 
     set_observation_reply(config.db_path, obs_id, reply_raw)
-    save_message(config.db_path, session_id, "assistant", reply_raw)
+    save_message(
+        config.db_path,
+        session_id,
+        "assistant",
+        reply_raw,
+        kind=REMARK,
+        source_ref=f"screen:{obs_id}",
+    )
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=reply_raw, animation_tag=None)
 
@@ -315,6 +323,8 @@ async def react_to_screen(
         return ChatResult(reply="", animation_tag=None)
 
     set_observation_reply(config.db_path, obs_id, line)
-    save_message(config.db_path, session_id, "assistant", line)
+    save_message(
+        config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}"
+    )
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=line, animation_tag=None, emotion=emotion)

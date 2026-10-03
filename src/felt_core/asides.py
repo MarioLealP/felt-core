@@ -31,7 +31,7 @@ import sqlite3
 
 from felt_core import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import _connect
+from felt_core.db import REMARK_KINDS, _connect
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,7 @@ _ASK = (
     "you most like him to answer? Give their numbers."
 )
 
-# her remarks are stored as plain assistant messages; these are the ones that
-# also exist as a screen reaction or an event line (same test as db.py's
-# _REMARK_EXCLUSION_SQL, inverted)
-_IS_REMARK_SQL = (
-    "role = 'assistant' AND ("
-    "content IN (SELECT spoken_reply FROM screen_observations"
-    " WHERE session_id = ? AND spoken_reply IS NOT NULL)"
-    " OR content IN (SELECT line FROM event_reactions WHERE session_id = ?))"
-)
+_IS_REMARK_SQL = f"kind IN ({', '.join(repr(k) for k in REMARK_KINDS)})"
 
 
 def _ensure(conn: sqlite3.Connection) -> None:
@@ -94,7 +86,7 @@ def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> 
     return conn.execute(
         "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"
         " AND created_at >= datetime('now', ?) AND " + _IS_REMARK_SQL + " ORDER BY id",
-        (session_id, after_id, MAX_AGE, session_id, session_id),
+        (session_id, after_id, MAX_AGE),
     ).fetchall()
 
 
@@ -222,7 +214,7 @@ def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> 
     try:
         row = conn.execute(
             "SELECT content FROM messages WHERE id = ? AND session_id = ? AND " + _IS_REMARK_SQL,
-            (remark_id, session_id, session_id, session_id),
+            (remark_id, session_id),
         ).fetchone()
     finally:
         conn.close()

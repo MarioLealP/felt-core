@@ -25,7 +25,7 @@ def _remark(db: str, line: str, session: str = "dashboard") -> None:
     """A screen remark, stored the way screen_reactions.py stores one."""
     obs = save_observation(db, session, "on screen: something")
     set_observation_reply(db, obs, line)
-    save_message(db, session, "assistant", line)
+    save_message(db, session, "assistant", line, kind="remark")
 
 
 def _ids(db: str) -> dict[str, int]:
@@ -50,7 +50,7 @@ def test_only_remarks_since_his_last_line_and_the_newest_two_by_default(tmp_path
     for i in range(5):
         _remark(db, f"remark {i}")
     save_event_reaction(db, "dashboard", "song", None, "good song")
-    save_message(db, "dashboard", "assistant", "good song")
+    save_message(db, "dashboard", "assistant", "good song", kind="event")
     _remark(db, "elsewhere", session="other")
     got = asides.current_asides(db)
     assert [a["content"] for a in got["asides"]] == ["remark 4", "good song"]

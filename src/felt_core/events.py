@@ -32,6 +32,7 @@ from felt_core import local_llm, metrics
 from felt_core.asides import schedule_pick
 from felt_core.config import FeltConfig
 from felt_core.db import (
+    EVENT,
     last_event_reaction_line,
     save_event_reaction,
     save_message,
@@ -478,7 +479,9 @@ async def react_to_event(
     # Cooldown state + chat history (her line shows in the chat window,
     # like a screen remark does) - but never a screen observation.
     save_event_reaction(config.db_path, session_id, event, key, line)
-    save_message(config.db_path, session_id, "assistant", line)
+    save_message(
+        config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}"
+    )
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     logger.info("event reaction %s: %r", event, line)
     return EventReaction(line=line, emotion=table[event].emotion)

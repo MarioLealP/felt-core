@@ -24,6 +24,59 @@ def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
     return cursor.lastrowid
 
 
+# WP-42.3: what kind of line a message is. Everything she says lives in
+# `messages` (Talk filters to chat, Margins shows the rest, asides are recent
+# remarks), instead of a second table or matching text against the remark
+# tables. `chat` is the conversation itself (his lines and her replies).
+CHAT = "chat"
+REMARK = "remark"  # a spoken screen reaction
+EVENT = "event"  # a line reacting to a desktop event (song, guest, unhush…)
+# her unprompted remarks: what asides are made of, and what her own
+# screen-reaction context leaves out (audit 2026-09-24)
+REMARK_KINDS = (REMARK, EVENT)
+
+_MESSAGE_COLUMNS = (
+    ("kind", f"TEXT NOT NULL DEFAULT '{CHAT}'"),
+    # where the line came from, e.g. "screen:812" or "event:song" (free-form)
+    ("source_ref", "TEXT"),
+    # Margins state (read / dismissed / snoozed); unused for chat
+    ("read_at", "TEXT"),
+    ("dismissed_at", "TEXT"),
+    ("snoozed_until", "TEXT"),
+)
+
+
+def _migrate_message_kinds(conn: sqlite3.Connection) -> None:
+    """Adds the WP-42.3 columns to a `messages` table made before them, and
+    labels the remarks already in it: the last use of the old test (her line's
+    text matching a screen reaction or event line), which `kind` replaces.
+    Only runs while the column is missing."""
+    have = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
+    if "kind" in have:
+        return
+    try:
+        with conn:
+            for name, decl in _MESSAGE_COLUMNS:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {decl}")
+            conn.execute(
+                "UPDATE messages SET kind = ? WHERE role = 'assistant' AND content IN"
+                " (SELECT spoken_reply FROM screen_observations"
+                "  WHERE session_id = messages.session_id AND spoken_reply IS NOT NULL)",
+                (REMARK,),
+            )
+            conn.execute(
+                "UPDATE messages SET kind = ? WHERE role = 'assistant' AND kind = ? AND content IN"
+                " (SELECT line FROM event_reactions WHERE session_id = messages.session_id)",
+                (EVENT, CHAT),
+            )
+    except sqlite3.OperationalError as exc:
+        # another connection migrated first
+        if "duplicate column" not in str(exc):
+            raise
+    conn.execute("CREATE INDEX IF NOT EXISTS messages_kind ON messages (session_id, kind, id)")
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -297,6 +350,8 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    # last: it reads the remark tables created above
+    _migrate_message_kinds(conn)
     return conn
 
 
@@ -353,31 +408,36 @@ def set_setting(db_path: str, key: str, value: str) -> None:
     conn.close()
 
 
-def save_message(db_path: str, session_id: str, role: str, content: str) -> None:
+def save_message(
+    db_path: str,
+    session_id: str,
+    role: str,
+    content: str,
+    kind: str = CHAT,
+    source_ref: str | None = None,
+) -> int:
     conn = _connect(db_path)
     with conn:
-        conn.execute(
-            "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-            (session_id, role, content),
+        cursor = conn.execute(
+            "INSERT INTO messages (session_id, role, content, kind, source_ref)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (session_id, role, content, kind, source_ref),
         )
+        message_id = _require_lastrowid(cursor)
     conn.close()
+    return message_id
 
 
-# Her own unprompted remarks (spoken screen reactions, and /v1/react/event
-# lines) are saved as `assistant` messages so the chat window shows them,
-# but they aren't conversation - see get_history's exclude_remarks.
-_REMARK_EXCLUSION_SQL = (
-    " AND NOT (role = 'assistant' AND ("
-    "content IN (SELECT spoken_reply FROM screen_observations WHERE session_id = ? AND spoken_reply IS NOT NULL)"
-    " OR content IN (SELECT line FROM event_reactions WHERE session_id = ?)))"
-)
+# Only the conversation itself: her unprompted lines (remarks, event lines,
+# and from WP-42.3 on, pushes) live in `messages` too, labelled by `kind`.
+CHAT_ONLY_SQL = f" AND kind = '{CHAT}'"
 
 
 def get_history(
     db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False
 ) -> list[dict]:
-    """`exclude_remarks=True` drops her own unprompted remarks (spoken
-    screen reactions), leaving only the real back-and-forth - what the
+    """`exclude_remarks=True` drops her own unprompted lines (kind other than
+    chat), leaving only the real back-and-forth - what the
     local screen-reaction path wants as "recent conversation" (audit
     2026-09-24: it was feeding her earlier screen remarks back to her)."""
     conn = _connect(db_path)
@@ -392,13 +452,12 @@ def get_history(
     # is a non-destructive fix for rows already in the prod DB - it hides
     # them from both the brain's own context and /v1/history without
     # deleting anything.
-    exclusion = _REMARK_EXCLUSION_SQL if exclude_remarks else ""
-    params = (session_id, session_id, session_id, limit) if exclude_remarks else (session_id, limit)
+    exclusion = CHAT_ONLY_SQL if exclude_remarks else ""
     rows = conn.execute(
         "SELECT role, content FROM messages "
         "WHERE session_id = ? AND content NOT LIKE '[System Observation%'" + exclusion + " "
         "ORDER BY id DESC LIMIT ?",
-        params,
+        (session_id, limit),
     ).fetchall()
     conn.close()
     return [{"role": role, "content": content} for role, content in reversed(rows)]
@@ -893,19 +952,13 @@ def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> 
     """Real conversation (not her own unprompted remarks) in the window,
     grouped by session - the diary's material gatherer treats each
     session's text as a WHOLE window, so
-    sessions must come back separately, not pre-flattened. Correlated
-    subqueries (not get_history's single-session-parameter exclusion SQL)
-    since this spans every session in the window at once."""
+    sessions must come back separately, not pre-flattened."""
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT m.session_id, m.role, m.content FROM messages m "
         "WHERE m.created_at >= ? AND m.created_at < ? "
         "AND m.content NOT LIKE '[System Observation%' "
-        "AND NOT (m.role = 'assistant' AND ("
-        "m.content IN (SELECT spoken_reply FROM screen_observations "
-        "WHERE session_id = m.session_id AND spoken_reply IS NOT NULL)"
-        " OR m.content IN (SELECT line FROM event_reactions WHERE session_id = m.session_id)"
-        ")) ORDER BY m.id ASC",
+        f"AND m.kind = '{CHAT}' ORDER BY m.id ASC",
         (start_utc, end_utc),
     ).fetchall()
     conn.close()
