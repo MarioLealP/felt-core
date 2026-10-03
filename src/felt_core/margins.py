@@ -7,7 +7,7 @@ Mario 10-02: Talk stays "only the conversation"; her chatter lives here.
 
 from datetime import UTC, datetime, timedelta
 
-from felt_core.db import APP_SESSION, CHAT, _connect
+from felt_core.db import ALERT, APP_SESSION, CHAT, _connect
 
 MAX_PAGE = 200
 MAX_SNOOZE_HOURS = 24 * 7
@@ -15,7 +15,8 @@ ACTIONS = ("read", "dismiss", "snooze")
 
 # hidden: dismissed, or snoozed until later than now
 _VISIBLE_SQL = (
-    f"session_id = ? AND role = 'assistant' AND kind != '{CHAT}' AND dismissed_at IS NULL"
+    f"session_id = ? AND role = 'assistant' AND kind NOT IN ('{CHAT}', '{ALERT}')"
+    " AND dismissed_at IS NULL"
     " AND (snoozed_until IS NULL OR snoozed_until <= datetime('now'))"
 )
 
@@ -107,7 +108,7 @@ def mark(
         with conn:
             cursor = conn.execute(
                 f"UPDATE messages SET {sets} WHERE id IN ({q}) AND session_id = ?"
-                f" AND role = 'assistant' AND kind != '{CHAT}'",
+                f" AND role = 'assistant' AND kind NOT IN ('{CHAT}', '{ALERT}')",
                 (*stamp, *ids, session_id),
             )
     finally:

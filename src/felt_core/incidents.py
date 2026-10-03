@@ -230,14 +230,17 @@ def get(db_path: str, incident_id: int) -> dict | None:
 PROMOTE_EVERY_S = 60.0
 
 
-async def watch(db_path: str) -> None:
+async def watch(config) -> None:
     """Background task: turns pending incidents whose wait ran out into
-    open ones."""
+    open ones, then writes the lines she owes (alert_lines.py)."""
+    from felt_core import alert_lines
+
     while True:
         try:
-            promoted = await asyncio.to_thread(promote_due, db_path)
+            promoted = await asyncio.to_thread(promote_due, config.db_path)
             if promoted:
                 logger.info("incidents: %s now open (no RESOLVED in time)", promoted)
+            await alert_lines.write_due(config)
         except Exception:
-            logger.exception("incidents: promote failed")
+            logger.exception("incidents: round failed")
         await asyncio.sleep(PROMOTE_EVERY_S)

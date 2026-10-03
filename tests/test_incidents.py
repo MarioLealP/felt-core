@@ -41,7 +41,10 @@ def test_real_titles_get_their_catalogue_type():
         ("HONEYPOT: someone banned", "honeypot"),
         ("clockmost Warning: Linux: clockmost-nitro5 has been restarted", "host-restarted"),
         ("clockmost High: Docker: Container /suricata: Health state unhealthy", "container-down"),
-        ("clockmost Average: Windows: Zabbix agent is not available", "zabbix-agent"),
+        ("clockmost Average: Windows: Zabbix agent is not available", "pc-agent"),
+        ("clockmost Average: Linux: Zabbix agent is not available", "zabbix-agent"),
+        ("clockmost Warning: Linux: Number of installed packages changed", "packages-changed"),
+        ("clockmost Average: clockmost-nitro5: Ollama service FAILED", "nitro-ollama"),
         ("something nobody has seen before", "unknown"),
     ]
     for title, name in cases:

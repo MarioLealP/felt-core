@@ -74,6 +74,16 @@ CATALOGUE: tuple[AlertType, ...] = (
         expected=True,
     ),
     AlertType("host-restarted", r"has been restarted", "default", "felt", expected=True),
+    # dnf's own updates change the package count
+    AlertType("packages-changed", r"Number of installed packages", "low", "felt", expected=True),
+    # the desktop's agent goes quiet whenever the PC is off
+    AlertType(
+        "pc-agent",
+        r"Windows: (Active checks are not available|Zabbix agent is not available)",
+        "low",
+        "felt",
+        expected=True,
+    ),
     # outages that mostly fix themselves -> wait, then Claude
     AlertType(
         "authentik-outpost",
@@ -97,7 +107,8 @@ CATALOGUE: tuple[AlertType, ...] = (
     ),
     AlertType("windows-crash", r"unexpected shutdown|Critical-level System log", "high", "felt"),
     AlertType("disk-space", r"FS \[.*Space is", "high", "felt", wait_s=15 * _M),
-    AlertType("nitro-node", r"Ollama service FAILED|GPU overheating", "default", "felt"),
+    AlertType("nitro-ollama", r"Ollama service FAILED", "default", "felt"),
+    AlertType("nitro-gpu-hot", r"GPU overheating", "default", "felt"),
     AlertType("smart", r"SMART:", "default", "felt", wait_s=15 * _M),
     AlertType("health-check", r"health check: ", "default", "felt"),
     AlertType(
@@ -106,7 +117,7 @@ CATALOGUE: tuple[AlertType, ...] = (
     AlertType(
         "host-load",
         r"(Windows|Linux): (The Memory Pages|High memory|High CPU|CPU privileged|"
-        r"Load average|High swap|nvme|Number of installed)",
+        r"Load average|High swap|nvme)",
         "default",
         "felt",
         wait_s=15 * _M,

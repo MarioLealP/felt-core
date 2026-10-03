@@ -34,6 +34,9 @@ EVENT = "event"  # a line reacting to a desktop event (song, guest, unhush…)
 PROACTIVE = "proactive"  # a push she starts (morning greeting, calendar heads-up)
 EMAIL = "email"  # "you have mail from X, want me to summarize it?"
 ALARM = "alarm"
+# WP-44: her line about a server/PC alert; lives in Systems, never in the
+# Margins with her chatter (WP-42 2.8)
+ALERT = "alert"
 # her unprompted lines that can wait in Talk to be answered (asides);
 # alarms just ring
 ASIDE_KINDS = (REMARK, EVENT, PROACTIVE, EMAIL)

@@ -110,8 +110,9 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(llm_warmup_loop(config))
     # WP-31: T-30/T-10 min calendar heads-ups through the proactive channel.
     calendar_task = asyncio.create_task(calendar_headsup_loop(config))
-    # WP-44: self-fixing alerts that didn't fix themselves become open
-    incidents_task = asyncio.create_task(incidents.watch(config.db_path))
+    # WP-44: self-fixing alerts that didn't fix themselves become open, and
+    # she writes her line about each incident that counts
+    incidents_task = asyncio.create_task(incidents.watch(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
