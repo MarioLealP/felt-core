@@ -59,7 +59,7 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     rounds = 0
 
     async def gone() -> bool:
-        return rounds >= 4
+        return rounds >= 5
 
     stream = notices(db, "dashboard", gone, poll_s=0, keepalive_s=10)
     assert _parse(await anext(stream))[0] == "hello"
@@ -69,6 +69,11 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     systems.mark_handled(db, backup)
     rounds += 1
     assert _parse(await anext(stream)) == ("systems", {})
+    from felt_core import controls
+
+    controls.set_control(db, "quiet", True)
+    rounds += 1
+    assert _parse(await anext(stream)) == ("controls", {})
 
 
 async def test_a_quiet_stream_sends_keepalives_and_ends_when_the_client_goes(tmp_path):

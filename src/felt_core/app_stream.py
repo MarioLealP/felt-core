@@ -4,7 +4,8 @@ GET /v1/app/stream.
 Notices only, never data: "a new line" (with its kind, so the app knows
 whether Talk or the Margins changed), "her aside pick changed", "a new mark",
 "the lists changed" (an item added by voice shows up at once), "an incident
-changed" (Claude reported, someone marked it handled - WP-42.5).
+changed" (Claude reported, someone marked it handled), "the controls
+changed" (a switch, or her state on the desktop - WP-42.5).
 The app refetches through the normal endpoints, so there is one source of
 truth and a missed notice or a reconnect can't leave the screen wrong.
 
@@ -28,9 +29,9 @@ def _fingerprint(conn, has: set[str], table: str, sql: str) -> str:
     return "|".join(str(v) for v in conn.execute(sql).fetchone()) if table in has else ""
 
 
-def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
+def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str, str]:
     """(newest message id, aside picks fingerprint, number of marks,
-    lists fingerprint, incidents fingerprint)."""
+    lists fingerprint, incidents fingerprint, controls fingerprint)."""
     conn = _connect(db_path)
     try:
         newest = conn.execute(
@@ -62,9 +63,20 @@ def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
             "SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(length(state)"
             " + COALESCE(length(report), 0) + COALESCE(length(followup), 0)), 0) FROM incidents",
         )
+        # the switches' version + the desktop's state (not its heartbeat time)
+        ctl = (
+            conn.execute(
+                "SELECT GROUP_CONCAT(key || '=' || CASE WHEN key = 'desktop_state'"
+                " THEN json_remove(value, '$.at') ELSE value END, ';') FROM settings"
+                " WHERE key IN ('controls_version', 'desktop_state')"
+            ).fetchone()[0]
+            or ""
+            if "settings" in has
+            else ""
+        )
     finally:
         conn.close()
-    return newest, picks, marks, lists, incidents
+    return newest, picks, marks, lists, incidents, ctl
 
 
 def _new_lines(db_path: str, session_id: str, after: int) -> list[dict]:
@@ -93,7 +105,9 @@ async def notices(
 ) -> AsyncIterator[str]:
     """The event stream. `gone` is awaited each round; truthy ends it (the
     client went away)."""
-    newest, picks, marks, lists, incidents = await asyncio.to_thread(_state, db_path, session_id)
+    newest, picks, marks, lists, incidents, ctl = await asyncio.to_thread(
+        _state, db_path, session_id
+    )
     yield _event("hello", {"newest": newest})
     quiet = 0.0
     while not await gone():
@@ -116,7 +130,10 @@ async def notices(
         if now[4] != incidents:
             yield _event("systems", {})
             sent = True
-        newest, picks, marks, lists, incidents = now
+        if now[5] != ctl:
+            yield _event("controls", {})
+            sent = True
+        newest, picks, marks, lists, incidents, ctl = now
         quiet = 0.0 if sent else quiet + poll_s
         if quiet >= keepalive_s:
             yield ": keepalive\n\n"

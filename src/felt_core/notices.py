@@ -9,6 +9,10 @@ pop-up for each line marked `pop`. The rules live here, in one place (Mario
 - default / low: never pops (Systems and the history only);
 - except: an outcome that needs him, or "Claude couldn't look", always pops
   and stays, whatever the level.
+
+Her quiet switch (controls.py) doesn't touch these: quiet is about her, and
+alerts come through (Mario 10-03: "No this is for felt, raw ntfy can come
+through").
 """
 
 import json

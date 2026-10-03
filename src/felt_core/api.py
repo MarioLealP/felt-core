@@ -53,6 +53,7 @@ from felt_core.brain import (
 )
 from felt_core.calendar_headsup import calendar_headsup_loop
 from felt_core.config import load_config
+from felt_core.controls_api import router as controls_router
 from felt_core.db import (
     add_shopping_item,
     clear_checked_shopping_items,
@@ -149,6 +150,7 @@ app.include_router(app_router)
 app.include_router(incident_router)
 app.include_router(systems_router)
 app.include_router(notices_router)
+app.include_router(controls_router)
 
 # LAN-only right now, no auth on this API yet (same posture as
 # felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
@@ -226,6 +228,9 @@ _SSO_GATED = (
     ("GET", re.compile(r"/v1/app/systems")),
     ("GET", re.compile(r"/v1/app/incidents/\d+")),
     ("POST", re.compile(r"/v1/app/incidents/\d+/handled")),
+    # WP-42.5: the controls (controls_api.py)
+    ("GET", re.compile(r"/v1/app/controls")),
+    ("POST", re.compile(r"/v1/app/controls")),
 )
 
 
