@@ -12,7 +12,15 @@ import logging
 from datetime import datetime
 
 from felt_core.config import FeltConfig
-from felt_core.db import delete_alarm, get_pending_alarms, mark_alarm_fired, save_alarm
+from felt_core.db import (
+    ALARM,
+    APP_SESSION,
+    delete_alarm,
+    get_pending_alarms,
+    mark_alarm_fired,
+    save_alarm,
+    save_message,
+)
 from felt_core.notify import notify
 
 logger = logging.getLogger(__name__)
@@ -35,6 +43,9 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
             fire_at,
         )
     text = f"Alarm: {label}" if label else "Alarm"
+    save_message(
+        config.db_path, APP_SESSION, "assistant", text, kind=ALARM, source_ref=f"alarm:{alarm_id}"
+    )
     await notify(config, text, title="Felt alarm")
     mark_alarm_fired(config.db_path, alarm_id)
     _scheduled_tasks.pop(alarm_id, None)

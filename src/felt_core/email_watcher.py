@@ -20,7 +20,13 @@ import imaplib
 import logging
 
 from felt_core.config import FeltConfig
-from felt_core.db import is_known_email_uid, save_pending_email
+from felt_core.db import (
+    APP_SESSION,
+    EMAIL,
+    is_known_email_uid,
+    save_message,
+    save_pending_email,
+)
 from felt_core.notify import notify
 
 logger = logging.getLogger(__name__)
@@ -134,11 +140,17 @@ async def _poll_once(config: FeltConfig) -> None:
         if is_known_email_uid(config.db_path, found["uid"]):
             continue
         save_pending_email(config.db_path, found["uid"], found["sender"], found["subject"])
-        await notify(
-            config,
-            f"You have mail from {found['sender']}: {found['subject']}. Want me to summarize it?",
-            title="New email",
+        line = f"You have mail from {found['sender']}: {found['subject']}. Want me to summarize it?"
+        # WP-42.3: in her history (so "yes" has something to answer) and the Margins
+        save_message(
+            config.db_path,
+            APP_SESSION,
+            "assistant",
+            line,
+            kind=EMAIL,
+            source_ref=f"email:{found['uid']}",
         )
+        await notify(config, line, title="New email")
         logger.info("new mail: %s / %s", found["sender"], found["subject"])
 
 

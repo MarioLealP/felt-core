@@ -31,11 +31,10 @@ import sqlite3
 
 from felt_core import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import REMARK_KINDS, _connect
+from felt_core.db import APP_SESSION, ASIDE_KINDS, _connect
 
 logger = logging.getLogger(__name__)
 
-APP_SESSION = "dashboard"
 SHOWN = 2
 MAX_AGE = "-6 hours"  # SQLite datetime modifier
 # a whole day away can leave hundreds; she compares the newest of them
@@ -58,7 +57,7 @@ _ASK = (
     "you most like him to answer? Give their numbers."
 )
 
-_IS_REMARK_SQL = f"kind IN ({', '.join(repr(k) for k in REMARK_KINDS)})"
+_IS_REMARK_SQL = f"kind IN ({', '.join(repr(k) for k in ASIDE_KINDS)})"
 
 
 def _ensure(conn: sqlite3.Connection) -> None:

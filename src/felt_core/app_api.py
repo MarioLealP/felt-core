@@ -20,9 +20,10 @@ from felt_core.app_history import history_page
 from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
 from felt_core.config import load_config
+from felt_core.db import APP_SESSION
 from felt_core.marks import maybe_mark
 
-SESSION = "dashboard"
+SESSION = APP_SESSION
 
 router = APIRouter(prefix="/v1/app")
 

@@ -134,6 +134,16 @@ def enqueue_proactive(
         payload["emotion"] = emotion
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_s)).strftime("%Y-%m-%d %H:%M:%S")
     item_id = db.insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
+    # WP-42.3: she said it, whether or not the desktop catches it in time;
+    # it's in her history and in the Margins
+    db.save_message(
+        config.db_path,
+        db.APP_SESSION,
+        "assistant",
+        text,
+        kind=db.PROACTIVE,
+        source_ref=f"proactive:{kind}:{item_id}",
+    )
     if ttl_s > 0:
         _prewarm_audio(config, text, emotion)
     return item_id

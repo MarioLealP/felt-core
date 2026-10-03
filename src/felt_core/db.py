@@ -31,9 +31,16 @@ def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
 CHAT = "chat"
 REMARK = "remark"  # a spoken screen reaction
 EVENT = "event"  # a line reacting to a desktop event (song, guest, unhush…)
-# her unprompted remarks: what asides are made of, and what her own
-# screen-reaction context leaves out (audit 2026-09-24)
-REMARK_KINDS = (REMARK, EVENT)
+PROACTIVE = "proactive"  # a push she starts (morning greeting, calendar heads-up)
+EMAIL = "email"  # "you have mail from X, want me to summarize it?"
+ALARM = "alarm"
+# her unprompted lines that can wait in Talk to be answered (asides);
+# alarms just ring
+ASIDE_KINDS = (REMARK, EVENT, PROACTIVE, EMAIL)
+
+# Mario's one conversation, shared by the tray window and the app; lines she
+# starts on her own (pushes, mail, alarms) belong to it too
+APP_SESSION = "dashboard"
 
 _MESSAGE_COLUMNS = (
     ("kind", f"TEXT NOT NULL DEFAULT '{CHAT}'"),
