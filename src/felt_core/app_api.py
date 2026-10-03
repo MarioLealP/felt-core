@@ -14,11 +14,13 @@ desktop see one conversation.
 import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from felt_core import margins
 from felt_core.app_history import history_page
+from felt_core.app_stream import notices
 from felt_core.asides import current_asides, link_answer, remark_text
 from felt_core.brain import chat
 from felt_core.config import load_config
@@ -148,6 +150,16 @@ async def margins_mark(req: MarkRequest, _user: str = Depends(sso_user)) -> Mark
         load_config().db_path, req.ids, req.action, hours=req.hours, session_id=SESSION
     )
     return MarkResult(changed=changed)
+
+
+@router.get("/stream")
+async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingResponse:
+    """Live notices for the open app (app_stream.py)."""
+    return StreamingResponse(
+        notices(load_config().db_path, SESSION, request.is_disconnected),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/chat", response_model=SayResponse)
