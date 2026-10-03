@@ -147,9 +147,12 @@ def _file(conn, parsed: Parsed, title: str, message: str, now: datetime) -> int:
     # (a flapping check that resolved and fired again is still one problem)
     row = conn.execute(
         # an expected run she already told him about is closed: the next
-        # update is news of its own
+        # update is news of its own. Same once Claude has reported on it (or
+        # was missed): a new alert after his look must get a look of its own,
+        # never fold silently into something already called fine (WP-58)
         "SELECT id, state FROM incidents WHERE key = ? AND state != 'dropped' AND last_at >= ?"
-        " AND NOT (state = 'noted' AND line IS NOT NULL) ORDER BY id DESC LIMIT 1",
+        " AND NOT (state = 'noted' AND line IS NOT NULL)"
+        " AND report IS NULL AND missed_at IS NULL ORDER BY id DESC LIMIT 1",
         (parsed.key, _ts(now - timedelta(seconds=alert_type.fold_s))),
     ).fetchone()
     if row:

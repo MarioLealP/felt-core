@@ -162,3 +162,16 @@ def test_handoff_and_report_over_http(tmp_path, monkeypatch):
         )
         stored = _get(str(tmp_path / "felt.db"), incident_id)
         assert json.loads(stored["report"])["summary"].startswith("The deploy")
+
+
+def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
+    db = str(tmp_path / "f.db")
+    title = "Wazuh L12 [clockmost]: clockmost: sensitive Linux file changed: /etc/a"
+    first = _in(db, title)
+    during = _in(db, title.replace("/etc/a", "/etc/b"), at=_at(1))
+    assert during == first  # still being looked at: same problem
+    responder.claim_next(db, _at(1))
+    assert _in(db, title.replace("/etc/a", "/etc/c"), at=_at(2)) == first  # he sees it live
+    responder.save_report(db, first, REPORT, "s1")
+    after = _in(db, title.replace("/etc/a", "/etc/shadow"), at=_at(5))
+    assert after != first and _get(db, after)["state"] == "open"
