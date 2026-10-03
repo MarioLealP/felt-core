@@ -113,11 +113,12 @@ def test_her_follow_up_comes_after_her_first_line(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")
     responder.claim_next(db, _at(1))
+    assert alert_lines.due(db, _at(1)) == [(honeypot, "line")]  # Claude still looking
+    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    assert alert_lines.due(db, _at(1)) == []
     responder.save_report(
         db, honeypot, {**REPORT, "verdict": "needs-mario", "for_mario": "check the NAS"}, "s1"
     )
-    assert alert_lines.due(db, _at(2)) == [(honeypot, "line")]
-    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     assert alert_lines.due(db, _at(2)) == [(honeypot, "followup")]
     facts = alert_lines.followup_facts(_get(db, honeypot))
     assert "it needs Mario" in facts and "check the NAS" in facts and "join Claude" in facts
@@ -193,3 +194,26 @@ def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
     responder.save_report(db, first, REPORT, "s1")
     after = _in(db, title.replace("/etc/a", "/etc/shadow"), at=_at(5))
     assert after != first and _get(db, after)["state"] == "open"
+
+
+def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
+    db = str(tmp_path / "f.db")
+    trivy = _in(db, "Trivy: weekly scan")
+    responder.claim_next(db, _at(0))
+    responder.save_report(db, trivy, REPORT, "s1")  # expected -> handled, no line yet
+    assert alert_lines.due(db, _at(1)) == [(trivy, "both")]
+    alert_lines.store(db, trivy, "The weekly scan ran; Claude says it's our own deploy.", "both")
+    incident = _get(db, trivy)
+    assert incident["line"] == incident["followup"]
+    assert alert_lines.due(db, _at(2)) == []
+
+
+def test_one_mario_closed_himself_gets_no_line(tmp_path):
+    db = str(tmp_path / "f.db")
+    from felt_core import systems
+
+    honeypot = _in(db, "HONEYPOT: ssh touched")
+    responder.claim_next(db, _at(0))
+    responder.save_report(db, honeypot, {**REPORT, "verdict": "needs-mario"}, "s1")
+    systems.mark_handled(db, honeypot)
+    assert alert_lines.due(db, _at(1)) == []

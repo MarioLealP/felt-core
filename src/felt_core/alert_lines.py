@@ -108,6 +108,13 @@ _FOLLOWUP = (
     "whether there's anything for him to do. Use ONLY the facts below - don't add "
     "causes, steps, numbers, names or files that aren't there. No emojis."
 )
+_BOTH = (
+    "A server alert came in and Claude has already looked into it. Write ONE short "
+    "message (max ~40 words), in character, casual, telling Mario in your own words "
+    "what happened, what Claude found, and whether there's anything for him to do. "
+    "Use ONLY the facts below - don't add causes, steps, numbers, names or files that "
+    "aren't there. No emojis."
+)
 _MISSED = (
     "Earlier you told Mario that Claude was looking into a server alert, but Claude "
     "couldn't. Write ONE short message (max ~30 words), in character, telling him so "
@@ -195,7 +202,9 @@ def _clip(text: str) -> str:
 async def line_for(config: FeltConfig, incident: dict, kind: str = "line") -> str:
     from felt_core.brain.replies import local_reply
 
-    if kind == "followup":
+    if kind == "both":
+        prompt = f"{_BOTH}\n\nFacts:\n{followup_facts(incident)}"
+    elif kind == "followup":
         instruction = _FOLLOWUP if incident.get("report") else _MISSED
         prompt = f"{instruction}\n\nFacts:\n{followup_facts(incident)}"
     else:
@@ -211,14 +220,18 @@ def due(db_path: str, now: datetime | None = None) -> list[tuple[int, str]]:
     """(incident id, which line) for every incident owed one: "line" for open
     ones and settled expected runs, "back" for ones that counted, got a line
     and have since resolved, "followup" once Claude reported or was missed
-    (always after her first line)."""
+    (always after her first line), and "both" when Claude's report came in
+    before her first line - pushed to him at once, he can finish before her
+    loop comes round, and she must still say something: one line with both."""
     settled = ((now or datetime.now(UTC)) - SETTLE).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
     try:
         _ensure(conn)
         rows = conn.execute(
-            "SELECT id, 'line' FROM incidents WHERE line IS NULL AND (state = 'open'"
-            " OR (state = 'noted' AND last_at <= ?))"
+            "SELECT id, 'line' FROM incidents WHERE line IS NULL AND report IS NULL"
+            " AND (state = 'open' OR (state = 'noted' AND last_at <= ?))"
+            " UNION ALL SELECT id, 'both' FROM incidents WHERE line IS NULL"
+            " AND report IS NOT NULL AND state IN ('open', 'handled') AND handled_by IS NULL"
             " UNION ALL SELECT id, 'back' FROM incidents WHERE state = 'resolved'"
             " AND line IS NOT NULL AND back_line IS NULL"
             " UNION ALL SELECT id, 'followup' FROM incidents WHERE line IS NOT NULL"
@@ -231,7 +244,9 @@ def due(db_path: str, now: datetime | None = None) -> list[tuple[int, str]]:
     return [(i, kind) for i, kind in rows]
 
 
-_COLUMNS = {"line": "line", "back": "back_line", "followup": "followup"}
+_COLUMNS = {"line": ("line",), "back": ("back_line",), "followup": ("followup",)}
+# one line that is both her first word and the outcome
+_COLUMNS["both"] = ("line", "followup")
 
 
 def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None:
@@ -239,10 +254,10 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
     try:
         _ensure(conn)
         with conn:
-            column = _COLUMNS[kind]
+            sets = ", ".join(f"{c} = ?" for c in _COLUMNS[kind])
             conn.execute(
-                f"UPDATE incidents SET {column} = ?, line_at = datetime('now') WHERE id = ?",
-                (text, incident_id),
+                f"UPDATE incidents SET {sets}, line_at = datetime('now') WHERE id = ?",
+                (*[text] * len(_COLUMNS[kind]), incident_id),
             )
     finally:
         conn.close()
@@ -252,7 +267,7 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
         "assistant",
         text,
         kind=ALERT,
-        source_ref=f"incident:{incident_id}{'' if kind == 'line' else ':' + kind}",
+        source_ref=f"incident:{incident_id}{'' if kind in ('line', 'both') else ':' + kind}",
     )
 
 
