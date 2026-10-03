@@ -121,12 +121,15 @@ def enqueue_proactive(
     animation_tag: str | None = None,
     emotion: str | None = None,
     ttl_s: float = _DEFAULT_TTL_S,
+    record: bool = True,
 ) -> int:
     """Inserts one proactive item, picked up by the next `wait_for_next`
     poll tick (at most `_POLL_INTERVAL_S` later). `ttl_s` is how long the
     item stays worth delivering (WP-25: "a heads-up for an event that has
     already started is useless") - past that, `claim_next_proactive`/the
-    accept test's "an expired one never is [spoken]" guarantee kicks in."""
+    accept test's "an expired one never is [spoken]" guarantee kicks in.
+    `record=False` when the line is already in her log (an event line), so
+    this only asks the desktop to say it."""
     payload: dict[str, str] = {}
     if animation_tag is not None:
         payload["animation_tag"] = animation_tag
@@ -136,14 +139,15 @@ def enqueue_proactive(
     item_id = db.insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
     # WP-42.3: she said it, whether or not the desktop catches it in time;
     # it's in her history and in the Margins
-    db.save_message(
-        config.db_path,
-        db.APP_SESSION,
-        "assistant",
-        text,
-        kind=db.PROACTIVE,
-        source_ref=f"proactive:{kind}:{item_id}",
-    )
+    if record:
+        db.save_message(
+            config.db_path,
+            db.APP_SESSION,
+            "assistant",
+            text,
+            kind=db.PROACTIVE,
+            source_ref=f"proactive:{kind}:{item_id}",
+        )
     if ttl_s > 0:
         _prewarm_audio(config, text, emotion)
     return item_id

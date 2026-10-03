@@ -13,7 +13,7 @@ import time
 
 import httpx
 
-from felt_core import local_llm, tts_cache
+from felt_core import local_llm, song_remarks, tts_cache
 from felt_core.brain.personality import PERSONALITY_PROMPT
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
@@ -238,11 +238,9 @@ def _finished_play_from_transition(previous: dict | None, current: dict | None) 
 async def music_taste_loop(config: FeltConfig) -> None:
     """WP-16 Part 2: polls Spotify's currently-playing endpoint to build a
     skip/full-play history per track (see music_taste.summarize_taste for
-    how it's surfaced back into the prompt). Runs independently of
-    felt-tray's own /v1/music/now polling (that one drives unprompted
-    "oh, this one again" remarks, not taste tracking) - both happen to
-    poll at a similar cadence for different reasons, and neither depends
-    on the other."""
+    how it's surfaced back into the prompt), and since 10-03 her remark on
+    a new song (song_remarks.py). felt-tray still polls /v1/music/now, but
+    only for mouthing along to a chorus on the desktop."""
     previous: dict | None = None
     async with httpx.AsyncClient(timeout=20) as client:
         while True:
@@ -250,6 +248,8 @@ async def music_taste_loop(config: FeltConfig) -> None:
                 if config.spotify_refresh_token:
                     current = await get_currently_playing(client, config)
                     finished = _finished_play_from_transition(previous, current)
+                    # Mario 10-03: the song remark comes from here now, not felt-tray
+                    song_remarks.on_poll(config, previous, current)
                     # Advance BEFORE recording: a record that fails must
                     # never leave `previous` pointing at the same item, or
                     # every later poll retries (and fails on) it forever.
