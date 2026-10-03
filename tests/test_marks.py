@@ -28,7 +28,7 @@ def test_parse_keeps_only_real_quotes():
         "note": "again?",
     }
     assert marks.parse_decision(_decision(quote="cat food"), line) is None
-    assert marks.parse_decision(_decision(mark=False), line) is None
+    assert marks.wants_to_mark(_decision()) and not marks.wants_to_mark(_decision(mark=False))
     assert marks.parse_decision(_decision(type="squiggle"), line) is None
     assert marks.parse_decision("not json", line) is None
 
@@ -45,7 +45,7 @@ async def test_mark_is_saved_and_shows_in_history(tmp_path, monkeypatch):
     seen = {}
 
     async def fake_chat(messages, **kw):
-        seen["prompt"] = messages[-1]["content"]
+        seen.setdefault("prompt", messages[-1]["content"])
         return local_llm.LocalReply(text=_decision())
 
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
@@ -63,7 +63,8 @@ async def test_no_second_mark_on_the_same_line_and_she_is_told_how_long_ago(tmp_
     prompts = []
 
     async def fake_chat(messages, **kw):
-        prompts.append(messages[-1]["content"])
+        if kw["json_schema"] is marks.WANT_SCHEMA:
+            prompts.append(messages[-1]["content"])
         return local_llm.LocalReply(text=_decision())
 
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
@@ -85,9 +86,10 @@ def test_parse_allows_her_own_line_long_quotes_and_strikes():
     assert struck == {"line": "mine", "type": "strike-through", "quote": "I promise", "note": ""}
     sentence = "I'm not going to remind you about the bin bags a third time"
     assert marks.parse_decision(_decision(line="mine", type="underline", quote=sentence), lines)
-    # a quote from her reply doesn't count as his, and vice versa
-    assert marks.parse_decision(_decision(line="his", quote="I promise"), lines) is None
-    assert marks.parse_decision(_decision(line="theirs"), lines) is None
+    # a real quote filed under the wrong line goes to the line it's in
+    moved = marks.parse_decision(_decision(line="his", quote="I promise"), lines)
+    assert moved is not None and moved["line"] == "mine"
+    assert marks.parse_decision(_decision(quote="cat food"), lines) is None
 
 
 def test_long_quotes_cant_be_circled():
@@ -104,7 +106,7 @@ async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
     seen = {}
 
     async def fake_chat(messages, **kw):
-        seen["prompt"] = messages[-1]["content"]
+        seen.setdefault("prompt", messages[-1]["content"])
         return local_llm.LocalReply(text=_decision(line="mine", quote="again", type="underline"))
 
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
@@ -114,6 +116,20 @@ async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
     assert page[0]["marks"] == [] and page[1]["marks"][0]["quote"] == "again"
     # one mark per exchange: a mark on her reply also closes it
     assert await marks.maybe_mark(config, "dashboard") is None
+
+
+async def test_no_means_no_second_question(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    save_message(config.db_path, "dashboard", "user", "good morning")
+    calls = []
+
+    async def fake_chat(messages, **kw):
+        calls.append(kw["json_schema"])
+        return local_llm.LocalReply(text='{"mark": false}')
+
+    monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
+    assert await marks.maybe_mark(config, "dashboard") is None
+    assert calls == [marks.WANT_SCHEMA]
 
 
 async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):

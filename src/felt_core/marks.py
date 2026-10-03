@@ -34,30 +34,46 @@ ENCLOSING = ("circle", "box")
 MAX_ENCLOSED_WORDS = 5
 MAX_WORDS = 20
 
+# Two questions, not one (dry runs 10-03): asked whether to mark and how in
+# one prompt, the shape meanings made marking look fun and she marked one
+# exchange in three, wherever the "rare" rule sat. Asked alone and plainly she
+# marks about one in seven; the shapes only come up once she's said yes.
+WANT_SCHEMA = {
+    "type": "object",
+    "properties": {"mark": {"type": "boolean"}},
+    "required": ["mark"],
+    "additionalProperties": False,
+}
+
 SCHEMA = {
     "type": "object",
     "properties": {
-        "mark": {"type": "boolean"},
         "line": {"type": "string", "enum": ["his", "mine"]},
         "type": {"type": "string", "enum": list(TYPES)},
         "quote": {"type": "string"},
         "note": {"type": "string"},
     },
-    "required": ["mark", "line", "type", "quote", "note"],
+    "required": ["line", "type", "quote", "note"],
     "additionalProperties": False,
 }
 
-_INSTRUCTION = (
+_WANT = (
     "You keep a shared notebook with Mario. Below are his line and your answer to it. "
     "Now, pen in hand, decide whether anything in either deserves a mark: something "
     "to tease him about, something you noticed, something that matters to you, or a "
     "bit of your own answer you'd underline or cross out. Marks are meant to be rare, "
     "a treat, not a habit; most exchanges get none, and marking often would cheapen "
-    "them. Answer mark=false unless it's genuinely worth it. If you mark: say which "
-    "line (his or mine), quote a word, a phrase or up to one sentence copied EXACTLY "
-    "from it, and pick circle or box (5 words at most), underline, bracket or "
-    "strike-through; then a note of at most 6 words, lowercase, in your voice, or an "
-    "empty note if the mark says it all. No emoji."
+    "them."
+)
+
+_HOW = (
+    "You decided to mark something in this exchange. Say which line (his or mine), "
+    "quote a word, a phrase or up to one sentence copied EXACTLY from it, and pick the "
+    "shape by what you mean: circle (5 words at most) for the thing that caught your "
+    "eye, box (5 words at most) for something to hold him to, underline for yes, "
+    "this, bracket for a passage to come back to, strike-through to take back your "
+    "own words or veto his. Then a note of at most 6 words, lowercase, in your "
+    "voice, or an empty note if the mark says it all. No emoji."
 )
 
 
@@ -111,7 +127,7 @@ def _since_last(conn: sqlite3.Connection, session_id: str) -> int | None:
 
 def pacing_line(since: int | None) -> str:
     if since is None:
-        return "You have never marked one of his lines yet."
+        return "You have never marked anything yet."
     if since == 0:
         return "You already marked this exchange."
     if since == 1:
@@ -144,26 +160,61 @@ def latest_exchange(db_path: str, session_id: str) -> dict[str, tuple[int, str]]
     return out
 
 
+def wants_to_mark(text: str) -> bool:
+    try:
+        d = json.loads(text)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(d, dict) and d.get("mark") is True
+
+
 def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
-    """The model's JSON -> a mark to keep (with "line": his/mine), or None (no
-    mark, bad JSON, an unknown line or type, a quote that isn't really in that
-    line, or one too long for its shape)."""
+    """The model's JSON -> a mark to keep (with "line": his/mine), or None (bad
+    JSON, an unknown type, a quote that isn't in either line, or one too long for
+    its shape). A real quote filed under the wrong line is moved to the right one."""
     try:
         d = json.loads(text)
     except (ValueError, TypeError):
         return None
-    if not isinstance(d, dict) or d.get("mark") is not True:
+    if not isinstance(d, dict):
         return None
     quote = str(d.get("quote", "")).strip()
     kind = d.get("type")
-    which = d.get("line")
     words = len(quote.split())
-    if not quote or kind not in TYPES or which not in lines or quote not in lines[which]:
+    found = [k for k in lines if quote and quote in lines[k]]
+    if not found or kind not in TYPES:
         return None
     if words > MAX_WORDS or (kind in ENCLOSING and words > MAX_ENCLOSED_WORDS):
         return None
+    which = d.get("line") if d.get("line") in found else found[0]
     note = " ".join(str(d.get("note", "")).split()[:8])
     return {"line": which, "type": kind, "quote": quote, "note": note}
+
+
+async def decide(config: FeltConfig, lines: dict[str, str], since: int | None) -> dict | None:
+    """Ask her about one exchange ({"his": text, "mine": text}); writes nothing.
+    Returns the mark she wants (with "line"), or None."""
+    shown = f"His line: {lines['his']}"
+    if "mine" in lines:
+        shown += f"\nYour answer: {lines['mine']}"
+    system = {"role": "system", "content": personality_prompt(config=config)}
+    want = await local_llm.chat(
+        [system, {"role": "user", "content": f"{_WANT}\n{pacing_line(since)}\n\n{shown}"}],
+        max_tokens=20,
+        temperature=0.7,
+        json_schema=WANT_SCHEMA,
+        config=config,
+    )
+    if not wants_to_mark(want.text):
+        return None
+    how = await local_llm.chat(
+        [system, {"role": "user", "content": f"{_HOW}\n\n{shown}"}],
+        max_tokens=200,
+        temperature=0.7,
+        json_schema=SCHEMA,
+        config=config,
+    )
+    return parse_decision(how.text, lines)
 
 
 async def maybe_mark(config: FeltConfig, session_id: str) -> dict | None:
@@ -180,27 +231,11 @@ async def maybe_mark(config: FeltConfig, session_id: str) -> dict | None:
         conn.close()
     if since == 0:
         return None  # this exchange already carries a mark
-    shown = f"His line: {exchange['his'][1]}"
-    if "mine" in exchange:
-        shown += f"\nYour answer: {exchange['mine'][1]}"
     try:
-        reply = await local_llm.chat(
-            [
-                {"role": "system", "content": personality_prompt(config=config)},
-                {
-                    "role": "user",
-                    "content": f"{_INSTRUCTION}\n{pacing_line(since)}\n\n{shown}",
-                },
-            ],
-            max_tokens=200,
-            temperature=0.7,
-            json_schema=SCHEMA,
-            config=config,
-        )
+        mark = await decide(config, {k: text for k, (_, text) in exchange.items()}, since)
     except local_llm.LocalLLMUnavailable as exc:
         logger.info("marks: felt-llm unavailable (%s)", exc)
         return None
-    mark = parse_decision(reply.text, {k: text for k, (_, text) in exchange.items()})
     if mark is None:
         return None
     message_id = exchange[mark.pop("line")][0]
