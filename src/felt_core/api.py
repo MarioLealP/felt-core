@@ -33,7 +33,6 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
@@ -152,29 +151,11 @@ app.include_router(systems_router)
 app.include_router(notices_router)
 app.include_router(controls_router)
 
-# LAN-only right now, no auth on this API yet (same posture as
-# felt-llm/ComfyUI elsewhere in this project) — permissive CORS matches
-# that reality rather than pretending there's a security boundary here.
-# Tighten this (a real origin allowlist, or auth) before this is ever
-# reachable outside the LAN.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=[
-        "X-Transcribed-Text",
-        "X-Reply-Text",
-        "X-UI-Action",
-        "X-Animation-Tag",
-        "Server-Timing",
-        "X-Emotion",
-        "X-Reaction-Skipped",
-        "X-Reply-Stream",
-        "X-Reply-Chunks",
-        "X-Chunk-Text",
-    ],
-)
+# No CORS (WP-62 phase 0.2, 2026-10-05): every browser client is same-origin
+# - the Felt app is served from felt.clockmost.com/app next to this API, and
+# the tray's window loads that hosted app; the tray, felt-animation and the
+# responder are native clients. Without CORS headers a foreign site can't
+# read any response, credentialed or not.
 
 
 # Polling / status / metrics reads - not user-facing turns, never timed.
@@ -199,8 +180,8 @@ def _is_untimed(path: str) -> bool:
 
 
 # WP-55: what stays reachable without the token - the container healthcheck
-# (/openapi.json, schema only, no data) and the docs page shell. CORS
-# preflights (OPTIONS) carry no credentials by design, so they pass too.
+# (/openapi.json, schema only, no data) and the docs page shell. OPTIONS
+# carries no credentials and gets no CORS answer, so it passes too.
 _AUTH_EXEMPT = frozenset({"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"})
 # The /shopping-list phone page and exactly the calls it makes. A browser
 # can't hold the API token, so Caddy puts SSO in front of these paths
@@ -273,12 +254,10 @@ async def auth_middleware(request: Request, call_next):
         given, load_config().responder_token
     ):
         return await call_next(request)
-    # The CORS middleware sits inside this one, so add its header here or the
-    # dashboard sees an opaque CORS error instead of the 401.
     return JSONResponse(
         status_code=401,
         content={"detail": "unauthorized"},
-        headers={"WWW-Authenticate": "Bearer", "Access-Control-Allow-Origin": "*"},
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
 

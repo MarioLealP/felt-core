@@ -180,10 +180,11 @@ async def test_emotion_reaches_the_felt_voice_body_for_screen_reactions(env, mon
     assert "X-Reply-Stream" not in r.headers  # screen reactions never stream
 
 
-async def test_stream_headers_are_cors_exposed(env):
+async def test_stream_headers_reach_same_origin_clients_without_cors(env):
+    """The app is same-origin (WP-62 0.2): the stream headers are there, and
+    no CORS header exposes anything to another origin."""
     client, _, _ = env
     r = await client.post(
         "/v1/text-chat", json={"message": "hi"}, headers={"Origin": "http://dash"}
     )
-    exposed = {h.strip().lower() for h in r.headers["access-control-expose-headers"].split(",")}
-    assert {"x-reply-stream", "x-reply-chunks", "x-chunk-text"} <= exposed
+    assert not any(h.lower().startswith("access-control-") for h in r.headers)

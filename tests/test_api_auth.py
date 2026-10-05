@@ -24,7 +24,7 @@ def test_token_required_on_data_routes(tmp_path, monkeypatch):
         r = c.get("/v1/history")
         assert r.status_code == 401
         assert r.headers["www-authenticate"] == "Bearer"
-        assert r.headers["access-control-allow-origin"] == "*"
+        assert "access-control-allow-origin" not in r.headers
         assert c.get("/v1/history", headers={"Authorization": "Bearer nope"}).status_code == 401
         assert c.get("/v1/history", headers={"Authorization": "s3cret"}).status_code == 401
         assert c.get("/v1/history", headers={"Authorization": "Bearer s3cret"}).status_code == 200
@@ -38,7 +38,18 @@ def test_healthcheck_docs_and_preflight_stay_open(tmp_path, monkeypatch):
             "/v1/history",
             headers={"Origin": "http://127.0.0.1:5173", "Access-Control-Request-Method": "GET"},
         )
-        assert r.status_code == 200
+        assert r.status_code != 401  # no credentials needed to be told no
+        assert "access-control-allow-origin" not in r.headers
+
+
+def test_no_cors_for_foreign_origins(tmp_path, monkeypatch):
+    """WP-62 0.2: no wildcard (or any) CORS - a foreign page can't read
+    felt-core's answers, with or without credentials."""
+    with _client(tmp_path, monkeypatch, "s3cret") as c:
+        for origin in ("https://evil.example", "null", "https://felt.clockmost.com"):
+            r = c.get("/v1/history", headers={"Origin": origin, "Authorization": "Bearer s3cret"})
+            assert r.status_code == 200
+            assert not any(h.startswith("access-control-") for h in r.headers)
 
 
 def test_websocket_needs_the_token_too(tmp_path, monkeypatch):
