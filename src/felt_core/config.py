@@ -5,11 +5,26 @@ addresses) flows through here — env vars / .env, never hardcoded in code.
 See the project README for why this matters.
 """
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FeltConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="FELT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="FELT_",
+        env_file=".env",
+        extra="ignore",
+        # WP-62 M1: settings rendered by the OpenBao Agent, one file per
+        # setting named like its env var (e.g. FELT_VAULT_PROBE). Set only on
+        # the server; lowest precedence, so an env/.env value still wins.
+        secrets_dir=os.environ.get("FELT_SECRETS_DIR") or None,
+    )
+
+    # WP-62 M1: a FAKE value that only the vault delivers - proves the
+    # vault -> Agent -> secrets_dir path end to end before any real secret
+    # moves. Never used for anything else.
+    vault_probe: str | None = None
 
     # felt-llm: the self-hosted llama.cpp server (OpenAI-compatible, one
     # model, native tool calling). The only model backend: nothing here
