@@ -98,6 +98,11 @@ _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
+    # WP-62 M1: say whether the vault path delivered (never the value itself)
+    if config.vault_probe:
+        logger.info("vault: probe delivered (%d chars)", len(config.vault_probe))
+    else:
+        logger.info("vault: no probe (settings not vault-delivered)")
     ntfy_task = asyncio.create_task(ntfy_listen(config))
     email_task = asyncio.create_task(email_watch(config))
     poe_cache_task = asyncio.create_task(poe_trade_cache_watch(config))
