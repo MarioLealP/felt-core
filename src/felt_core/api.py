@@ -233,25 +233,49 @@ def _token_ok(given: str, token: str | None) -> bool:
     return bool(token) and hmac.compare_digest(given.encode(), token.encode())
 
 
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _origin_ok(request: Request, app_origin: str) -> bool:
+    """WP-62 phase 4 CSRF guard for the SSO-gated (cookie/forward-auth) routes.
+    The forward-auth cookie is SameSite=Lax and every *.clockmost.com app is
+    same-site, so a sibling page could drive a credentialed mutation; these
+    routes carry no bearer token and felt-core has no CSRF token. A safe method
+    is always fine; an unsafe one is refused when the browser says the request
+    is cross-origin (Origin set and not us, or Sec-Fetch-Site same-site/
+    cross-site). A same-origin app request sends Origin == app_origin; native
+    clients use the token path, not these routes, and send no Origin."""
+    if request.method in _SAFE_METHODS:
+        return True
+    origin = request.headers.get("origin")
+    if origin is not None and origin != app_origin:
+        return False
+    site = request.headers.get("sec-fetch-site")
+    return site is None or site in ("same-origin", "none")
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """WP-55: with FELT_API_TOKEN set, every other route needs
     `Authorization: Bearer <token>` (constant-time compare) or gets 401."""
-    token = load_config().api_token
+    config = load_config()
+    token = config.api_token
     path = request.url.path
-    if (
-        not token
-        or request.method == "OPTIONS"
-        or path in _AUTH_EXEMPT
-        or _sso_gated(request.method, path)
-    ):
+    if not token or request.method == "OPTIONS" or path in _AUTH_EXEMPT:
+        return await call_next(request)
+    if _sso_gated(request.method, path):
+        # Caddy forward-auth is the authentication on these routes; felt-core
+        # only has to stop a cross-origin (sibling-subdomain) CSRF here, since
+        # they carry no token (WP-62 phase 4).
+        if not _origin_ok(request, config.app_origin):
+            return JSONResponse(status_code=403, content={"detail": "bad origin"})
         return await call_next(request)
     given = request.headers.get("authorization", "")
     given = given[7:] if given.startswith("Bearer ") else ""
     if _token_ok(given, token):
         return await call_next(request)
     if any(request.method == m and rx.fullmatch(path) for m, rx in _RESPONDER_ROUTES) and _token_ok(
-        given, load_config().responder_token
+        given, config.responder_token
     ):
         return await call_next(request)
     return JSONResponse(

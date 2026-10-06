@@ -78,3 +78,43 @@ def test_shopping_list_paths_are_left_to_caddy_sso(tmp_path, monkeypatch):
         assert c.get("/v1/shopping-list/1").status_code == 401
         assert c.get("/v1/shopping-listx").status_code == 401
         assert c.put("/v1/shopping-list/1").status_code == 401
+
+
+def test_sso_mutations_reject_a_foreign_origin(tmp_path, monkeypatch):
+    """WP-62 phase 4: the SSO-gated routes carry no token (Caddy forward-auth
+    is the auth), the forward-auth cookie is SameSite=Lax and every
+    *.clockmost.com app is same-site - so felt-core refuses an unsafe SSO
+    request whose Origin isn't the app's own, to stop a sibling-subdomain CSRF.
+    Native clients use the token path (not these routes) and send no Origin."""
+    with _client(tmp_path, monkeypatch, "s3cret") as c:
+        app_origin = "https://felt.clockmost.com"
+        # same-origin (and native-ish no-Origin) mutations still work
+        assert c.post("/v1/shopping-list", json={"text": "milk"}).status_code == 200
+        assert (
+            c.post(
+                "/v1/shopping-list",
+                json={"text": "eggs"},
+                headers={"Origin": app_origin, "Sec-Fetch-Site": "same-origin"},
+            ).status_code
+            == 200
+        )
+        # a foreign origin - a sibling subdomain or anywhere - is refused
+        for origin in ("https://calc.clockmost.com", "https://evil.example"):
+            assert (
+                c.post(
+                    "/v1/shopping-list", json={"text": "x"}, headers={"Origin": origin}
+                ).status_code
+                == 403
+            ), origin
+        # cross-site fetch metadata alone (no Origin header) is refused too
+        assert (
+            c.post(
+                "/v1/shopping-list", json={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}
+            ).status_code
+            == 403
+        )
+        # a safe cross-origin read is unaffected (no state change)
+        assert (
+            c.get("/v1/shopping-list", headers={"Origin": "https://calc.clockmost.com"}).status_code
+            == 200
+        )

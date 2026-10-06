@@ -42,6 +42,14 @@ class FeltConfig(BaseSettings):
     # WP-58: the felt-responder's own token, accepted only on /v1/incidents/*
     # (FELT_RESPONDER_TOKEN). Unset = the responder can't get in.
     responder_token: str | None = None
+    # WP-62 phase 4: the browser app's own origin, for the CSRF guard on the
+    # SSO-gated (cookie/forward-auth) state-changing routes. The forward-auth
+    # cookie is SameSite=Lax and every *.clockmost.com app is same-site, so a
+    # sibling page could otherwise drive a credentialed mutation; felt-core has
+    # no CSRF token. An unsafe SSO request whose Origin is set and isn't this is
+    # refused. Native clients use the API token (not these routes) and send no
+    # Origin, so they're unaffected.
+    app_origin: str = "https://felt.clockmost.com"
 
     # WP-54: /v1/voice-chat and /v1/text-chat answer with the first
     # sentence chunk's audio and synthesise the rest in the background
