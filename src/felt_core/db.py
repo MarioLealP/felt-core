@@ -7,6 +7,7 @@ that the brief blocking calls aren't worth the extra complexity yet.
 """
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -87,9 +88,7 @@ def _migrate_message_kinds(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS messages_kind ON messages (session_id, kind, id)")
 
 
-def _connect(db_path: str) -> sqlite3.Connection:
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+def _create_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS messages (
@@ -362,6 +361,26 @@ def _connect(db_path: str) -> sqlite3.Connection:
     )
     # last: it reads the remark tables created above
     _migrate_message_kinds(conn)
+
+
+# The schema is created / migrated once per database per process, not on every
+# connection: concurrent first connections (the lifespan's background tasks
+# plus a request, on a fresh DB) all ran the migration's writes at once and
+# one lost with "database is locked" - flaky tests, and a red CI blocks a
+# release. The 30 s timeout lets an ordinary write collision wait it out
+# instead of failing at once.
+_schema_ready: set[str] = set()
+_schema_lock = threading.Lock()
+
+
+def _connect(db_path: str) -> sqlite3.Connection:
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=30)
+    if db_path not in _schema_ready:
+        with _schema_lock:
+            if db_path not in _schema_ready:
+                _create_schema(conn)
+                _schema_ready.add(db_path)
     return conn
 
 

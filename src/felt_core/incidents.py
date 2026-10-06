@@ -94,7 +94,13 @@ def _ensure(conn) -> None:
     have = {r[1] for r in conn.execute("PRAGMA table_info(incidents)")}
     for name, kind in _ADDED_COLUMNS:
         if name not in have:
-            conn.execute(f"ALTER TABLE incidents ADD COLUMN {name} {kind}")
+            try:
+                conn.execute(f"ALTER TABLE incidents ADD COLUMN {name} {kind}")
+            except sqlite3.OperationalError as exc:
+                # another connection added it between the check and here
+                # (same tolerance as marks.py / db.py's migration)
+                if "duplicate column" not in str(exc):
+                    raise
     conn.commit()
 
 
