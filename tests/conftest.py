@@ -154,6 +154,7 @@ class FakeLLM:
         max_tokens,
         temperature=0.8,
         tools=None,
+        tool_choice=None,
         json_schema=None,
         config,
     ):
@@ -166,6 +167,7 @@ class FakeLLM:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "tools": tools,
+                "tool_choice": tool_choice,
                 "json_schema": json_schema,
             }
         )

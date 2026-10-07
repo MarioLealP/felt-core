@@ -82,6 +82,7 @@ async def chat(
     max_tokens: int,
     temperature: float = 0.8,
     tools: list[dict] | None = None,
+    tool_choice: str | None = None,
     json_schema: dict | None = None,
     config: FeltConfig,
 ) -> LocalReply:
@@ -98,6 +99,8 @@ async def chat(
     }
     if tools:
         payload["tools"] = tools
+        if tool_choice:  # "required": llama.cpp constrains the turn to a tool call
+            payload["tool_choice"] = tool_choice
     if json_schema is not None:
         payload["response_format"] = {
             "type": "json_schema",

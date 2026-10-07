@@ -24,6 +24,7 @@ from collections.abc import Callable
 from felt_core import local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
+from felt_core.brain.lookup_claims import claims_a_lookup
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
     _tool_result_instruction,
@@ -198,6 +199,7 @@ async def _run_skill_call(
     a skill that raised never gets a reaction."""
     skill_name, params = call
     result = None
+    logger.info("skill call: %s", skill_name)
     try:
         ctx = ExecutionContext(config=config, original_message=message)
         async with metrics.timed("skill", skill=skill_name):
@@ -251,6 +253,29 @@ async def _chat_local(
             first = await local_llm.chat(
                 prefix, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config
             )
+        if not first.tool_calls and claims_a_lookup(first.text):
+            # FELT-108: she said she'd look it up ("pulling up the wiki...")
+            # but called nothing, then answered from memory. Ask again with a
+            # tool call required, so the claim is true or the answer honest.
+            logger.warning(
+                "reply claimed a lookup without a tool call - retrying with a tool required"
+            )
+            try:
+                async with metrics.timed("reply", route="local", model=config.local_llm_model):
+                    forced = await local_llm.chat(
+                        prefix,
+                        max_tokens=_REPLY_MAX_TOKENS,
+                        tools=tools,
+                        tool_choice="required",
+                        config=config,
+                    )
+            except local_llm.LocalLLMUnavailable as e:  # never worse than before
+                logger.warning("forced retry failed (%s) - keeping the plain reply", e)
+                forced = None
+            if forced is not None and forced.tool_calls:
+                first = forced
+            elif forced is not None:
+                logger.warning("forced retry still called no tool - keeping the plain reply")
         if first.tool_calls:
             tool_call = first.tool_calls[0]
             name, params = local_llm.parse_tool_arguments(tool_call)
