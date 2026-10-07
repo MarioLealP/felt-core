@@ -17,9 +17,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
-
 from felt_core import db, metrics, tts_cache
+from felt_core.felt_tls import voice_client
 from felt_core.speech import strip_for_tts, tts_request_body
 
 logger = logging.getLogger(__name__)
@@ -51,7 +50,7 @@ async def _synthesize(config: Any, tts_text: str, emotion: str | None = None) ->
     if cached is not None:
         return cached
     async with (
-        httpx.AsyncClient(timeout=60) as client,
+        voice_client(config, timeout=60) as client,
         metrics.timed("tts", chars=len(tts_text)),
     ):
         resp = await client.post(

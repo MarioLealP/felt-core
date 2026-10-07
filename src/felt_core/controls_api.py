@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from felt_core import controls, local_llm
 from felt_core.app_api import sso_user
 from felt_core.config import FeltConfig, load_config
+from felt_core.felt_tls import voice_client
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ async def _voice_up(config: FeltConfig) -> bool | None:
     if not config.voice_url:
         return None
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with voice_client(config, timeout=2.0) as client:
             await client.get(config.voice_url)
         return True  # any answer means it's there
     except httpx.HTTPError:
