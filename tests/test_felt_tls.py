@@ -231,3 +231,23 @@ async def test_https_without_identity_fails_closed(pki):
 def test_plain_http_unchanged():
     c = voice_client(SimpleNamespace(voice_url="http://192.168.10.104:8421", identity_dir="/nope"))
     assert isinstance(c, httpx.AsyncClient)  # no cert files touched for plain HTTP
+
+
+@pytest.mark.asyncio
+async def test_felt_client_for_another_peer(pki):
+    """drive-rag (B5.2): the same mTLS for any Felt peer URL."""
+    from felt_core.felt_tls import felt_client
+
+    port, seen = _server(pki, "voice", "feltint")  # any felt.internal server cert will do
+    cfg = SimpleNamespace(voice_url=None, identity_dir=str(pki / "identity"))
+    async with felt_client(cfg, f"https://{NAME}:{port}", timeout=5) as c:
+        r = await c.get(f"https://127.0.0.1:{port}/", extensions={"sni_hostname": NAME})
+    assert r.status_code == 200
+    assert seen[-1][0] == ["spiffe://clockmost.internal/workload/felt-core"]
+
+
+def test_felt_client_plain_url_unchanged():
+    from felt_core.felt_tls import felt_client
+
+    c = felt_client(SimpleNamespace(identity_dir="/nope"), "http://drive-rag:8000")
+    assert isinstance(c, httpx.AsyncClient)
