@@ -6,6 +6,7 @@ See the project README for why this matters.
 """
 
 import os
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -61,6 +62,11 @@ class FeltConfig(BaseSettings):
     # Caddy strips client copies of the header on every other site (infra #158),
     # or a browser-site client could claim a machine identity.
     machine_identity: bool = False
+    # B5.4 token retirement: "token" = the WP-55 shared bearer token (unset =
+    # open, the old dev default); "identity" = the token is gone: every route
+    # that isn't SSO-gated or exempt needs a Felt machine identity, deny by
+    # default - retiring FELT_API_TOKEN can never leave felt-core open.
+    auth_mode: Literal["token", "identity"] = "token"
     # B5.3 (D10.1): poe2rag's search, via Caddy's machine host with her Felt cert
     # (https://poe2-api.clockmost.com/api/search) - or the old in-network URL.
     poe2_search_url: str = "http://poe2rag:8000/api/search"

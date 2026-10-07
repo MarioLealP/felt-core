@@ -92,3 +92,34 @@ def test_header_ignored_until_switched_on(tmp_path, monkeypatch):
     identity counts for nothing (the token is still required)."""
     with _client(tmp_path, monkeypatch, on=False) as c:
         assert c.get("/v1/settings/temperature-unit", headers=_as("tray")).status_code == 401
+
+
+def test_identity_mode_retires_the_token_and_denies_by_default(tmp_path, monkeypatch):
+    """Token retirement: with FELT_AUTH_MODE=identity, no token works, no token
+    configured does NOT mean open, machine identities and SSO routes still do."""
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")
+    with _client(tmp_path, monkeypatch, token=None) as c:
+        assert c.get("/v1/history").status_code == 401
+        assert c.get("/v1/history", headers={"Authorization": "Bearer s3cret"}).status_code == 401
+        assert c.get("/v1/settings/temperature-unit", headers=_as("tray")).status_code == 200
+        assert c.get("/openapi.json").status_code == 200
+        assert c.get("/v1/shopping-list").status_code != 401  # Caddy's SSO decides
+
+
+def test_identity_mode_refuses_the_old_token_even_if_still_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")
+    with _client(tmp_path, monkeypatch, token="s3cret") as c:
+        assert c.get("/v1/history", headers={"Authorization": "Bearer s3cret"}).status_code == 401
+
+
+def test_identity_mode_closes_the_websocket(tmp_path, monkeypatch):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")
+    with (
+        _client(tmp_path, monkeypatch, token=None) as c,
+        pytest.raises(WebSocketDisconnect),
+        c.websocket_connect("/v1/chat/ws?token=x"),
+    ):
+        pass
