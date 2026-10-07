@@ -285,6 +285,17 @@ async def auth_middleware(request: Request, call_next):
             )
             return JSONResponse(status_code=403, content={"detail": why})
         return await call_next(request)
+    if config.auth_mode == "identity":
+        # B5.4: the shared tokens are retired - no Bearer path at all. Exempt
+        # routes and Caddy's SSO-gated ones as before; anything else needed a
+        # machine identity above, so it's refused here.
+        if request.method == "OPTIONS" or path in _AUTH_EXEMPT:
+            return await call_next(request)
+        if _sso_gated(request.method, path):
+            if not _origin_ok(request, config.app_origin):
+                return JSONResponse(status_code=403, content={"detail": "bad origin"})
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "unauthorized"})
     if not token or request.method == "OPTIONS" or path in _AUTH_EXEMPT:
         return await call_next(request)
     if _sso_gated(request.method, path):
@@ -1111,7 +1122,10 @@ async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
 def _ws_authorized(websocket: WebSocket) -> bool:
     """WP-55: the HTTP auth middleware doesn't see websockets, and browsers
     can't set headers on them - so a Bearer header or ?token= is checked here."""
-    token = load_config().api_token
+    config = load_config()
+    if config.auth_mode == "identity":
+        return False  # B5.4: no shared token any more, and no machine caller uses websockets
+    token = config.api_token
     if not token:
         return True
     given = websocket.headers.get("authorization", "")
