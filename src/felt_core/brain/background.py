@@ -23,6 +23,7 @@ from felt_core.brain.replies import (
 )
 from felt_core.config import FeltConfig
 from felt_core.db import record_music_play
+from felt_core.felt_tls import voice_client
 from felt_core.music_taste import is_skip
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
@@ -97,7 +98,7 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
     # no need to re-render it.
     if config.voice_url and tts_cache.get(tts_text) is None:
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with voice_client(config, timeout=30) as client:
                 tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
                 tts_resp.raise_for_status()
             tts_cache.put(tts_text, tts_resp.content)

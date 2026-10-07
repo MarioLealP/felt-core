@@ -50,6 +50,10 @@ class FeltConfig(BaseSettings):
     # felt-voice — STT/TTS service. Unset means voice-chat simply isn't
     # available, not a hardcoded assumption it's always running.
     voice_url: str | None = None
+    # WP-62 M2b B5 (D4): felt-core's Felt service identity (mounted read-only
+    # from the server's vault service dir). With voice_url on https:// she
+    # talks mTLS to felt-voice with it. Unset = no Felt certs (as before).
+    identity_dir: str | None = None
     # WP-55: shared bearer token for every API route (FELT_API_TOKEN, sops on
     # the server; the desktop clients send it). Unset = no auth (the old LAN
     # posture) - set it only once every client sends it.

@@ -80,6 +80,7 @@ from felt_core.db import (
 )
 from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
+from felt_core.felt_tls import voice_client
 from felt_core.incident_api import router as incident_router
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.notices_api import router as notices_router
@@ -479,7 +480,7 @@ async def _tts_audio(
 async def _fill_reply_stream(stream: reply_stream.ReplyStream, config: Any) -> None:
     """Background half of a streamed reply: chunks 1..N-1, on a client of its
     own (the request's is closed as soon as chunk 0's response is sent)."""
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with voice_client(config, timeout=60) as client:
         await reply_stream.run(stream, lambda _n, text: _tts_audio(text, None, config, client))
 
 
@@ -541,7 +542,7 @@ async def voice_chat_endpoint(
             status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
         )
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with voice_client(config, timeout=60) as client:
         async with metrics.timed("stt"):
             stt_resp = await client.post(
                 f"{config.voice_url}/v1/stt",
@@ -595,7 +596,7 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
     result = await chat(req.message, config, req.session_id, req.tone)
     if req.session_id == APP_SESSION:
         schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
             asdict(result.ui_action) if result.ui_action else None,
@@ -651,7 +652,7 @@ async def screen_context_endpoint(
             headers["X-Animation-Tag"] = quote(result.animation_tag)
         return Response(content=b"", media_type="audio/wav", headers=headers)
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
             asdict(result.ui_action) if result.ui_action else None,
@@ -688,7 +689,7 @@ async def react_screen_endpoint(
             headers["X-Animation-Tag"] = quote(result.animation_tag)
         return Response(content=b"", media_type="audio/wav", headers=headers)
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
             asdict(result.ui_action) if result.ui_action else None,
@@ -738,7 +739,7 @@ async def react_event_endpoint(
 
     emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with voice_client(config, timeout=60) as client:
             return await _synthesize_reply(
                 result.line,
                 None,
