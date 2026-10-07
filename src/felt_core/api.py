@@ -36,7 +36,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from felt_core import diary, incidents, local_llm, metrics, reply_stream, tts_cache
+from felt_core import diary, incidents, local_llm, machine_auth, metrics, reply_stream, tts_cache
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.app_api import SESSION as APP_SESSION
 from felt_core.app_api import router as app_router
@@ -267,6 +267,24 @@ async def auth_middleware(request: Request, call_next):
     config = load_config()
     token = config.api_token
     path = request.url.path
+    # WP-62 M2b B5.4 (D3): a Felt machine identity, set only by Caddy's
+    # machine host (every other site strips it): per identity per route,
+    # deny by default - checked before anything else, token or not.
+    identity = request.headers.get("x-felt-identity") if config.machine_identity else None
+    if identity:
+        why = machine_auth.authorize(
+            identity,
+            request.headers.get("x-felt-serial", ""),
+            request.method,
+            path,
+            config.machine_deny_serials,
+        )
+        if why:
+            logger.warning(
+                "machine caller %s refused on %s %s: %s", identity, request.method, path, why
+            )
+            return JSONResponse(status_code=403, content={"detail": why})
+        return await call_next(request)
     if not token or request.method == "OPTIONS" or path in _AUTH_EXEMPT:
         return await call_next(request)
     if _sso_gated(request.method, path):
