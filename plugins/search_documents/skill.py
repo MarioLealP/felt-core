@@ -9,10 +9,11 @@ right: drive-rag's ingest reads the desktop's local Drive sync folder
 directly, no Drive API/OAuth involved. This skill just calls the already-
 built index, same internal-service pattern as any other felt-core -> sibling
 container call (no Caddy route, no SSO gate — `felt` network only).
+Since WP-62 M2b B5.2 drive-rag only answers felt-core's Felt cert (mTLS),
+so the client comes from felt_tls.felt_client.
 """
 
-import httpx
-
+from felt_core.felt_tls import felt_client
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -41,7 +42,7 @@ async def handle(params, ctx):
 
     # drive-rag answers via felt-llm since WP-56 (local, one slot, ~40 s seen),
     # so 60 s was too tight.
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with felt_client(config, config.drive_rag_url, timeout=120) as client:
         response = await client.post(f"{config.drive_rag_url}/api/ask", json={"question": question})
         response.raise_for_status()
         body = response.json()

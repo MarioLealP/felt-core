@@ -1,4 +1,5 @@
-"""Felt service certs on felt-core's outbound links (WP-62 M2b B5, D4/D5).
+"""Felt service certs on felt-core's outbound links (WP-62 M2b B5: felt-voice D4,
+drive-rag D10.2; D5).
 
 felt-core's 2-hour Felt client cert is renewed hourly by the server-side
 helper into FELT_IDENTITY_DIR (mounted read-only from
@@ -27,11 +28,15 @@ def felt_client_context(identity_dir: str) -> ssl.SSLContext:
     return ctx
 
 
-def voice_client(config: Any, **kwargs: Any) -> httpx.AsyncClient:
-    """The client for felt-voice: mTLS with her Felt cert when felt-voice is
-    on https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before)."""
-    url = getattr(config, "voice_url", None) or ""
+def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
+    """A client for a Felt peer at ``url``: mTLS with her Felt cert when the URL
+    is https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before)."""
     identity_dir = getattr(config, "identity_dir", None)
-    if url.startswith("https://") and identity_dir:
+    if (url or "").startswith("https://") and identity_dir:
         return httpx.AsyncClient(verify=felt_client_context(identity_dir), **kwargs)
     return httpx.AsyncClient(**kwargs)
+
+
+def voice_client(config: Any, **kwargs: Any) -> httpx.AsyncClient:
+    """felt-voice (B5.1)."""
+    return felt_client(config, getattr(config, "voice_url", None), **kwargs)
