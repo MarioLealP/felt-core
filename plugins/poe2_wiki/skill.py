@@ -5,8 +5,7 @@ fully local, so this uses /api/search and hands the passages to her own
 model to answer from.
 """
 
-import httpx
-
+from felt_core.felt_tls import machine_client
 from felt_core.plugin import SkillResult
 
 name = "poe2_wiki"
@@ -26,7 +25,6 @@ parameters_schema = {
     "required": ["query"],
 }
 
-_SEARCH_URL = "http://poe2rag:8000/api/search"
 _TOP_K = 4
 # The passages ride into one felt-llm follow-up (8K context, shared with
 # the persona and tools) - keep them to a few thousand characters.
@@ -35,8 +33,11 @@ _PASSAGE_CHARS = 700
 
 async def handle(params, ctx):
     query = params.get("query") or ctx.original_message
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(_SEARCH_URL, json={"query": query, "k": _TOP_K})
+    # WP-62 M2b B5.3 (D10.1): poe2rag via Caddy's machine host with her Felt
+    # cert once FELT_POE2_SEARCH_URL is https://poe2-api.clockmost.com/...
+    url = ctx.config.poe2_search_url
+    async with machine_client(ctx.config, url, timeout=20) as client:
+        response = await client.post(url, json={"query": query, "k": _TOP_K})
         response.raise_for_status()
         hits = response.json().get("hits", [])
 

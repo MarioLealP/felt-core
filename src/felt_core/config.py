@@ -54,6 +54,16 @@ class FeltConfig(BaseSettings):
     # from the server's vault service dir). With voice_url on https:// she
     # talks mTLS to felt-voice with it. Unset = no Felt certs (as before).
     identity_dir: str | None = None
+    # B5.4 (D3): Felt machine certs revoked before their 2h expiry, as Caddy's
+    # decimal serials (X-Felt-Serial); felt-core refuses them at once.
+    machine_deny_serials: list[str] = []
+    # B5.4: honour X-Felt-Identity at all. Off by default: only turn it on once
+    # Caddy strips client copies of the header on every other site (infra #158),
+    # or a browser-site client could claim a machine identity.
+    machine_identity: bool = False
+    # B5.3 (D10.1): poe2rag's search, via Caddy's machine host with her Felt cert
+    # (https://poe2-api.clockmost.com/api/search) - or the old in-network URL.
+    poe2_search_url: str = "http://poe2rag:8000/api/search"
     # WP-55: shared bearer token for every API route (FELT_API_TOKEN, sops on
     # the server; the desktop clients send it). Unset = no auth (the old LAN
     # posture) - set it only once every client sends it.

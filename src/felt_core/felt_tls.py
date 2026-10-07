@@ -16,6 +16,7 @@ import ssl
 from pathlib import Path
 from typing import Any
 
+import certifi
 import httpx
 
 
@@ -26,6 +27,19 @@ def felt_client_context(identity_dir: str) -> ssl.SSLContext:
     ctx.minimum_version = ssl.TLSVersion.TLSv1_3
     ctx.load_cert_chain(str(d / "client" / "current" / "bundle.pem"))
     return ctx
+
+
+def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
+    """A client for one of Caddy's machine hosts (B5.3, e.g. poe2-api): Caddy
+    shows its normal public certificate (verified against the public CAs, as
+    httpx does by default), and she presents her Felt cert. Plain otherwise."""
+    identity_dir = getattr(config, "identity_dir", None)
+    if (url or "").startswith("https://") and identity_dir:
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.load_cert_chain(str(Path(identity_dir) / "client" / "current" / "bundle.pem"))
+        return httpx.AsyncClient(verify=ctx, **kwargs)
+    return httpx.AsyncClient(**kwargs)
 
 
 def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:

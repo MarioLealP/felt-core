@@ -23,7 +23,9 @@ def _mock(monkeypatch, hits, seen):
 
     transport = httpx.MockTransport(handler)
     orig = httpx.AsyncClient
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    monkeypatch.setattr(
+        skill, "machine_client", lambda config, url, **kw: orig(transport=transport, **kw)
+    )
 
 
 async def test_passages_are_trimmed_and_labelled(monkeypatch):
