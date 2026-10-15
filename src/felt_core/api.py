@@ -539,13 +539,22 @@ async def _synthesize_reply(
         speech_chunks(tts_text, config.reply_stream_first_chunk_chars) if stream else [tts_text]
     )
     streaming = len(chunks) >= 2
-    audio_bytes = await _tts_audio(
-        chunks[0] if streaming else tts_text, emotion, config, client, first_chunk=streaming
-    )
+    voice_down = False
+    try:
+        audio_bytes = await _tts_audio(
+            chunks[0] if streaming else tts_text, emotion, config, client, first_chunk=streaming
+        )
+    except httpx.HTTPError:
+        # felt-voice (the laptop) is off or failing: her reply still exists, so
+        # it goes out as text only instead of a 500 that loses it (2026-10-15).
+        logger.warning("felt-voice unavailable - replying without audio", exc_info=True)
+        audio_bytes, streaming, voice_down = b"", False, True
 
     # Percent-encoded — headers must be ASCII-safe, a non-English reply
     # (accents, etc.) would otherwise break this.
     headers = {"X-Reply-Text": quote(reply), **(extra_headers or {})}
+    if voice_down:
+        headers["X-Voice"] = "unavailable"
     if streaming:
         live = reply_stream.create(chunks, audio_bytes)
         live.task = asyncio.create_task(_fill_reply_stream(live, config))

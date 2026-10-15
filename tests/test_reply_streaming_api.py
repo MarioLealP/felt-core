@@ -188,3 +188,16 @@ async def test_stream_headers_reach_same_origin_clients_without_cors(env):
         "/v1/text-chat", json={"message": "hi"}, headers={"Origin": "http://dash"}
     )
     assert not any(h.lower().startswith("access-control-") for h in r.headers)
+
+
+async def test_voice_down_still_returns_her_text(env):
+    """felt-voice off (the laptop): 200 with her reply text and no audio, not a 500."""
+    client, voice, _ = env
+    first_text = api.speech_chunks(api.strip_for_tts(_LONG_REPLY))[0]
+    voice.fail_on.add(first_text)
+    r = await client.post("/v1/text-chat", json={"message": "hi"})
+    assert r.status_code == 200
+    assert unquote(r.headers["X-Reply-Text"]) == _LONG_REPLY
+    assert r.headers["X-Voice"] == "unavailable"
+    assert r.content == b""
+    assert "X-Reply-Stream" not in r.headers
