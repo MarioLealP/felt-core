@@ -50,6 +50,7 @@ from felt_core.brain import (
     react_to_screen,
     weather_precompute_loop,
 )
+from felt_core.calendar_api import router as calendar_router
 from felt_core.calendar_headsup import calendar_headsup_loop
 from felt_core.config import load_config
 from felt_core.controls_api import router as controls_router
@@ -155,6 +156,7 @@ app.include_router(app_router)
 app.include_router(incident_router)
 app.include_router(systems_router)
 app.include_router(notices_router)
+app.include_router(calendar_router)
 app.include_router(controls_router)
 
 # No CORS (WP-62 phase 0.2, 2026-10-05): every browser client is same-origin
