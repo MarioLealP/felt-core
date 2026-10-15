@@ -40,7 +40,7 @@ def _link(event: dict) -> str | None:
 def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]:
     """Pure: Google events -> the bar's items, sorted by start. Cancelled
     events and ones Mario declined are left out; all-day events stay."""
-    out = []
+    keyed: list[tuple[tuple[str, bool, str], dict]] = []
     for calendar, events in events_by_calendar:
         for e in events:
             if e.get("status") == "cancelled":
@@ -54,19 +54,19 @@ def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]
             end, _ = _when(e.get("end", {}))
             if not start:
                 continue
-            out.append(
-                {
-                    "title": e.get("summary") or "(untitled)",
-                    "calendar": calendar,
-                    "start": start,
-                    "end": end,
-                    "all_day": all_day,
-                    "location": e.get("location"),
-                    "link": _link(e),
-                }
-            )
-    out.sort(key=lambda i: (i["start"][:10], not i["all_day"], i["start"]))
-    return out
+            item = {
+                "title": e.get("summary") or "(untitled)",
+                "calendar": calendar,
+                "start": start,
+                "end": end,
+                "all_day": all_day,
+                "location": e.get("location"),
+                "link": _link(e),
+            }
+            # by day, all-day first on its day, then by time
+            keyed.append(((start[:10], not all_day, start), item))
+    keyed.sort(key=lambda k: k[0])
+    return [item for _, item in keyed]
 
 
 @router.get("/v1/calendar/upcoming")
