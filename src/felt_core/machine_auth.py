@@ -40,6 +40,7 @@ MACHINE_ROUTES: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
         ("GET", r"/v1/proactive/next"),
         ("GET", r"/v1/proactive/\d+/audio"),
         ("POST", r"/v1/proactive/\d+/requeue"),
+        ("GET", r"/v1/calendar/upcoming"),
     ),
     # felt-animation (desktop): event_log, behavior, loops, reaction, playback
     _W + "felt-animation": _r(
