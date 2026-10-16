@@ -41,6 +41,11 @@ MACHINE_ROUTES: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
         ("GET", r"/v1/proactive/\d+/audio"),
         ("POST", r"/v1/proactive/\d+/requeue"),
         ("GET", r"/v1/calendar/upcoming"),
+        # her body runs inside felt-tray since 2026-10-16 (felt-animation's routes, one identity)
+        ("POST", r"/v1/events"),
+        ("POST", r"/v1/react/event"),
+        ("POST", r"/v1/reaction-tag"),
+        ("GET", r"/v1/weather/now"),
     ),
     # felt-animation (desktop): event_log, behavior, loops, reaction, playback
     _W + "felt-animation": _r(
