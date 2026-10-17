@@ -98,6 +98,18 @@ def test_sso_mutations_reject_a_foreign_origin(tmp_path, monkeypatch):
             ).status_code
             == 200
         )
+        # felt-tray's window on the cert-only host is the same app (2026-10-17)
+        assert (
+            c.post(
+                "/v1/shopping-list",
+                json={"text": "tea"},
+                headers={
+                    "Origin": "https://felt-desktop.clockmost.com",
+                    "Sec-Fetch-Site": "same-origin",
+                },
+            ).status_code
+            == 200
+        )
         # a foreign origin - a sibling subdomain or anywhere - is refused
         for origin in ("https://calc.clockmost.com", "https://evil.example"):
             assert (

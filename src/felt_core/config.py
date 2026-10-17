@@ -85,6 +85,9 @@ class FeltConfig(BaseSettings):
     # refused. Native clients use the API token (not these routes) and send no
     # Origin, so they're unaffected.
     app_origin: str = "https://felt.clockmost.com"
+    # The same app served to felt-tray's window on the cert-only host (no
+    # login from the tray, 2026-10-17); its page sends this Origin.
+    app_desktop_origin: str = "https://felt-desktop.clockmost.com"
 
     # WP-54: /v1/voice-chat and /v1/text-chat answer with the first
     # sentence chunk's audio and synthesise the rest in the background
