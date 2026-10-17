@@ -29,6 +29,14 @@ from felt_core.brain.music_fast_path import music_fast_path
         ("like this one", "media_control", {"action": "save"}),
         ("save this to my liked songs", "media_control", {"action": "save"}),
         ("what's this song?", "now_playing", {}),
+        # Mario's own lines, 2026-10-17 (all three missed the first version)
+        ("can u pause the song?", "media_control", {"action": "pause"}),
+        ("can you restart the song?", "media_control", {"action": "restart"}),
+        ("can you play birdbrain jamie paige", "play_music", {"query": "birdbrain jamie paige"}),
+        ("start this song over", "media_control", {"action": "restart"}),
+        ("play it from the beginning", "media_control", {"action": "restart"}),
+        ("pls play some daft punk", "play_music", {"query": "some daft punk"}),
+        ("play the music", "media_control", {"action": "resume"}),
         ("what song is playing", "now_playing", {}),
     ],
 )
@@ -42,7 +50,10 @@ def test_commands(message, skill, params):
         "stop",  # the presence hush
         "stop it",  # more likely aimed at her
         "turn it off",
-        "play some Daft Punk",  # play_music by name, via the model
+        "play a game with me",
+        "play games with me later?",
+        "play along",
+        "play it cool",
         "I skipped breakfast",
         "what's this song about? it sounds sad",
         "the volume on my headphones is broken",

@@ -94,3 +94,9 @@ async def test_play_pause_toggles(monkeypatch):
 async def test_no_active_player(monkeypatch):
     text, calls = await _do(monkeypatch, {"action": "next"}, player=False)
     assert calls == [] and text == "Nothing's playing on Spotify right now."
+
+
+async def test_restart_seeks_to_zero(monkeypatch):
+    text, calls = await _do(monkeypatch, {"action": "restart"})
+    assert calls == [("PUT", "/v1/me/player/seek", {"position_ms": "0"})]
+    assert text == "From the top."

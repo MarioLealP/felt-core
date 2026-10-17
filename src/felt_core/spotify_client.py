@@ -160,6 +160,10 @@ async def previous_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "POST", "/me/player/previous")
 
 
+async def restart_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+    await _player_call(client, config, "PUT", "/me/player/seek", params={"position_ms": 0})
+
+
 async def set_volume(client: httpx.AsyncClient, config: FeltConfig, percent: int) -> None:
     percent = max(0, min(100, percent))
     await _player_call(
