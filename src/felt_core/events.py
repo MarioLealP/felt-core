@@ -291,8 +291,10 @@ def build_prompt(
         if not title:
             return None
         song = f'"{title}"' + (f" by {artist}" if artist else "")
+        because = _text(details, "because")
         why = (
-            "It's new to him - you're putting him onto it, so sell it a little."
+            "It's an artist new to him - you're putting him onto it, so sell it a little"
+            + (f" (you picked it because: {because})." if because else ".")
             if details.get("new") is True
             else "It's one he already likes."
         )

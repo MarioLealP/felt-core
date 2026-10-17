@@ -40,19 +40,16 @@ def is_on() -> bool:
     return SESSION.on
 
 
-def _norm(text: str) -> str:
-    return "".join(ch for ch in text.lower() if ch.isalnum())
-
-
 def same_track(pick: dict, snapshot: dict | None) -> bool:
     """Pure: is `snapshot` (a currently-playing poll) her `pick`? By uri, or
     by title + artist (Spotify can relink a track to another uri)."""
     track = (snapshot or {}).get("track") or {}
     if track.get("uri") == pick["uri"]:
         return True
-    artists = _norm(" ".join(a.get("name", "") for a in track.get("artists", [])))
-    return bool(_norm(track.get("name", ""))) and (
-        _norm(track.get("name", "")) == _norm(pick["title"]) and _norm(pick["artist"]) in artists
+    artists = sp.norm_name(" ".join(a.get("name", "") for a in track.get("artists", [])))
+    return bool(sp.norm_name(track.get("name", ""))) and (
+        sp.norm_name(track.get("name", "")) == sp.norm_name(pick["title"])
+        and sp.norm_name(pick["artist"]) in artists
     )
 
 
@@ -168,7 +165,12 @@ async def _say(config: FeltConfig, pick: dict) -> None:
     from felt_core.events import react_to_event
     from felt_core.proactive import enqueue_proactive
 
-    details = {"title": pick["title"], "artist": pick["artist"], "new": pick["discovery"]}
+    details = {
+        "title": pick["title"],
+        "artist": pick["artist"],
+        "new": pick["discovery"],
+        "because": pick.get("because", ""),
+    }
     try:
         result = await react_to_event("dj_track", details, config, session_id=APP_SESSION)
     except Exception:

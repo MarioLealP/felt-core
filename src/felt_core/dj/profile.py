@@ -15,12 +15,14 @@ def build_profile(
     """`history_artists`: {artist, plays, skips} from the listening history;
     `top_artists`: Spotify's ~6-month top; `feedback`: {title, artist, liked};
     `outcomes`: her recent picks {title, artist, discovery, outcome}."""
-    played = [a for a in history_artists if a["plays"] - a["skips"] > 0][:_TOP]
     skippy = [
         a["artist"]
         for a in history_artists
         if a["plays"] >= _SKIPPY_MIN_PLAYS and a["skips"] / a["plays"] >= 0.5
     ][:10]
+    played = [a for a in history_artists if a["plays"] > a["skips"] and a["artist"] not in skippy][
+        :_TOP
+    ]
     lines = []
     if played:
         lines.append("Artists he plays most: " + ", ".join(a["artist"] for a in played) + ".")

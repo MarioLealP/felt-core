@@ -208,26 +208,20 @@ async def library_contains(
     return [bool(x) for x in data] if isinstance(data, list) else [False] * len(uris)
 
 
-def _norm(text: str) -> str:
+def norm_name(text: str) -> str:
+    """Lowercase letters and digits only, for comparing names."""
     return "".join(ch for ch in text.lower() if ch.isalnum())
 
 
-async def find_track(
-    client: httpx.AsyncClient, config: FeltConfig, title: str, artist: str
-) -> dict | None:
-    """The track `title` by `artist`, or None - a search hit only counts when
-    one of its artists is the one asked for, so a song her model half
-    remembers can't turn into a different track with a similar name."""
-    data = await _get(
-        client, config, "/search", q=f"track:{title} artist:{artist}", type="track", limit=5
-    )
-    want = _norm(artist)
+async def artist_tracks(client: httpx.AsyncClient, config: FeltConfig, artist: str) -> list[dict]:
+    """Tracks whose main artist is `artist` (by name, Spotify's search order -
+    roughly the popular ones first); empty if Spotify has no such artist."""
+    data = await _get(client, config, "/search", q=f'artist:"{artist}"', type="track", limit=10)
+    want = norm_name(artist)
     items = data.get("tracks", {}).get("items", []) if isinstance(data, dict) else []
-    for track in items:
-        names = [_norm(a.get("name", "")) for a in track.get("artists", [])]
-        if want and any(n and (n == want or want in n or n in want) for n in names):
-            return track
-    return None
+    return [
+        t for t in items if t.get("artists") and norm_name(t["artists"][0].get("name", "")) == want
+    ]
 
 
 def pick_device(devices: list[dict]) -> dict | None:
