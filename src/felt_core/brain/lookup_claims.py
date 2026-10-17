@@ -11,7 +11,8 @@ later "let me know if..." isn't one.
 Actions too (2026-10-17): "Consider it done. I'm flipping that switch for
 you now" - and the shelf light never changed (no smart_home_control call).
 A switching verb only counts with an on/off/up/down a few words later, so
-"I'm going to turn in for the night" isn't a claim.
+"I'm going to turn in for the night" isn't a claim (past tense: on/off only,
+since "it turned up" is everyday English).
 """
 
 import re
@@ -36,7 +37,9 @@ _ACTION = re.compile(
     r"\b("
     r"consider it done"
     r"|(turn|switch|flip|toggle|shut|power|dimm?)(ing)?\b[^.!?]{0,40}?\b(on|off|up|down)\b"
-    r"|flipp?(ing)? (that|the|this) switch"
+    # past tense only with on/off: "the package turned up" is no claim
+    r"|(turned|switched|flipped|toggled|powered|dimmed)\b[^.!?]{0,40}?\b(on|off)\b"
+    r"|flipp?(ing|ed)? (that|the|this) switch"
     r")",
     re.IGNORECASE,
 )
