@@ -107,12 +107,14 @@ class FeltConfig(BaseSettings):
     # its own port/path convention (see printer_status/skill.py).
     hp_printer_host: str | None = None
 
-    # Plane — the WP board (WP-37). Felt only ever reads it (board_status
-    # refuses anything but GET); moving cards is Mario's or Claude's job.
-    plane_url: str = "https://plane.clockmost.com"
-    plane_api_token: str | None = None
-    plane_workspace: str = "clockmost"
-    plane_project: str = "FELT"
+    # The work board (WP-37; Beads since 2026-10-17, decision D10): the
+    # issues file the agents keep in Mario's workspace repo, read through
+    # Gitea's API as the restricted read-only user `felt-board`. Felt only
+    # ever reads it (board_status refuses anything but GET).
+    board_gitea_url: str = "https://git.clockmost.com"
+    board_repo: str = "Benylin/workspace"
+    board_path: str = ".beads/issues.jsonl"
+    board_token: str | None = None
 
     # News/RSS digest — comma-separated feed URLs. Empty by default;
     # Mario hasn't specified which feeds he actually wants yet.
