@@ -1,9 +1,9 @@
 """Start new music by name ("play Bohemian Rhapsody") via the Spotify Web
 API — the counterpart media_control's own description explicitly excludes
-("NOT for starting new music/videos by name"). Targets whichever of Mario's
-devices Spotify reports as active, falling back to the first available one
-if none is — Spotify's Connect model requires at least one device with the
-app open; there's no way to "wake" a fully closed client remotely.
+("NOT for starting new music/videos by name"). Started as queue + skip
+(spotify_client.start_track - the plain play call doesn't work on Mario's
+Linux client); a player that hasn't played anything since it opened can't be
+woken remotely.
 """
 
 import httpx
@@ -11,11 +11,10 @@ import httpx
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 from felt_core.spotify_client import (
+    NoActivePlayer,
     format_track_name,
-    list_devices,
-    pick_device,
-    play_track,
     search_track,
+    start_track,
 )
 
 name = "play_music"
@@ -48,13 +47,13 @@ async def handle(params, ctx):
         if track is None:
             return SkillResult(text=f"Couldn't find '{query}' on Spotify.")
 
-        devices = await list_devices(client, config)
-        device = pick_device(devices)
-        if device is None:
+        try:
+            await start_track(client, config, track["uri"])
+        except NoActivePlayer:
             return SkillResult(
-                text="No Spotify device is open right now — open Spotify somewhere first."
+                text="Spotify's asleep on your desktop - hit play on anything once, then ask again."
             )
+        except httpx.HTTPError:
+            return SkillResult(text="Spotify didn't take that right now.")
 
-        await play_track(client, config, track["uri"], device["id"])
-
-    return SkillResult(text=f"Playing {format_track_name(track)} on {device['name']}.")
+    return SkillResult(text=f"Playing {format_track_name(track)}.")
