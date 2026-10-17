@@ -12,6 +12,7 @@ single account) via the shared oauth_token.refresh_access_token helper
 
 import base64
 import time
+from typing import Any
 
 import httpx
 
@@ -175,6 +176,58 @@ async def save_to_library(client: httpx.AsyncClient, config: FeltConfig, uri: st
     """The generic library endpoint (Spotify's February 2026 change replaced
     PUT /me/tracks); scope user-library-modify."""
     await _player_call(client, config, "PUT", "/me/library", params={"uris": uri})
+
+
+async def queue_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+    await _player_call(client, config, "POST", "/me/player/queue", params={"uri": uri})
+
+
+async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:
+    token = await _get_access_token(client, config)
+    response = await client.get(
+        f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, params=params
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+async def top_artists(client: httpx.AsyncClient, config: FeltConfig, limit: int = 30) -> list[str]:
+    """Mario's top artists over ~6 months (scope user-top-read)."""
+    data = await _get(client, config, "/me/top/artists", time_range="medium_term", limit=limit)
+    items = data.get("items", []) if isinstance(data, dict) else []
+    return [a["name"] for a in items if a.get("name")]
+
+
+async def library_contains(
+    client: httpx.AsyncClient, config: FeltConfig, uris: list[str]
+) -> list[bool]:
+    """Which of `uris` (max 40) Mario has saved (scope user-library-read)."""
+    if not uris:
+        return []
+    data = await _get(client, config, "/me/library/contains", uris=",".join(uris[:40]))
+    return [bool(x) for x in data] if isinstance(data, list) else [False] * len(uris)
+
+
+def _norm(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+async def find_track(
+    client: httpx.AsyncClient, config: FeltConfig, title: str, artist: str
+) -> dict | None:
+    """The track `title` by `artist`, or None - a search hit only counts when
+    one of its artists is the one asked for, so a song her model half
+    remembers can't turn into a different track with a similar name."""
+    data = await _get(
+        client, config, "/search", q=f"track:{title} artist:{artist}", type="track", limit=5
+    )
+    want = _norm(artist)
+    items = data.get("tracks", {}).get("items", []) if isinstance(data, dict) else []
+    for track in items:
+        names = [_norm(a.get("name", "")) for a in track.get("artists", [])]
+        if want and any(n and (n == want or want in n or n in want) for n in names):
+            return track
+    return None
 
 
 def pick_device(devices: list[dict]) -> dict | None:
