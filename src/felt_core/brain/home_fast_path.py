@@ -11,8 +11,9 @@ still goes to the model.
 
 import re
 
-_POLITE = r"(?:(?:hey|ok(?:ay)?|felt)[,!]?\s+)?(?:(?:can|could|would|will) you\s+)?(?:please\s+)?"
-_TAIL = r"(?:\s*,?\s*(?:please|pls|plz|for me|thanks|thank you|now))*[\s.!?:)(]*$"
+from felt_core.brain.command_words import POLITE as _POLITE
+from felt_core.brain.command_words import TAIL as _TAIL
+
 # a device name, never a second request ("the light and dance")
 _DEVICE = r"(?P<device>[a-z0-9](?:(?!\band\b)[a-z0-9 '-]){0,40}?)"
 

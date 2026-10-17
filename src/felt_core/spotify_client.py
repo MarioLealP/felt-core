@@ -1,10 +1,9 @@
 """Spotify — Felt's own dedicated OAuth client (2026-09-14), for
-play_music (search + start new playback by name). Distinct from
-media_control, which only does transport control (play/pause/skip) on
-whatever's already loaded via local MPRIS on the desktop — this is the
-"start something new" half, and it's a plain server-side API integration
-(no felt-desktop-agent involved at all, unlike media_control), since the
-Spotify Web API is public internet, not a local-network call.
+play_music (search + start new playback by name) and, since WP-48
+(2026-10-17), media_control's transport (pause/resume/skip/back/volume)
+and "save this song": the old MPRIS path went through felt-desktop-agent,
+retired in WP-62 M2b. A plain server-side API integration - the Spotify
+Web API is public internet, not a local-network call.
 
 Access tokens are refreshed on demand and cached in-process (module-level,
 single account) via the shared oauth_token.refresh_access_token helper
@@ -117,6 +116,61 @@ async def play_track(
         json={"uris": [track_uri]},
     )
     response.raise_for_status()
+
+
+async def _player_call(
+    client: httpx.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs
+) -> None:
+    """One player/library change; the now-playing cache is dropped so the
+    next read sees it."""
+    token = await _get_access_token(client, config)
+    response = await client.request(
+        method, f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, **kwargs
+    )
+    response.raise_for_status()
+    _now_playing_cache["data"] = "unset"
+
+
+async def get_player(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+    """The playback state (`is_playing`, `device.volume_percent`, ...), or
+    None when no device is active (204)."""
+    token = await _get_access_token(client, config)
+    response = await client.get(
+        f"{_API_BASE}/me/player", headers={"Authorization": f"Bearer {token}"}
+    )
+    if response.status_code == 204:
+        return None
+    response.raise_for_status()
+    return response.json()
+
+
+async def pause(client: httpx.AsyncClient, config: FeltConfig) -> None:
+    await _player_call(client, config, "PUT", "/me/player/pause")
+
+
+async def resume(client: httpx.AsyncClient, config: FeltConfig) -> None:
+    await _player_call(client, config, "PUT", "/me/player/play")
+
+
+async def next_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+    await _player_call(client, config, "POST", "/me/player/next")
+
+
+async def previous_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+    await _player_call(client, config, "POST", "/me/player/previous")
+
+
+async def set_volume(client: httpx.AsyncClient, config: FeltConfig, percent: int) -> None:
+    percent = max(0, min(100, percent))
+    await _player_call(
+        client, config, "PUT", "/me/player/volume", params={"volume_percent": percent}
+    )
+
+
+async def save_to_library(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+    """The generic library endpoint (Spotify's February 2026 change replaced
+    PUT /me/tracks); scope user-library-modify."""
+    await _player_call(client, config, "PUT", "/me/library", params={"uris": uri})
 
 
 def pick_device(devices: list[dict]) -> dict | None:
