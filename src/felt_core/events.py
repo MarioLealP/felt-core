@@ -67,6 +67,9 @@ class EventPolicy:
 # any field per deployment with FELT_EVENT_POLICIES (JSON).
 DEFAULT_POLICIES: dict[str, EventPolicy] = {
     "music_new_track": EventPolicy(cooldown_s=5 * 60, dedupe_s=60 * 60, emotion="happy"),
+    # WP-48 DJ mode: a line as each of her picks comes on. He asked for the
+    # set (and said she can yap), so no cooldown and no min gap.
+    "dj_track": EventPolicy(cooldown_s=0, emotion="happy", bypass_min_gap=True),
     "game_start": EventPolicy(cooldown_s=20 * 60, dedupe_s=2 * 60 * 60, emotion="excited"),
     "game_stop": EventPolicy(cooldown_s=20 * 60, min_duration_s=20 * 60, emotion="amused"),
     "afk_end": EventPolicy(cooldown_s=30 * 60, min_duration_s=30 * 60, emotion="happy"),
@@ -283,6 +286,20 @@ def build_prompt(
         )
         lyric_part = f' A line from it: "{lyric}". You may quote it if it fits.' if lyric else ""
         return f"Mario just started playing {song}.{lyric_part} {_EVENT_INSTRUCTION}"
+    if event == "dj_track":
+        title, artist = _text(details, "title"), _text(details, "artist")
+        if not title:
+            return None
+        song = f'"{title}"' + (f" by {artist}" if artist else "")
+        why = (
+            "It's new to him - you're putting him onto it, so sell it a little."
+            if details.get("new") is True
+            else "It's one he already likes."
+        )
+        return (
+            f"You're DJ-ing Mario's music. Your pick is coming on now: {song}. {why} "
+            f"Introduce it like a radio DJ, in character. {_EVENT_INSTRUCTION}"
+        )
     if event == "game_start":
         name = _game_name(details)
         what = f"the game {name}" if name else "a game"

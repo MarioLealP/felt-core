@@ -85,6 +85,26 @@ _NOT_MUSIC = re.compile(
     r"|hide\b|pretend\b|fair\b|it\s+(?:cool|safe|by\s+ear)\b|on\b|for\b)",
     re.IGNORECASE,
 )
+_DJ: list[tuple[re.Pattern, dict]] = [
+    (
+        _cmd(r"(?:turn\s+)?(?:the\s+)?dj\s+mode\s+off|stop\s+(?:the\s+)?dj(?:\s+mode)?|end\s+dj"),
+        {"action": "stop"},
+    ),
+    (
+        _cmd(
+            r"(?:turn\s+on\s+)?(?:the\s+)?dj\s+mode(?:\s+on)?|be\s+my\s+dj|dj\s+for\s+me"
+            r"|start\s+(?:the\s+)?dj(?:\s+mode)?"
+        ),
+        {"action": "start"},
+    ),
+    (_cmd(r"more\s+like\s+(?:this|that)(?:\s+(?:one|song))?"), {"action": "more"}),
+    (
+        _cmd(
+            r"not\s+(?:this|that)(?:\s+(?:one|song))?|i\s+don'?t\s+like\s+(?:this|that)(?:\s+(?:one|song))?"
+        ),
+        {"action": "less"},
+    ),
+]
 _VOLUME = re.compile(
     rf"^\s*{POLITE}(?:set\s+)?(?:the\s+)?volume\s+(?:to\s+)?(?P<n>\d{{1,3}})\s*%?{TAIL}",
     re.IGNORECASE,
@@ -92,6 +112,9 @@ _VOLUME = re.compile(
 
 
 def music_fast_path(message: str) -> tuple[str, dict] | None:
+    for pattern, params in _DJ:
+        if pattern.match(message):
+            return "dj_mode", dict(params)
     m = _VOLUME.match(message)
     if m:
         return "media_control", {"action": "volume", "level": int(m["n"])}

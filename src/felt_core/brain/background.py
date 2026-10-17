@@ -23,6 +23,7 @@ from felt_core.brain.replies import (
 )
 from felt_core.config import FeltConfig
 from felt_core.db import record_music_play
+from felt_core.dj import control as dj_control
 from felt_core.felt_tls import voice_client
 from felt_core.music_taste import is_skip
 from felt_core.plugin import ExecutionContext
@@ -249,8 +250,12 @@ async def music_taste_loop(config: FeltConfig) -> None:
                 if config.spotify_refresh_token:
                     current = await get_currently_playing(client, config)
                     finished = _finished_play_from_transition(previous, current)
-                    # Mario 10-03: the song remark comes from here now, not felt-tray
-                    song_remarks.on_poll(config, previous, current)
+                    # Mario 10-03: the song remark comes from here now, not felt-tray;
+                    # in DJ mode (WP-48) her DJ line takes its place
+                    if dj_control.is_on():
+                        dj_control.on_poll(config, previous, current)
+                    else:
+                        song_remarks.on_poll(config, previous, current)
                     # Advance BEFORE recording: a record that fails must
                     # never leave `previous` pointing at the same item, or
                     # every later poll retries (and fails on) it forever.
