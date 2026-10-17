@@ -1,11 +1,15 @@
-"""Her picks: felt-llm suggests songs from his taste profile, Spotify confirms
-each one exists (by that artist), and the mix of new-to-him vs familiar is
-enforced here, not left to the model's word."""
+"""Her picks. Familiar ones come straight from his listening history (songs
+he plays through, never the last few days', never ones he skips); new ones
+are artists he doesn't listen to yet, named by felt-llm with a "because",
+with real tracks from Spotify. The model only names artists - a local model
+knows artists far better than exact song titles (2026-10-17 dry run: of nine
+suggested titles, one existed)."""
 
 import datetime as dt
 import json
 import logging
 import random
+import re
 
 import httpx
 
@@ -20,24 +24,26 @@ logger = logging.getLogger(__name__)
 _SCHEMA = {
     "type": "object",
     "properties": {
-        "songs": {
+        "artists": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string"},
-                    "artist": {"type": "string"},
-                    "new": {"type": "boolean"},
+                    "name": {"type": "string"},
+                    "because": {"type": "string"},
                 },
-                "required": ["title", "artist", "new"],
+                "required": ["name", "because"],
             },
         }
     },
-    "required": ["songs"],
+    "required": ["artists"],
 }
 _RECENT_PICK_DAYS = 7
 _RECENT_PLAY_DAYS = 3
+_TRACKS_PER_NEW_ARTIST = 5  # pick among an artist's top few: a good first impression
 _top_cache: dict = {"artists": [], "at": 0.0}
+# a catalogue track id; local files show up as "spotify:local:..." and can't be queued
+_TRACK_ID = re.compile(r"^[0-9A-Za-z]{22}$")
 
 
 async def _top_artists(client: httpx.AsyncClient, config: FeltConfig) -> list[str]:
@@ -51,29 +57,6 @@ async def _top_artists(client: httpx.AsyncClient, config: FeltConfig) -> list[st
     return _top_cache["artists"]
 
 
-async def _suggest(config: FeltConfig, profile: str, count: int, new: int) -> list[dict]:
-    system = (
-        "You are Felt, DJ-ing for Mario on Spotify. Suggest real, existing songs that fit his "
-        "taste below - exact song titles and artist names as they appear on Spotify. Mark a "
-        "song new=true when it's likely new to him: an artist he doesn't play, or a deeper cut "
-        "he hasn't heard; new songs should still fit what he likes. Never suggest the same song "
-        "twice, and vary the artists."
-    )
-    user = f"{profile}\n\nSuggest {count} songs, at least {new} of them new to him. Answer as JSON."
-    reply = await local_llm.chat(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_tokens=900,
-        temperature=0.9,
-        json_schema=_SCHEMA,
-        config=config,
-    )
-    try:
-        songs = json.loads(reply.text).get("songs", [])
-    except (ValueError, AttributeError):
-        return []
-    return [s for s in songs if isinstance(s, dict) and s.get("title") and s.get("artist")]
-
-
 def _recent(last: str | None, days: int) -> bool:
     if not last:
         return False
@@ -85,67 +68,123 @@ def _recent(last: str | None, days: int) -> bool:
     return dt.datetime.now(dt.UTC).replace(tzinfo=None) - when < dt.timedelta(days=days)
 
 
+def familiar(history: dict[str, dict], count: int, avoid: set[str]) -> list[dict]:
+    """Pure-ish (random): songs he plays through, weighted by how often;
+    never one he mostly skips, played in the last few days, or in `avoid`."""
+    pool = [
+        (tid, t)
+        for tid, t in history.items()
+        if _TRACK_ID.match(tid or "")
+        and t["artist"]
+        and t["plays"] > t["skips"]
+        and t["skips"] / t["plays"] < 0.5
+        and not _recent(t["last"], _RECENT_PLAY_DAYS)
+        and f"spotify:track:{tid}" not in avoid
+    ]
+    picks: list[dict] = []
+    while pool and len(picks) < count:
+        weights = [t["plays"] - t["skips"] for _, t in pool]
+        i = random.choices(range(len(pool)), weights=weights)[0]
+        tid, t = pool.pop(i)
+        picks.append(
+            {
+                "uri": f"spotify:track:{tid}",
+                "title": t["title"],
+                "artist": t["artist"],
+                "discovery": False,
+            }
+        )
+    return picks
+
+
+async def _new_artists(config: FeltConfig, profile: str, known: set[str], count: int) -> list[dict]:
+    system = (
+        "You are Felt, DJ-ing for Mario on Spotify. Name real artists he doesn't listen to yet "
+        "who fit his taste below - exact artist names as on Spotify, each with a short reason "
+        "tied to something he likes ('because' - e.g. 'like Jonathan Young, metal covers of game "
+        "songs'). Vary them; none from his lists."
+    )
+    user = f"{profile}\n\nName {count} artists new to him. Answer as JSON."
+    reply = await local_llm.chat(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        max_tokens=500,
+        temperature=0.9,
+        json_schema=_SCHEMA,
+        config=config,
+    )
+    try:
+        artists = json.loads(reply.text).get("artists", [])
+    except (ValueError, AttributeError):
+        return []
+    return [
+        a
+        for a in artists
+        if isinstance(a, dict) and a.get("name") and sp.norm_name(a["name"]) not in known
+    ]
+
+
+async def discoveries(
+    client: httpx.AsyncClient,
+    config: FeltConfig,
+    profile: str,
+    known: set[str],
+    count: int,
+    avoid: set[str],
+) -> list[dict]:
+    """`count` tracks by artists new to him (one per artist), from Spotify."""
+    picks: list[dict] = []
+    for a in await _new_artists(config, profile, known, count * 2):
+        if len(picks) >= count:
+            break
+        try:
+            tracks = await sp.artist_tracks(client, config, a["name"])
+        except httpx.HTTPError:
+            continue
+        tracks = [t for t in tracks[:_TRACKS_PER_NEW_ARTIST] if t["uri"] not in avoid]
+        if not tracks:
+            logger.info("dj: no tracks for suggested artist %r", a["name"])
+            continue
+        t = random.choice(tracks)
+        avoid.add(t["uri"])
+        picks.append(
+            {
+                "uri": t["uri"],
+                "title": t["name"],
+                "artist": ", ".join(x["name"] for x in t.get("artists", [])),
+                "discovery": True,
+                "because": str(a.get("because", ""))[:160],
+            }
+        )
+    return picks
+
+
 async def pick(
     client: httpx.AsyncClient, config: FeltConfig, count: int, avoid: set[str]
 ) -> list[dict]:
-    """Up to `count` playable picks {uri, title, artist, discovery}, none in
-    `avoid` (what's queued now) or recently picked/played, none he usually
-    skips; about discovery_share of them new to him."""
+    """Up to `count` picks {uri, title, artist, discovery[, because]}, about
+    discovery_share of them by artists new to him."""
     db = config.db_path
     share = learning.discovery_share(store.discovery_outcomes(db, 10))
     want_new = sum(random.random() < share for _ in range(count))
-    profile = build_profile(
-        store.history_artists(db),
-        await _top_artists(client, config),
-        store.feedback(db, 20),
-        store.pick_outcomes(db, 12),
-        dt.datetime.now().hour,
-    )
-    suggestions = await _suggest(config, profile, count * 3, max(want_new, 1))
+    avoid = avoid | store.recent_pick_uris(db, _RECENT_PICK_DAYS)
     history = store.history_tracks(db)
-    skip_uris = avoid | store.recent_pick_uris(db, _RECENT_PICK_DAYS)
-    found: list[dict] = []
-    for s in suggestions:
-        try:
-            track = await sp.find_track(client, config, s["title"], s["artist"])
-        except httpx.HTTPError:
-            continue
-        if track is None or track["uri"] in skip_uris:
-            continue
-        seen = history.get(track.get("id", ""))
-        if seen and (
-            _recent(seen["last"], _RECENT_PLAY_DAYS)
-            or (seen["plays"] >= 2 and seen["skips"] / seen["plays"] >= 0.5)
-        ):
-            continue
-        skip_uris.add(track["uri"])
-        found.append(
-            {
-                "uri": track["uri"],
-                "title": track["name"],
-                "artist": ", ".join(a["name"] for a in track.get("artists", [])),
-                "discovery": seen is None,
-            }
+    picks = familiar(history, count - want_new, avoid)
+    want_new = count - len(picks)
+    if want_new:
+        artists = store.history_artists(db)
+        top = await _top_artists(client, config)
+        known = {sp.norm_name(a["artist"]) for a in artists} | {sp.norm_name(a) for a in top}
+        profile = build_profile(
+            artists,
+            top,
+            store.feedback(db, 20),
+            store.pick_outcomes(db, 12),
+            dt.datetime.now().hour,
         )
-    # "new" = never in his history AND not saved in his library
-    unknown = [f["uri"] for f in found if f["discovery"]]
-    try:
-        saved = dict(zip(unknown, await sp.library_contains(client, config, unknown), strict=False))
-    except httpx.HTTPError:
-        saved = {}
-    for f in found:
-        f["discovery"] = f["discovery"] and not saved.get(f["uri"], False)
-    return choose(found, count, want_new)
-
-
-def choose(found: list[dict], count: int, want_new: int) -> list[dict]:
-    """Pure: `count` picks with `want_new` discoveries where there are enough
-    of each, filled from the other kind otherwise; shuffled together."""
-    new = [f for f in found if f["discovery"]]
-    known = [f for f in found if not f["discovery"]]
-    n_new = min(want_new, len(new))
-    n_known = min(count - n_new, len(known))
-    n_new = min(count - n_known, len(new))
-    picks = new[:n_new] + known[:n_known]
+        avoid = avoid | {p["uri"] for p in picks}
+        picks += await discoveries(client, config, profile, known, want_new, avoid)
+    if len(picks) < count:  # too few discoveries came through: familiar ones fill in
+        taken = avoid | {p["uri"] for p in picks}
+        picks += familiar(history, count - len(picks), taken)
     random.shuffle(picks)
     return picks

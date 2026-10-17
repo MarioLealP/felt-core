@@ -53,7 +53,7 @@ def test_profile_names_favourites_skips_and_feedback():
         [{"title": "X", "artist": "Y", "discovery": 1, "outcome": "skipped"}],
         23,
     )
-    assert "Artists he plays most: Jamie Paige, Nobody Likes." in text
+    assert "Artists he plays most: Jamie Paige." in text  # the skippy one isn't a favourite
     assert "Spotify's top artists for him lately: Porter Robinson." in text
     assert "Artists he usually skips: Nobody Likes." in text
     assert 'He asked for more like: "Birdbrain" by Jamie Paige.' in text
@@ -61,69 +61,85 @@ def test_profile_names_favourites_skips_and_feedback():
     assert "It's late evening." in text
 
 
-# --- choosing ---------------------------------------------------------------
+# --- picking ----------------------------------------------------------------
 
 
-def _p(uri, new):
-    return {"uri": uri, "title": uri, "artist": "a", "discovery": new}
+def _hist(tid, plays, skips, last="2026-01-01 00:00:00"):
+    return {"title": tid, "artist": "a", "plays": plays, "skips": skips, "last": last}
 
 
-def test_choose_hits_the_mix_and_fills_from_the_other_kind():
-    found = [_p("n1", True), _p("n2", True), _p("k1", False), _p("k2", False)]
-    picks = picker.choose(found, 3, 1)
-    assert sorted(p["uri"] for p in picks if p["discovery"]) == ["n1"]
-    assert len(picks) == 3
-    only_known = picker.choose([_p("k1", False), _p("k2", False)], 2, 2)
-    assert len(only_known) == 2  # no discoveries found: familiar ones fill in
+def test_familiar_only_takes_songs_he_plays_through_and_not_lately():
+    good = "4uLU6hMCjMI75M1A2tKUQC"
+    history = {
+        good: _hist("good", 5, 0),
+        "spotify:local:::Shadow+Bringers+Ost:400": _hist("local file", 50, 0),
+        "skippy": _hist("skippy", 4, 3),
+        "lately": _hist("lately", 9, 0, last="2999-01-01 00:00:00"),
+        "avoided": _hist("avoided", 9, 0),
+    }
+    picks = picker.familiar(history, 5, avoid={"spotify:track:avoided"})
+    assert [p["uri"] for p in picks] == [f"spotify:track:{good}"]
+    assert picks[0]["discovery"] is False
 
 
-async def test_pick_checks_spotify_and_his_history(tmp_path, monkeypatch, fake_llm):
+async def test_discoveries_are_new_artists_with_real_tracks(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    # he has played "Old Fave" (familiar); "Skipped Thing" mostly skipped
-    record_music_play(config.db_path, "id-old", "Old Fave", "Known", 200_000, 200_000, False)
-    for _ in range(3):
-        record_music_play(config.db_path, "id-skip", "Skipped Thing", "Meh", 1_000, 200_000, True)
     fake_llm.script = [
         json.dumps(
             {
-                "songs": [
-                    {"title": "Old Fave", "artist": "Known", "new": False},
-                    {"title": "Skipped Thing", "artist": "Meh", "new": False},
-                    {"title": "Fresh", "artist": "Newbie", "new": True},
-                    {"title": "Made Up Song", "artist": "Nobody", "new": True},
+                "artists": [
+                    {"name": "Jonathan Young", "because": "already his"},
+                    {"name": "Made Up Band", "because": "nope"},
+                    {"name": "Ghost Data", "because": "like Jonathan Young, game-song metal"},
                 ]
             }
         )
     ]
-    tracks = {
-        ("Old Fave", "Known"): {"id": "id-old", "uri": "u:old", "name": "Old Fave"},
-        ("Skipped Thing", "Meh"): {"id": "id-skip", "uri": "u:skip", "name": "Skipped Thing"},
-        ("Fresh", "Newbie"): {"id": "id-new", "uri": "u:new", "name": "Fresh"},
-    }
 
-    async def find(client, cfg, title, artist):
-        t = tracks.get((title, artist))
-        return None if t is None else {**t, "artists": [{"name": artist}]}
-
-    async def nothing(*a, **k):
+    async def tracks(client, cfg, artist):
+        if artist == "Ghost Data":
+            return [{"uri": "u:gd", "name": "Wicked", "artists": [{"name": "Ghost Data"}]}]
         return []
 
-    async def not_saved(client, cfg, uris):
-        return [False] * len(uris)
-
-    monkeypatch.setattr(sp, "find_track", find)
-    monkeypatch.setattr(sp, "top_artists", nothing)
-    monkeypatch.setattr(sp, "library_contains", not_saved)
-    monkeypatch.setattr(picker.random, "random", lambda: 0.0)  # every slot wants a discovery
-    picker._top_cache["at"] = 0.0
-    # "Old Fave" was played just now -> too recent; the skipped one is out; made-up song not found
-    async with httpx.AsyncClient() as client:  # every Spotify call above is faked
-        picks = await picker.pick(client, config, 2, avoid=set())
-    assert [(p["uri"], p["discovery"]) for p in picks] == [("u:new", True)]
+    monkeypatch.setattr(sp, "artist_tracks", tracks)
+    async with httpx.AsyncClient() as client:  # every Spotify call is faked
+        picks = await picker.discoveries(
+            client, config, "profile", {"jonathanyoung"}, 1, avoid=set()
+        )
+    assert picks == [
+        {
+            "uri": "u:gd",
+            "title": "Wicked",
+            "artist": "Ghost Data",
+            "discovery": True,
+            "because": "like Jonathan Young, game-song metal",
+        }
+    ]
     assert fake_llm.calls[0]["json_schema"] is not None
 
 
+async def test_pick_fills_with_familiar_when_discoveries_fail(tmp_path, monkeypatch, fake_llm):
+    config = _config(tmp_path)
+    # recorded just now -> too recent to come back as a familiar pick
+    record_music_play(config.db_path, "id-old", "Old Fave", "Known", 200_000, 200_000, False)
+    fake_llm.script = [json.dumps({"artists": []})]
+
+    async def none(*a, **k):
+        return []
+
+    monkeypatch.setattr(sp, "top_artists", none)
+    monkeypatch.setattr(picker.random, "random", lambda: 0.0)  # every slot wants a discovery
+    picker._top_cache["at"] = 0.0
+    async with httpx.AsyncClient() as client:
+        picks = await picker.pick(client, config, 2, avoid=set())
+    assert picks == []  # nothing new found, and the one familiar song was played just now
+
+
 # --- the poll loop --------------------------------------------------------------
+
+
+def _p(uri, new):
+    return {"uri": uri, "title": uri, "artist": "a", "discovery": new}
 
 
 def _snap(uri, title="t", progress=0, duration=200_000, playing=True):

@@ -108,14 +108,19 @@ def feedback(db_path: str, last: int) -> list[dict]:
 
 
 def history_artists(db_path: str) -> list[dict]:
-    """Per artist from the listening history (music_taste): plays, skips."""
+    """Per artist from the listening history (music_taste): plays, skips. A
+    track by several artists ("A, B") counts for each."""
     conn = _conn(db_path)
-    rows = conn.execute(
-        "SELECT artists AS artist, COUNT(*) AS plays, SUM(skipped) AS skips"
-        " FROM music_taste GROUP BY artists ORDER BY plays - skips DESC"
-    ).fetchall()
+    rows = conn.execute("SELECT artists, skipped FROM music_taste").fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    stats: dict[str, dict] = {}
+    for r in rows:
+        for name in (a.strip() for a in (r["artists"] or "").split(",")):
+            if name:
+                s = stats.setdefault(name, {"artist": name, "plays": 0, "skips": 0})
+                s["plays"] += 1
+                s["skips"] += r["skipped"]
+    return sorted(stats.values(), key=lambda a: a["plays"] - a["skips"], reverse=True)
 
 
 def history_tracks(db_path: str) -> dict[str, dict]:
