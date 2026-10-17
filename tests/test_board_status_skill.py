@@ -1,6 +1,7 @@
-"""WP-37: board_status reads the Plane board and never writes to it."""
+"""WP-37: board_status reads the Beads board file and never writes to it."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 import httpx
@@ -16,36 +17,38 @@ assert _spec is not None and _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
-STATES = [
-    {"id": "s-done", "name": "Done", "sequence": 90},
-    {"id": "s-ready", "name": "Ready", "sequence": 40},
-    {"id": "s-prog", "name": "In progress", "sequence": 50},
-    {"id": "s-review", "name": "Needs review", "sequence": 60},
-    {"id": "s-polish", "name": "Polish pile", "sequence": 10},
-]
 ISSUES = [
-    {"name": "WP-47 Home Assistant", "state": "s-ready", "sort_order": 20},
-    {"name": "WP-41 ntfy hygiene", "state": "s-ready", "sort_order": 10},
-    {"name": "WP-37 The board", "state": "s-prog", "sort_order": 10},
-    {"name": "WP-01 freeze fix", "state": "s-done", "sort_order": 10},
-    {"name": "Walk cycle", "state": "s-polish", "sort_order": 10},
+    {"id": "cm-1", "title": "Home Assistant", "status": "open", "priority": 2, "created_at": "2"},
+    {"id": "cm-2", "title": "ntfy hygiene", "status": "open", "priority": 1, "created_at": "3"},
+    {"id": "cm-3", "title": "The board", "status": "in_progress", "priority": 2, "created_at": "1"},
+    {"id": "cm-4", "title": "freeze fix", "status": "closed", "priority": 1, "created_at": "1"},
+    {"id": "cm-5", "title": "Walk cycle", "status": "open", "priority": 4, "labels": ["polish"]},
+    {"id": "cm-6", "title": "Email noise", "status": "open", "priority": 3, "created_at": "1"},
+    {
+        "id": "cm-7",
+        "title": "Retire Plane",
+        "status": "open",
+        "priority": 2,
+        "dependencies": [{"issue_id": "cm-7", "depends_on_id": "cm-3", "type": "blocks"}],
+    },
+    {
+        "id": "cm-8",
+        "title": "Unblocked now",
+        "status": "open",
+        "priority": 2,
+        "created_at": "9",
+        "dependencies": [{"issue_id": "cm-8", "depends_on_id": "cm-4", "type": "blocks"}],
+    },
 ]
-
-
-def _page(results):
-    return {"results": results, "next_page_results": False, "next_cursor": None}
 
 
 def _mock(monkeypatch, seen, issues=ISSUES):
+    body = "\n".join(json.dumps(i) for i in issues) + "\n"
+
     def handler(request):
         seen.append(request)
-        path = request.url.path
-        if path.endswith("/projects/"):
-            return httpx.Response(200, json=_page([{"id": "p1", "identifier": "FELT"}]))
-        if path.endswith("/states/"):
-            return httpx.Response(200, json=_page(STATES))
-        if path.endswith("/issues/"):
-            return httpx.Response(200, json=_page(issues))
+        if request.url.path == "/api/v1/repos/Benylin/workspace/raw/.beads/issues.jsonl":
+            return httpx.Response(200, text=body)
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
@@ -54,39 +57,62 @@ def _mock(monkeypatch, seen, issues=ISSUES):
 
 
 def _ctx(msg=""):
-    return ExecutionContext(config=FeltConfig(plane_api_token="t"), original_message=msg)
+    return ExecutionContext(config=FeltConfig(board_token="t"), original_message=msg)
 
 
-async def test_overview_lists_columns_in_board_order(monkeypatch):
+async def test_overview_counts_columns_and_lists_the_top(monkeypatch):
     seen = []
     _mock(monkeypatch, seen)
     r = await skill.handle({}, _ctx("how's the board?"))
-    assert r.text.startswith("Board: Polish pile 1, Ready 2, In progress 1, Done 1.")
-    assert "In progress: WP-37 The board" in r.text
-    assert "Ready: WP-41 ntfy hygiene; WP-47 Home Assistant" in r.text
+    assert r.text.startswith(
+        "Board: In progress 1, Ready 3, Blocked 1, Backlog 1, Polish pile 1, Done 1."
+    )
+    assert "In progress: The board" in r.text
+    assert "Ready: ntfy hygiene; Home Assistant; Unblocked now" in r.text
     assert "Nothing is waiting for Mario's review." in r.text
     assert {req.method for req in seen} == {"GET"}
-    assert seen[0].headers["X-API-Key"] == "t"
+    assert seen[0].headers["Authorization"] == "token t"
 
 
 async def test_next_is_the_top_of_ready(monkeypatch):
     _mock(monkeypatch, [])
     r = await skill.handle({"focus": "next"}, _ctx())
-    assert r.text == "Next up: WP-41 ntfy hygiene; WP-47 Home Assistant"
+    assert r.text == "Next up: ntfy hygiene; Home Assistant; Unblocked now"
 
 
 async def test_waiting_for_me_means_review(monkeypatch):
-    _mock(monkeypatch, [])
+    issues = [
+        *ISSUES,
+        {"id": "cm-9", "title": "M2b certs", "status": "open", "labels": ["needs-review"]},
+    ]
+    _mock(monkeypatch, [], issues)
     r = await skill.handle({}, _ctx("anything waiting for me?"))
-    assert r.text == "Nothing in Needs review."
+    assert r.text == "Needs review (1): M2b certs"
+
+
+async def test_parked_is_deferred(monkeypatch):
+    _mock(monkeypatch, [], [{"id": "cm-1", "title": "PoE2 pricing", "status": "deferred"}])
+    r = await skill.handle({"focus": "parked"}, _ctx())
+    assert r.text == "Parked (1): PoE2 pricing"
 
 
 async def test_no_token_is_reported():
-    r = await skill.handle({}, ExecutionContext(config=FeltConfig(plane_api_token=None)))
+    r = await skill.handle({}, ExecutionContext(config=FeltConfig(board_token=None)))
     assert "isn't connected" in r.text
 
 
+async def test_unreadable_board_is_reported(monkeypatch):
+    def handler(request):
+        return httpx.Response(200, text="not json\n")
+
+    orig = httpx.AsyncClient
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    r = await skill.handle({}, _ctx())
+    assert r.text == "Couldn't read the board right now."
+
+
 async def test_non_get_is_refused_before_sending():
-    request = httpx.Request("PATCH", "https://plane.example/api/v1/x")
+    request = httpx.Request("PATCH", "https://git.example/api/v1/x")
     with pytest.raises(RuntimeError, match="read-only"):
         await skill._read_only(request)

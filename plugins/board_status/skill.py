@@ -1,10 +1,13 @@
-"""WP-37: Felt's read-only view of the WP board (Plane, project FELT).
+"""WP-37: Felt's read-only view of the work board (Beads, since 2026-10-17).
 
 Answers "what's in progress / waiting for me / next?". Mario 2026-09-26:
-"she should have overview of the gitea board also" (the board moved to Plane
-on 10-02). She never moves cards: every request that isn't a GET is refused
-before it leaves the process.
+"she should have overview of the gitea board also". The board is the issues
+file the agents keep with Beads in Mario's workspace repo (decision D10 - it
+replaced Plane); she reads it through Gitea's API and never changes it: every
+request that isn't a GET is refused before it leaves the process.
 """
+
+import json
 
 import httpx
 
@@ -13,7 +16,7 @@ from felt_core.plugin import SkillResult
 
 name = "board_status"
 description = (
-    "Reads Mario's work board (the Felt WP tickets on Plane): what's in progress, what "
+    "Reads Mario's work board (the open-work list the agents keep): what's in progress, what "
     "needs his review, what's next, the backlog or the polish pile. Read-only."
 )
 parameters_schema = {
@@ -29,17 +32,27 @@ parameters_schema = {
     },
 }
 
-# focus word -> board column names it covers
+# focus word -> the column it shows (the column names she says out loud)
 _FOCUS = {
-    "in progress": ["In progress"],
-    "review": ["Needs review"],
-    "next": ["Ready"],
-    "ready": ["Ready"],
-    "backlog": ["Backlog"],
-    "polish": ["Polish pile"],
-    "parked": ["Parked"],
-    "done": ["Done"],
+    "in progress": "In progress",
+    "review": "Needs review",
+    "next": "Ready",
+    "ready": "Ready",
+    "backlog": "Backlog",
+    "polish": "Polish pile",
+    "parked": "Parked",
+    "done": "Done",
 }
+_COLUMNS = [
+    "In progress",
+    "Needs review",
+    "Ready",
+    "Blocked",
+    "Backlog",
+    "Polish pile",
+    "Parked",
+    "Done",
+]
 _LIST_MAX = 6
 
 
@@ -56,37 +69,55 @@ def _focus(raw: str | None) -> str:
     return "overview"
 
 
-async def _pages(client: httpx.AsyncClient, url: str) -> list[dict]:
-    out: list[dict] = []
-    cursor = None
-    while True:
-        params = {"per_page": 100} | ({"cursor": cursor} if cursor else {})
-        data = (await client.get(url, params=params)).raise_for_status().json()
-        out.extend(data["results"])
-        if not data.get("next_page_results"):
-            return out
-        cursor = data["next_cursor"]
-
-
-async def fetch_board(config) -> dict[str, list[str]]:
-    """Column name -> ticket names in board order (columns in board order)."""
-    base = f"{config.plane_url.rstrip('/')}/api/v1/workspaces/{config.plane_workspace}"
+async def fetch_issues(config) -> list[dict]:
+    """The board's issues, one dict per line of the Beads export."""
+    url = (
+        f"{config.board_gitea_url.rstrip('/')}/api/v1/repos/{config.board_repo}"
+        f"/raw/{config.board_path}"
+    )
     async with httpx.AsyncClient(
         timeout=15,
-        headers={"X-API-Key": config.plane_api_token},
+        headers={"Authorization": f"token {config.board_token}"},
         event_hooks={"request": [_read_only]},
     ) as client:
-        projects = await _pages(client, f"{base}/projects/")
-        project = next(p for p in projects if p["identifier"] == config.plane_project)
-        url = f"{base}/projects/{project['id']}"
-        states = sorted(await _pages(client, f"{url}/states/"), key=lambda s: s["sequence"])
-        issues = await _pages(client, f"{url}/issues/")
-    board: dict[str, list[dict]] = {s["name"]: [] for s in states}
-    by_id = {s["id"]: s["name"] for s in states}
+        text = (await client.get(url)).raise_for_status().text
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def _column(issue: dict, open_ids: set[str]) -> str:
+    status, labels = issue.get("status"), set(issue.get("labels") or [])
+    if status == "closed":
+        return "Done"
+    if status == "deferred":
+        return "Parked"
+    if "needs-review" in labels:
+        return "Needs review"
+    if status == "in_progress":
+        return "In progress"
+    blockers = [
+        d["depends_on_id"]
+        for d in issue.get("dependencies") or []
+        if d.get("type") == "blocks" and d.get("depends_on_id") in open_ids
+    ]
+    if status == "blocked" or blockers:
+        return "Blocked"
+    if "polish" in labels:
+        return "Polish pile"
+    # the most urgent open work is "ready"; the rest waits in the backlog
+    return "Ready" if issue.get("priority", 4) <= 2 else "Backlog"
+
+
+def build_board(issues: list[dict]) -> dict[str, list[str]]:
+    """Column name -> issue titles, most urgent first (columns in a fixed order)."""
+    open_ids = {i["id"] for i in issues if i.get("status") != "closed"}
+    board: dict[str, list[dict]] = {col: [] for col in _COLUMNS}
     for issue in issues:
-        board.setdefault(by_id.get(issue["state"], "?"), []).append(issue)
+        board[_column(issue, open_ids)].append(issue)
     return {
-        col: [i["name"] for i in sorted(items, key=lambda i: i["sort_order"])]
+        col: [
+            i["title"]
+            for i in sorted(items, key=lambda i: (i.get("priority", 4), i.get("created_at", "")))
+        ]
         for col, items in board.items()
     }
 
@@ -101,23 +132,23 @@ def summarise(board: dict[str, list[str]], focus: str) -> str:
         if not board.get("Needs review"):
             lines.append("Nothing is waiting for Mario's review.")
         return "\n".join(lines)
-    cols = _FOCUS[focus]
-    items = [name for col in cols for name in board.get(col, [])]
+    col = _FOCUS[focus]
+    items = board.get(col, [])
     if not items:
-        return f"Nothing in {' / '.join(cols)}."
+        return f"Nothing in {col}."
     more = f" (+{len(items) - _LIST_MAX} more)" if len(items) > _LIST_MAX else ""
     if focus == "next":
         return "Next up: " + "; ".join(items[:3]) + more
-    return f"{' / '.join(cols)} ({len(items)}): " + "; ".join(items[:_LIST_MAX]) + more
+    return f"{col} ({len(items)}): " + "; ".join(items[:_LIST_MAX]) + more
 
 
 async def handle(params, ctx):
     config = ctx.config
-    if not config.plane_api_token:
-        return SkillResult(text="The board isn't connected (no Plane token configured).")
+    if not config.board_token:
+        return SkillResult(text="The board isn't connected (no board token configured).")
     focus = _focus(get_single_param(params, "focus") or ctx.original_message)
     try:
-        board = await fetch_board(config)
-    except (httpx.HTTPError, StopIteration, KeyError):
+        issues = await fetch_issues(config)
+    except (httpx.HTTPError, ValueError, KeyError):
         return SkillResult(text="Couldn't read the board right now.")
-    return SkillResult(text=summarise(board, focus))
+    return SkillResult(text=summarise(build_board(issues), focus))
