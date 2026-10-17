@@ -6,7 +6,7 @@ import json
 import pytest
 
 from felt_core.brain import orchestrator
-from felt_core.brain.lookup_claims import claims_a_lookup
+from felt_core.brain.lookup_claims import claims_a_lookup, claims_a_tool_use, claims_an_action
 from felt_core.config import FeltConfig
 from felt_core.plugin import SkillResult
 from felt_core.plugin_loader import LoadedSkill
@@ -37,6 +37,34 @@ def test_claims(text):
 )
 def test_not_claims(text):
     assert not claims_a_lookup(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # the two live replies from 2026-10-17 (the shelf light never changed)
+        "Consider it done. I'm flipping that switch for you now.",
+        "Got it. Turning the shelf light off for you now.",
+        "I'll switch the fan on.",
+        "Dimming the lights down a bit.",
+    ],
+)
+def test_action_claims(text):
+    assert claims_an_action(text)
+    assert claims_a_tool_use(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I'm going to turn in for the night.",
+        "That song really turned my mood around.",
+        "Morning! Coffee first?",
+        "Ha, nice one. " * 15 + "Want me to turn the fan on?",
+    ],
+)
+def test_not_action_claims(text):
+    assert not claims_an_action(text)
 
 
 def _config(tmp_path):

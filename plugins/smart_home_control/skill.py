@@ -21,7 +21,8 @@ from felt_core.plugin import SkillResult
 name = "smart_home_control"
 description = (
     "Turns a smart-home device (light, plug, fan) on or off, or checks whether it's "
-    "currently on — by name, e.g. 'turn on the chandelier', 'is the fan on'."
+    "currently on — by name or kind, e.g. 'turn on the chandelure', 'is the fan on', "
+    "'turn off the lights' (plural or 'all' = every one of that kind)."
 )
 parameters_schema = {
     "type": "object",
@@ -53,27 +54,54 @@ async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, 
     return states
 
 
-def _match(query: str, states: dict[str, dict]) -> list[str]:
-    """Same exact-wins-else-substring spirit as get_container_status's
-    matching_containers, but bidirectional — a real 2026-09-12 finding:
-    the router doesn't reliably send just the device's own name. It
-    sometimes drops it for a generic category word instead ("the shelf
-    plug" -> "plug", which IS a substring of "ExtraPlug" so a one-way
-    check still works there by luck), and sometimes keeps a generic word
-    alongside the real name ("shelf plug" for a device actually just
-    named "Shelf" — the real name is a substring of THAT query, not the
-    other way around, so a query-in-name-only check misses it). Checking
-    both directions covers either mistake without needing the router to
-    guess exactly right."""
-    query = query.lower()
-    exact = [eid for eid, info in states.items() if info["friendly_name"].lower() == query]
+# what Mario calls a kind of device -> its Home Assistant domain
+_KINDS = {
+    "fan": "fan",
+    "fans": "fan",
+    "light": "light",
+    "lights": "light",
+    "lamp": "light",
+    "lamps": "light",
+    "plug": "switch",
+    "plugs": "switch",
+    "switch": "switch",
+    "switches": "switch",
+}
+_PLURALS = {"fans", "lights", "lamps", "plugs", "switches"}
+_FILLER = {"the", "my", "all", "a"}
+
+
+def _norm(text: str) -> str:
+    """Lowercase letters and digits only: "front left" and "FrontLeft" compare equal."""
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _match(query: str, states: dict[str, dict]) -> tuple[list[str], bool]:
+    """The entities `query` means, and whether it means all of them at once.
+
+    By name first: exact (ignoring case and spaces) wins, else a substring
+    either way - a real 2026-09-12 finding: the router sometimes sends a
+    generic word instead of the name ("plug" for "ExtraPlug") and sometimes
+    keeps one beside it ("shelf plug" for "Shelf"). Then by kind (2026-10-17:
+    HA's names are things like "Core 300S Series" and "FrontLeft", so "the
+    fan" found nothing): a kind word picks that domain's entities, and a
+    plural or "all" ("the lights", "all plugs") means every one of them."""
+    words = [w for w in query.lower().split() if w not in _FILLER]
+    group = "all" in query.lower().split() or any(w in _PLURALS for w in words)
+    q = _norm(" ".join(words))
+    names = {eid: _norm(info["friendly_name"]) for eid, info in states.items()}
+    exact = [eid for eid, name in names.items() if name == q]
     if exact:
-        return exact
-    return [
-        eid
-        for eid, info in states.items()
-        if query in info["friendly_name"].lower() or info["friendly_name"].lower() in query
-    ]
+        return exact, False
+    if q and not (len(words) == 1 and words[0] in _KINDS):
+        by_name = [eid for eid, name in names.items() if q in name or (name and name in q)]
+        if by_name:
+            return by_name, False
+    kinds = {_KINDS[w] for w in words if w in _KINDS}
+    if len(kinds) == 1:
+        domain = kinds.pop()
+        return [eid for eid in states if eid.split(".")[0] == domain], group
+    return [], False
 
 
 async def handle(params, ctx):
@@ -94,15 +122,14 @@ async def handle(params, ctx):
         except httpx.HTTPError:
             return SkillResult(text="Couldn't reach Home Assistant right now.")
 
-        matches = _match(str(device), states)
+        matches, group = _match(str(device), states)
         if not matches:
             return SkillResult(text=f"I don't see a device matching '{device}'.")
-        if len(matches) > 1:
+        if len(matches) > 1 and not group:
             names = ", ".join(states[eid]["friendly_name"] for eid in matches)
             return SkillResult(text=f"Multiple devices match '{device}': {names}. Which one?")
 
-        entity_id = matches[0]
-        friendly_name = states[entity_id]["friendly_name"]
+        label = states[matches[0]]["friendly_name"] if len(matches) == 1 else f"all {len(matches)}"
         action = str(
             get_single_param(params, "action", "command", ignore_keys=("device", "name", "entity"))
             or "status"
@@ -113,16 +140,23 @@ async def handle(params, ctx):
         elif "off" in action:
             service = "turn_off"
         else:
-            is_on = states[entity_id]["state"] == "on"
-            return SkillResult(text=f"{friendly_name} is currently {'on' if is_on else 'off'}.")
+            on = [states[eid]["friendly_name"] for eid in matches if states[eid]["state"] == "on"]
+            if len(matches) == 1:
+                return SkillResult(text=f"{label} is currently {'on' if on else 'off'}.")
+            if not on:
+                return SkillResult(text=f"All {len(matches)} are off.")
+            if len(on) == len(matches):
+                return SkillResult(text=f"All {len(matches)} are on.")
+            return SkillResult(text=f"{len(on)} of {len(matches)} are on: {', '.join(on)}.")
 
-        domain = entity_id.split(".")[0]
+        # one call per domain (a group is always one domain; HA takes a list of entities)
+        domain = matches[0].split(".")[0]
         try:
             response = await client.post(
-                f"{config.ha_url}/api/services/{domain}/{service}", json={"entity_id": entity_id}
+                f"{config.ha_url}/api/services/{domain}/{service}", json={"entity_id": matches}
             )
             response.raise_for_status()
         except httpx.HTTPError:
-            return SkillResult(text=f"Couldn't reach Home Assistant to control {friendly_name}.")
+            return SkillResult(text=f"Couldn't reach Home Assistant to control {label}.")
 
-    return SkillResult(text=f"{friendly_name} turned {'on' if service == 'turn_on' else 'off'}.")
+    return SkillResult(text=f"{label} turned {'on' if service == 'turn_on' else 'off'}.")
