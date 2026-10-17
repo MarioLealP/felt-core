@@ -24,6 +24,14 @@ _COMMANDS: list[tuple[re.Pattern, str, dict]] = [
         {"action": "next"},
     ),
     (
+        _cmd(
+            rf"restart(?:\s+{_MUSIC})?|start\s+(?:{_MUSIC}\s+)?over"
+            rf"|(?:play\s+)?{_MUSIC}\s+from\s+the\s+(?:start|beginning|top)"
+        ),
+        "media_control",
+        {"action": "restart"},
+    ),
+    (
         _cmd(r"(?:go\s+)?back(?:\s+a\s+song)?|previous(?:\s+(?:song|track|one))?|last\s+song"),
         "media_control",
         {"action": "previous"},
@@ -69,6 +77,14 @@ _COMMANDS: list[tuple[re.Pattern, str, dict]] = [
         {},
     ),
 ]
+# "play birdbrain jamie paige" -> play_music by name; tried after the fixed
+# commands ("play the music" is resume). Not "play a game with me" & co.
+_PLAY = re.compile(rf"^\s*{POLITE}play\s+(?:me\s+)?(?P<query>.{{2,80}}?){TAIL}", re.IGNORECASE)
+_NOT_MUSIC = re.compile(
+    r"^(?:a\s+)?(?:games?\b|with\b|along\b|nice\b|around\b|dead\b|chess\b|tag\b"
+    r"|hide\b|pretend\b|fair\b|it\s+(?:cool|safe|by\s+ear)\b|on\b|for\b)",
+    re.IGNORECASE,
+)
 _VOLUME = re.compile(
     rf"^\s*{POLITE}(?:set\s+)?(?:the\s+)?volume\s+(?:to\s+)?(?P<n>\d{{1,3}})\s*%?{TAIL}",
     re.IGNORECASE,
@@ -82,4 +98,7 @@ def music_fast_path(message: str) -> tuple[str, dict] | None:
     for pattern, skill, params in _COMMANDS:
         if pattern.match(message):
             return skill, dict(params)
+    m = _PLAY.match(message)
+    if m and not _NOT_MUSIC.match(m["query"]):
+        return "play_music", {"query": m["query"].strip()}
     return None

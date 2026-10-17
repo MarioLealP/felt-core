@@ -17,6 +17,7 @@ from felt_core.spotify_client import (
     next_track,
     pause,
     previous_track,
+    restart_track,
     resume,
     save_to_library,
     set_volume,
@@ -25,8 +26,8 @@ from felt_core.spotify_client import (
 name = "media_control"
 description = (
     "Controls the music already playing on Spotify: pause, resume, skip to the next song, "
-    "go back, set the volume or turn it up/down, or save the current song to Mario's "
-    "library. NOT for starting new music by name (that's play_music)."
+    "go back, restart the song, set the volume or turn it up/down, or save the current song "
+    "to Mario's library. NOT for starting new music by name (that's play_music)."
 )
 parameters_schema = {
     "type": "object",
@@ -34,8 +35,8 @@ parameters_schema = {
         "action": {
             "type": "string",
             "description": (
-                "'pause', 'resume', 'play_pause', 'next', 'previous', 'volume', 'louder', "
-                "'quieter' or 'save'"
+                "'pause', 'resume', 'play_pause', 'next', 'previous', 'restart', 'volume', "
+                "'louder', 'quieter' or 'save'"
             ),
         },
         "level": {
@@ -51,6 +52,8 @@ _STEP = 10  # louder / quieter, in percent
 def _operation(action: str) -> str:
     if "save" in action or "like" in action:
         return "save"
+    if "restart" in action or "start over" in action or "beginning" in action:
+        return "restart"
     if "next" in action or "skip" in action:
         return "next"
     if "prev" in action or "back" in action:
@@ -101,6 +104,9 @@ async def handle(params, ctx):
                 now = await get_currently_playing(client, config)
                 name = format_track_name(now["track"]) if now else "the next song"
                 return SkillResult(text=f"Skipped. Now playing {name}.")
+            if op == "restart":
+                await restart_track(client, config)
+                return SkillResult(text="From the top.")
             if op == "previous":
                 await previous_track(client, config)
                 return SkillResult(text="Back to the previous song.")
