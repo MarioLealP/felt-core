@@ -47,6 +47,8 @@ def test_not_claims(text):
         "Got it. Turning the shelf light off for you now.",
         "I'll switch the fan on.",
         "Dimming the lights down a bit.",
+        "I already flipped that switch for you, but I can do it again.",
+        "Done - I switched the shelf light off.",
     ],
 )
 def test_action_claims(text):
@@ -59,6 +61,7 @@ def test_action_claims(text):
     [
         "I'm going to turn in for the night.",
         "That song really turned my mood around.",
+        "Your package turned up, by the way.",
         "Morning! Coffee first?",
         "Ha, nice one. " * 15 + "Want me to turn the fan on?",
     ],
