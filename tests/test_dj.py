@@ -222,3 +222,58 @@ def test_dj_line_prompt_sells_a_discovery():
     assert new is not None and "new to him" in new and '"Fresh" by Newbie' in new
     assert old is not None and "already likes" in old
     assert build_prompt("dj_track", {"artist": "x"}) is None
+
+
+# --- starting a song (2026-10-18: the plain play call loads nothing on his client) ----
+
+
+async def _calls_with(monkeypatch, queue_status):
+    calls = []
+
+    async def token(client, config):
+        return "tok"
+
+    def handler(request):
+        calls.append((request.method, request.url.path))
+        if request.url.path == "/v1/me/player/queue":
+            return httpx.Response(queue_status)
+        return httpx.Response(204)
+
+    monkeypatch.setattr(sp, "_get_access_token", token)
+    return calls, httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+async def test_start_track_queues_then_skips(tmp_path, monkeypatch):
+    calls, client = await _calls_with(monkeypatch, 204)
+    async with client:
+        await sp.start_track(client, _config(tmp_path), "u:x")
+    assert calls == [("POST", "/v1/me/player/queue"), ("POST", "/v1/me/player/next")]
+
+
+async def test_a_sleeping_player_says_so(tmp_path, monkeypatch):
+    calls, client = await _calls_with(monkeypatch, 404)
+    async with client:
+        with pytest.raises(sp.NoActivePlayer):
+            await sp.start_track(client, _config(tmp_path), "u:x")
+    assert calls == [("POST", "/v1/me/player/queue")]  # never skips what he has on
+
+
+async def test_dj_start_on_a_sleeping_player(tmp_path, monkeypatch):
+    async def picks(client, config, count, avoid):
+        return [_p("u:a", False)]
+
+    async def asleep(client, config, uri):
+        raise sp.NoActivePlayer
+
+    monkeypatch.setattr(picker, "pick", picks)
+    monkeypatch.setattr(sp, "start_track", asleep)
+    assert await control.start(_config(tmp_path)) == control.NOT_AWAKE
+    assert not control.is_on()
+
+
+def test_a_leftover_from_an_earlier_set_is_skipped_not_the_end(tmp_path, monkeypatch):
+    config, spawned = _config(tmp_path), []
+    store.add_pick(config.db_path, "u:old", "Old", "a", False)  # an earlier set's pick
+    _on(config, _p("u:a", False), [_p("u:b", False)], monkeypatch, spawned)
+    control.on_poll(config, _snap("u:a", "u:a"), _snap("u:old", "Old"))
+    assert control.is_on() and spawned == ["_skip_leftover"]

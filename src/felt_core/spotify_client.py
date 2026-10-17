@@ -106,19 +106,6 @@ async def list_devices(client: httpx.AsyncClient, config: FeltConfig) -> list[di
     return response.json().get("devices", [])
 
 
-async def play_track(
-    client: httpx.AsyncClient, config: FeltConfig, track_uri: str, device_id: str
-) -> None:
-    token = await _get_access_token(client, config)
-    response = await client.put(
-        f"{_API_BASE}/me/player/play",
-        headers={"Authorization": f"Bearer {token}"},
-        params={"device_id": device_id},
-        json={"uris": [track_uri]},
-    )
-    response.raise_for_status()
-
-
 async def _player_call(
     client: httpx.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs
 ) -> None:
@@ -180,6 +167,25 @@ async def save_to_library(client: httpx.AsyncClient, config: FeltConfig, uri: st
 
 async def queue_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
     await _player_call(client, config, "POST", "/me/player/queue", params={"uri": uri})
+
+
+class NoActivePlayer(Exception):
+    """Spotify has no awake player to start the song on."""
+
+
+async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+    """Plays `uri` now: queued, then skipped to. Not PUT /me/player/play with
+    uris - on Mario's Linux desktop client that's accepted (204) and loads
+    nothing, and while playing it stops the music (2026-10-18). Queue + next
+    works while playing or paused (and resumes); a freshly started client
+    with nothing played yet has no active device (404) -> NoActivePlayer."""
+    try:
+        await queue_track(client, config, uri)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise NoActivePlayer from e
+        raise
+    await next_track(client, config)
 
 
 async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:

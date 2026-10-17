@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 AHEAD = 2
 PAUSE_ENDS_S = 10 * 60
 _LINE_TTL_S = 90.0
+NOT_AWAKE = "Spotify's asleep on your desktop - hit play on anything once, then ask me again."
 
 
 @dataclass
@@ -59,16 +60,19 @@ def _uri(snapshot: dict | None) -> str | None:
 
 async def start(config: FeltConfig) -> str:
     async with httpx.AsyncClient(timeout=20) as client:
-        device = sp.pick_device(await sp.list_devices(client, config))
-        if device is None:
-            return "Open Spotify somewhere first and I'll take it from there."
         picks = await picker.pick(client, config, AHEAD + 1, avoid=set())
         if not picks:
             return "I couldn't line anything up right now."
         first, rest = picks[0], picks[1:]
-        await sp.play_track(client, config, first["uri"], device["id"])
-        for p in rest:
-            await sp.queue_track(client, config, p["uri"])
+        try:
+            await sp.start_track(client, config, first["uri"])
+            for p in rest:
+                await sp.queue_track(client, config, p["uri"])
+        except sp.NoActivePlayer:
+            return NOT_AWAKE
+        except httpx.HTTPError:
+            logger.warning("dj: Spotify refused the start", exc_info=True)
+            return "Spotify didn't take that right now."
     for p in picks:
         store.add_pick(config.db_path, p["uri"], p["title"], p["artist"], p["discovery"])
     SESSION.on, SESSION.current, SESSION.ahead = True, first, rest
@@ -108,6 +112,11 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
         return
     at = next((i for i, p in enumerate(SESSION.ahead) if same_track(p, current)), None)
     if at is None:
+        if _uri(current) in store.recent_pick_uris(config.db_path, 1):
+            # Spotify's queue can't be cleared: a pick left over from an
+            # earlier set came up - skip past it rather than stepping back
+            _spawn(_skip_leftover(config))
+            return
         stop("Mario played something else")
         return
     for passed in SESSION.ahead[:at]:  # skipped through within one poll
@@ -135,6 +144,15 @@ async def feedback(config: FeltConfig, liked: bool) -> str:
             store.set_outcome(config.db_path, SESSION.current["uri"], "skipped")
         await sp.next_track(client, config)
     return f"Got it, no more {title}. Skipped."
+
+
+async def _skip_leftover(config: FeltConfig) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            await sp.next_track(client, config)
+        logger.info("dj: skipped a leftover from an earlier set")
+    except httpx.HTTPError:
+        logger.warning("dj: couldn't skip a leftover", exc_info=True)
 
 
 async def _refill(config: FeltConfig) -> None:
