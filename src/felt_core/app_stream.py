@@ -29,9 +29,9 @@ def _fingerprint(conn, has: set[str], table: str, sql: str) -> str:
     return "|".join(str(v) for v in conn.execute(sql).fetchone()) if table in has else ""
 
 
-def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str, str]:
+def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
     """(newest message id, aside picks fingerprint, number of marks,
-    lists fingerprint, incidents fingerprint, controls fingerprint)."""
+    incidents fingerprint, controls fingerprint)."""
     conn = _connect(db_path)
     try:
         newest = conn.execute(
@@ -49,12 +49,6 @@ def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str, str]
             conn.execute("SELECT COUNT(*) FROM message_marks").fetchone()[0]
             if "message_marks" in has
             else 0
-        )
-        lists = _fingerprint(
-            conn,
-            has,
-            "shopping_list",
-            "SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(checked), 0) FROM shopping_list",
         )
         incidents = _fingerprint(
             conn,
@@ -76,7 +70,7 @@ def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str, str]
         )
     finally:
         conn.close()
-    return newest, picks, marks, lists, incidents, ctl
+    return newest, picks, marks, incidents, ctl
 
 
 def _new_lines(db_path: str, session_id: str, after: int) -> list[dict]:
@@ -100,19 +94,21 @@ async def notices(
     session_id: str,
     gone: Callable[[], Awaitable[bool]],
     *,
+    lists_version: Callable[[], Awaitable[str]] | None = None,
     poll_s: float = POLL_S,
     keepalive_s: float = KEEPALIVE_S,
 ) -> AsyncIterator[str]:
     """The event stream. `gone` is awaited each round; truthy ends it (the
-    client went away)."""
-    newest, picks, marks, lists, incidents, ctl = await asyncio.to_thread(
-        _state, db_path, session_id
-    )
+    client went away). `lists_version` says when the shopping list changed -
+    it lives in Home Assistant (shopping.py); "" = couldn't tell, so no notice."""
+    newest, picks, marks, incidents, ctl = await asyncio.to_thread(_state, db_path, session_id)
+    lists = await lists_version() if lists_version else ""
     yield _event("hello", {"newest": newest})
     quiet = 0.0
     while not await gone():
         await asyncio.sleep(poll_s)
         now = await asyncio.to_thread(_state, db_path, session_id)
+        now_lists = await lists_version() if lists_version else ""
         sent = False
         if now[0] > newest:
             for line in await asyncio.to_thread(_new_lines, db_path, session_id, newest):
@@ -124,16 +120,18 @@ async def notices(
         if now[2] != marks:
             yield _event("marks", {})
             sent = True
-        if now[3] != lists:
-            yield _event("lists", {})
-            sent = True
-        if now[4] != incidents:
+        if now_lists and now_lists != lists:
+            if lists:
+                yield _event("lists", {})
+                sent = True
+            lists = now_lists
+        if now[3] != incidents:
             yield _event("systems", {})
             sent = True
-        if now[5] != ctl:
+        if now[4] != ctl:
             yield _event("controls", {})
             sent = True
-        newest, picks, marks, lists, incidents, ctl = now
+        newest, picks, marks, incidents, ctl = now
         quiet = 0.0 if sent else quiet + poll_s
         if quiet >= keepalive_s:
             yield ": keepalive\n\n"

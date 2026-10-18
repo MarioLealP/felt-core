@@ -1,5 +1,6 @@
 """WP-55: optional bearer-token auth on the API."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from felt_core.api import app
@@ -66,21 +67,34 @@ def test_websocket_needs_the_token_too(tmp_path, monkeypatch):
             pass
 
 
-def test_shopping_list_paths_are_left_to_caddy_sso(tmp_path, monkeypatch):
+@pytest.fixture
+def fake_ha(monkeypatch):
+    """The shopping list lives in Home Assistant (shopping.py): answer for it."""
+    from felt_core import shopping
+
+    async def ha(*_args, **_kwargs):
+        return {}
+
+    monkeypatch.setattr(shopping, "_call", ha)
+
+
+def test_shopping_list_paths_are_left_to_caddy_sso(tmp_path, monkeypatch, fake_ha):
+    item = "0e2d6f2e8b764d4ebcef36de5d99d0ab"  # an HA item uid
     with _client(tmp_path, monkeypatch, "s3cret") as c:
         assert c.get("/shopping-list").status_code == 200
         assert c.get("/v1/shopping-list").status_code == 200
-        item = c.post("/v1/shopping-list", json={"text": "milk"}).json()["id"]
+        assert c.post("/v1/shopping-list", json={"text": "milk"}).status_code == 200
         assert c.patch(f"/v1/shopping-list/{item}?checked=true").status_code == 200
         assert c.delete("/v1/shopping-list/checked").status_code == 200
         assert c.delete(f"/v1/shopping-list/{item}").status_code == 200
         # exact paths only: no prefix match, no other methods
-        assert c.get("/v1/shopping-list/1").status_code == 401
+        assert c.get(f"/v1/shopping-list/{item}").status_code == 401
+        assert c.patch("/v1/shopping-list/1?checked=true").status_code == 401
         assert c.get("/v1/shopping-listx").status_code == 401
         assert c.put("/v1/shopping-list/1").status_code == 401
 
 
-def test_sso_mutations_reject_a_foreign_origin(tmp_path, monkeypatch):
+def test_sso_mutations_reject_a_foreign_origin(tmp_path, monkeypatch, fake_ha):
     """WP-62 phase 4: the SSO-gated routes carry no token (Caddy forward-auth
     is the auth), the forward-auth cookie is SameSite=Lax and every
     *.clockmost.com app is same-site - so felt-core refuses an unsafe SSO

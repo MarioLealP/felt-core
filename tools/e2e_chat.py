@@ -98,6 +98,12 @@ CASES: list[Case] = [
     Case("how much battery does my phone have?", [], [], "phone", ("get_phone_battery",)),
     Case("when's my alarm?", [], [], "phone", ("list_alarms",)),
     Case("what time is my alarm set for tomorrow", [], [], "phone", ("list_alarms",)),
+    # the shopping list: Home Assistant's todo list (fake - the real one stays untouched)
+    Case("add milk to the shopping list", ["POST /todo/add_item"], note="shop"),
+    Case("put eggs and bread on my shopping list", ["POST /todo/add_item"], note="shop"),
+    Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
+    Case("what's on my shopping list?", [], [], "shop", ("shopping_list",)),
+    Case("take oat milk off the shopping list", ["POST /todo/remove_item"], note="shop"),
     # reminders -> calendar events the phone notifies for (WP-46)
     Case("remind me friday at 3pm to call the dentist", ["POST /calendar/reminder"], note="remind"),
     # short and relative: a labelled phone timer rings just the same
@@ -203,6 +209,18 @@ class Recorder:
             return httpx.Response(200, json={"state": "2026-10-19T05:30:00+00:00"})
         if path.endswith("_battery_state"):
             return httpx.Response(200, json={"state": "charging"})
+        if path.startswith("/api/services/todo/"):
+            service = path.rsplit("/", 1)[1]
+            if service == "get_items":
+                self.calls.append("GET /todo/get_items")
+                items = [
+                    {"summary": "oat milk", "uid": "a" * 32, "status": "needs_action"},
+                    {"summary": "rice", "uid": "b" * 32, "status": "needs_action"},
+                ]
+                todo = {"todo.shopping_list": {"items": items}}
+                return httpx.Response(200, json={"changed_states": [], "service_response": todo})
+            self.calls.append(f"POST /todo/{service}")
+            return httpx.Response(200, json=[])
         self.calls.append(f"{request.method} /ha{path}")
         return httpx.Response(503)
 

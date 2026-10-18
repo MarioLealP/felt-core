@@ -49,11 +49,14 @@ async def test_new_lines_picks_and_marks_become_notices(tmp_path):
 
 async def test_list_and_incident_changes_become_notices(tmp_path):
     from felt_core import incidents, systems
-    from felt_core.db import add_shopping_item, set_shopping_item_checked
 
     db = str(tmp_path / "felt.db")
     save_message(db, "dashboard", "user", "hi")
-    item = add_shopping_item(db, "milk")
+    shopping = ["1|t0"]  # HA's todo entity: unchecked count | last update
+
+    async def lists_version() -> str:
+        return shopping[0]
+
     backup = incidents.intake(db, "backup full FAILED")
     assert backup is not None
     rounds = 0
@@ -61,9 +64,9 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     async def gone() -> bool:
         return rounds >= 5
 
-    stream = notices(db, "dashboard", gone, poll_s=0, keepalive_s=10)
+    stream = notices(db, "dashboard", gone, lists_version=lists_version, poll_s=0, keepalive_s=10)
     assert _parse(await anext(stream))[0] == "hello"
-    set_shopping_item_checked(db, item, True)  # she crossed it off by voice
+    shopping[0] = "0|t1"  # she crossed it off by voice
     rounds += 1
     assert _parse(await anext(stream)) == ("lists", {})
     systems.mark_handled(db, backup)

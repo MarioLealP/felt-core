@@ -55,7 +55,7 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 | file | LOC | responsibility |
 |---|---:|---|
 | `brain.py` | 1080 | **God file.** Orchestration: router/privacy dispatch, local vs. cloud reply generation, skill-result phrasing, screen-reaction (two implementations), weather-precompute background loop, music-taste background loop. |
-| `db.py` | 687 | SQLite schema (12 tables, all in one `_connect()`) + every persistence function (messages, alarms, facts, settings, shopping list, observations, cloud usage, music taste, event reactions, latency). |
+| `db.py` | 687 | SQLite schema (12 tables, all in one `_connect()`) + every persistence function (messages, alarms, facts, settings, observations, cloud usage, music taste, event reactions, latency). |
 | `api.py` | 600 | FastAPI app: CORS, latency middleware, all 20 HTTP/WS routes, request→brain wiring, TTS synthesis glue. |
 | `cloud.py` | 470 | Sole Gemini/Gemma API client: purpose-routed model choice, RPM/TPM/RPD quota tracking, thinking-budget handling, `CloudUnavailable`. |
 | `events.py` | 400 | Desktop-event (`/v1/react/event`) policy table, cooldown/dedupe decision, prompt building, phrasing. |
@@ -102,7 +102,7 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 | `news_digest` | 60 | RSS/Atom feed digest. |
 | `list_calendar_events` | 59 | Google Calendar read, all calendars. |
 | `play_music` | 58 | Start named track/artist via Spotify. |
-| `shopping_list` | 57 | Add/list items (shared with the `/shopping-list` mini web app). |
+| `shopping_list` | 64 | Add/remove/list items in Home Assistant's `todo.shopping_list` via `shopping.py` (same list as the HA app, the Felt app's Lists page and `/shopping-list`). |
 | `delegate_research` | 55 | Explicit cloud-delegation tool (via ninerouter). |
 | `search_documents` | 52 | RAG query to the sibling `drive-rag` service. |
 | `cancel_alarm` | 51 | Cancels a pending alarm. |
@@ -121,8 +121,8 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 `plugins/skills.json` — privacy-class manifest. `plugins/tags.json` —
 skill→default-animation-tag manifest. `plugins/README.md` — the
 plugin-authoring contract. `static/shopping-list.html` (136 LOC) —
-standalone page served at `GET /shopping-list`, same REST routes a voice
-command uses.
+standalone page served at `GET /shopping-list`; its REST routes pass through
+to HA's todo list (`shopping.py`), like the voice skill.
 
 ## 5. Interfaces
 
@@ -182,8 +182,8 @@ Ollama/ComfyUI elsewhere on clockmost). All routes are one file, `api.py`.
 ### Data stores (SQLite, `db.py`, one file at `FELT_DB_PATH`)
 
 `messages`, `ntfy_events`, `facts`, `settings`, `alarms`, `pending_emails`,
-`shopping_list`, `screen_observations`, `cloud_usage`, `music_taste`,
-`event_reactions`, `latency` — 12 tables, all created in one `_connect()`.
+`screen_observations`, `cloud_usage`, `music_taste`,
+`event_reactions`, `latency` — 11 tables (the shopping list moved to HA, 2026-10-18), all created in one `_connect()`.
 Plus two flat-file caches outside SQLite: `lyrics_client.py`'s per-track
 JSON cache dir, and `poe_trade_cache.py`'s single JSON file. TTS cache
 (`tts_cache.py`) is in-memory only, not persisted.

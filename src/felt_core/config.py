@@ -165,6 +165,10 @@ class FeltConfig(BaseSettings):
     def ha_entities_list(self) -> list[str]:
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
+    # The shopping list (shopping.py): HA's todo entity, the one list everywhere.
+    # Its own setting, not in ha_entities (those are devices to switch).
+    ha_shopping_list: str = "todo.shopping_list"
+
     # Home Assistant calling Felt (ha_auth.py, felt-ha-hub D3): Authentik's
     # `ha-felt` OAuth provider - its issuer URL (ends in /), client id, and the
     # service account its tokens must belong to. Empty issuer = route closed.
