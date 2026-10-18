@@ -163,7 +163,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
-app.include_router(app_router)
+app.include_router(app_router, prefix="/v1/app")
+app.include_router(app_router, prefix="/v1/ha/app")
 app.include_router(incident_router)
 app.include_router(systems_router)
 app.include_router(notices_router)
@@ -289,6 +290,7 @@ async def auth_middleware(request: Request, call_next):
         if why:
             logger.warning("ha agent refused on %s %s: %s", request.method, path, why)
             return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+        request.state.ha_agent = True
         return await call_next(request)
     # WP-62 M2b B5.4 (D3): a Felt machine identity, set only by Caddy's
     # machine host (every other site strips it): per identity per route,

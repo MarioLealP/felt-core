@@ -9,6 +9,11 @@ a route that somehow skipped Caddy fails closed.
 
 It shares the "dashboard" session with the tray window, so the phone and the
 desktop see one conversation.
+
+The same routes again at /v1/ha/app/* (felt-ha-hub, 2026-10-19): the Felt panel
+inside Home Assistant. There HA's integration calls with its ha-felt token
+(ha_auth.py, checked in api.py's middleware before anything else), never an
+SSO header - Caddy's felt-ha host strips those.
 """
 
 import asyncio
@@ -30,7 +35,11 @@ from felt_core.marks import mark_seen, maybe_mark
 
 SESSION = APP_SESSION
 
-router = APIRouter(prefix="/v1/app")
+# mounted twice in api.py: /v1/app (SSO) and /v1/ha/app (Home Assistant)
+router = APIRouter()
+
+# who a Home Assistant panel request is, for /me
+HA_PANEL_USER = "home-assistant"
 
 # background mark decisions, kept referenced so they aren't garbage-collected
 _pending: set[asyncio.Task] = set()
@@ -43,7 +52,10 @@ def schedule_mark(config, session_id: str = SESSION) -> None:
     task.add_done_callback(_pending.discard)
 
 
-def sso_user(x_authentik_username: str | None = Header(default=None)) -> str:
+def sso_user(request: Request, x_authentik_username: str | None = Header(default=None)) -> str:
+    # set only by api.py's middleware, after a valid ha-felt token on /v1/ha/app/*
+    if getattr(request.state, "ha_agent", False):
+        return HA_PANEL_USER
     if not x_authentik_username:
         raise HTTPException(status_code=401, detail="sign in through SSO")
     return x_authentik_username
