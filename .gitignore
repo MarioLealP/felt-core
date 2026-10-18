@@ -14,3 +14,4 @@ wheels/
 
 # Runtime data (SQLite db, etc.)
 data/
+ha/custom_components/felt/panel/

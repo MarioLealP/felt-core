@@ -12,6 +12,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .client import FeltClient
 from .const import CONF_CLIENT_ID, CONF_PASSWORD, CONF_TOKEN_URL, CONF_URL, CONF_USERNAME
 from .coordinator import FeltCoordinator
+from .panel import async_register as register_panel
+from .panel import async_unregister as unregister_panel
+
+# bumped with manifest.json; also busts the browser cache of the panel
+VERSION = "0.4.0"
 
 PLATFORMS = [Platform.CONVERSATION, Platform.SENSOR, Platform.SWITCH]
 
@@ -36,8 +41,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = FeltData(client, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await register_panel(hass, VERSION)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    unregister_panel(hass)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -214,3 +214,27 @@ def test_systems_summary(client, monkeypatch):
 
 def test_systems_needs_the_ha_token(client):
     assert client.get("/v1/ha/systems").status_code == 401
+
+
+# --- the Felt panel in HA: the app's Talk + Margins routes under /v1/ha/app ---------
+
+
+def test_the_panel_routes_take_the_ha_token(client, monkeypatch):
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")
+    auth = {"Authorization": f"Bearer {_token()}"}
+    assert client.get("/v1/ha/app/me", headers=auth).json() == {"user": "home-assistant"}
+    assert client.get("/v1/ha/app/history", headers=auth).status_code == 200
+    assert client.get("/v1/ha/app/margins/count", headers=auth).status_code == 200
+
+
+def test_the_panel_routes_refuse_everything_else(client, monkeypatch):
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")
+    # no token, a forged one, or an SSO header (Caddy's felt-ha host strips it anyway)
+    assert client.get("/v1/ha/app/history").status_code == 401
+    bad = {"Authorization": f"Bearer {_token(key=OTHER_KEY)}"}
+    assert client.get("/v1/ha/app/history", headers=bad).status_code == 401
+    sso = {"X-Authentik-Username": "mario"}
+    assert client.get("/v1/ha/app/history", headers=sso).status_code == 401
+    # and the HA token still doesn't open the SSO copy of the same routes
+    auth = {"Authorization": f"Bearer {_token()}"}
+    assert client.get("/v1/app/history", headers=auth).status_code == 401

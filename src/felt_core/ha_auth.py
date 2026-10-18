@@ -27,6 +27,16 @@ HA_ROUTES = frozenset(
         ("GET", "/v1/ha/controls"),
         ("POST", "/v1/ha/controls"),
         ("GET", "/v1/ha/systems"),
+        # the Felt panel in HA (2026-10-19): the app's Talk + Margins routes
+        ("GET", "/v1/ha/app/me"),
+        ("GET", "/v1/ha/app/history"),
+        ("GET", "/v1/ha/app/asides"),
+        ("GET", "/v1/ha/app/margins"),
+        ("GET", "/v1/ha/app/margins/count"),
+        ("POST", "/v1/ha/app/margins/mark"),
+        ("POST", "/v1/ha/app/marks/seen"),
+        ("GET", "/v1/ha/app/stream"),
+        ("POST", "/v1/ha/app/chat"),
     }
 )
 _ALGORITHMS = ["RS256", "ES256"]
