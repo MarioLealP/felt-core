@@ -79,6 +79,22 @@ def unread(db_path: str, session_id: str = APP_SESSION) -> int:
     return row[0]
 
 
+def read_all(db_path: str, session_id: str = APP_SESSION) -> int:
+    """Every unread line on the page marked read ("mark all read", 2026-10-19:
+    1200+ old ones kept the badge up); returns how many changed."""
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    conn = _connect(db_path)
+    try:
+        with conn:
+            cursor = conn.execute(
+                "UPDATE messages SET read_at = ? WHERE " + _VISIBLE_SQL + " AND read_at IS NULL",
+                (now, session_id),
+            )
+    finally:
+        conn.close()
+    return cursor.rowcount
+
+
 def mark(
     db_path: str,
     ids: list[int],

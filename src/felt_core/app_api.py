@@ -21,7 +21,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from felt_core import margins, shopping
 from felt_core.app_history import history_page
@@ -138,9 +138,19 @@ class Unread(BaseModel):
 
 
 class MarkRequest(BaseModel):
-    ids: list[int] = Field(min_length=1, max_length=500)
+    ids: list[int] = Field(default_factory=list, max_length=500)
     action: Literal["read", "dismiss", "snooze"]
     hours: float | None = None
+    # "mark all read": every unread line, no ids (only with action read)
+    all: bool = False
+
+    @model_validator(mode="after")
+    def _ids_or_all(self) -> "MarkRequest":
+        if self.all and (self.action != "read" or self.ids):
+            raise ValueError("all goes with action read and no ids")
+        if not self.all and not self.ids:
+            raise ValueError("ids, or all")
+        return self
 
 
 class MarkResult(BaseModel):
@@ -161,9 +171,10 @@ async def margins_count(_user: str = Depends(sso_user)) -> Unread:
 
 @router.post("/margins/mark", response_model=MarkResult)
 async def margins_mark(req: MarkRequest, _user: str = Depends(sso_user)) -> MarkResult:
-    changed = margins.mark(
-        load_config().db_path, req.ids, req.action, hours=req.hours, session_id=SESSION
-    )
+    db_path = load_config().db_path
+    if req.all:
+        return MarkResult(changed=margins.read_all(db_path, SESSION))
+    changed = margins.mark(db_path, req.ids, req.action, hours=req.hours, session_id=SESSION)
     return MarkResult(changed=changed)
 
 

@@ -65,6 +65,21 @@ def test_read_dismiss_and_snooze(tmp_path):
     assert back and back[0]["read"] is False
 
 
+def test_read_all_leaves_snoozed_lines_and_other_sessions(tmp_path):
+    db = str(tmp_path / "felt.db")
+    ids = _lines(db)
+    assert margins.mark(db, [ids["Dentist in 15."]], "snooze", hours=2) == 1
+    assert margins.read_all(db) == 3
+    assert margins.unread(db) == 0
+    assert margins.unread(db, "other") == 1
+    # the snoozed one comes back unread, to be noticed again
+    conn = sqlite3.connect(db)
+    with conn:
+        conn.execute("UPDATE messages SET snoozed_until = datetime('now', '-1 minute')")
+    conn.close()
+    assert margins.unread(db) == 1
+
+
 def test_a_dismissed_line_stops_waiting_as_an_aside(tmp_path):
     db = str(tmp_path / "felt.db")
     ids = _lines(db)
@@ -99,3 +114,12 @@ def test_routes_are_sso_gated_and_work(tmp_path, monkeypatch):
         assert c.post("/v1/app/margins/mark", json=bad, headers=SSO).status_code == 422
         empty = {"ids": [], "action": "read"}
         assert c.post("/v1/app/margins/mark", json=empty, headers=SSO).status_code == 422
+        # "mark all read": only as read, never mixed with ids
+        for bad in (
+            {"all": True, "action": "dismiss"},
+            {"all": True, "ids": [1], "action": "read"},
+        ):
+            assert c.post("/v1/app/margins/mark", json=bad, headers=SSO).status_code == 422
+        r = c.post("/v1/app/margins/mark", json={"all": True, "action": "read"}, headers=SSO)
+        assert r.json() == {"changed": 2}
+        assert c.get("/v1/app/margins/count", headers=SSO).json() == {"unread": 0}
