@@ -21,6 +21,8 @@ import logging
 import re
 from collections.abc import Callable
 
+import httpx
+
 from felt_core import local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
@@ -212,6 +214,15 @@ async def _run_skill_call(
         tool_output = result.voice_line or result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
+    except httpx.HTTPError as e:
+        # the service behind the skill is down or erroring (poe2-rag, drive
+        # search, weather, searxng...): was an unhandled crash - the whole
+        # chat 500'd (e2e 2026-10-18). She says so instead of guessing.
+        logger.warning("skill %s: service unavailable (%r)", skill_name, e)
+        tool_output = (
+            f"Error: couldn't reach the service behind {skill_name} right now. "
+            "Say so plainly - don't answer from memory as if you'd looked it up."
+        )
     return result, tool_output
 
 

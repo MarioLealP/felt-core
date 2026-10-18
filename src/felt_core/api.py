@@ -1092,7 +1092,13 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
 
     # Pre-synthesised at enqueue time where possible (proactive.py).
     emotion = json.loads(row["payload_json"] or "{}").get("emotion")
-    audio_bytes = await proactive_audio(config, row["text"], emotion)
+    try:
+        audio_bytes = await proactive_audio(config, row["text"], emotion)
+    except httpx.HTTPError as e:
+        # felt-voice runs on the laptop, which is often off: the same answer
+        # as no voice configured, not a 500 (2026-10-18 logs)
+        logger.warning("proactive audio: felt-voice unavailable (%r)", e)
+        raise HTTPException(status_code=503, detail="voice_unavailable") from e
     return Response(content=audio_bytes, media_type="audio/wav")
 
 
