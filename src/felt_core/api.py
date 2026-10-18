@@ -33,6 +33,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi import Path as FastAPIPath
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
@@ -44,6 +45,7 @@ from felt_core import (
     machine_auth,
     metrics,
     reply_stream,
+    shopping,
     tts_cache,
 )
 from felt_core.alarms import reschedule_pending_alarms
@@ -65,12 +67,9 @@ from felt_core.calendar_headsup import calendar_headsup_loop
 from felt_core.config import load_config
 from felt_core.controls_api import router as controls_router
 from felt_core.db import (
-    add_shopping_item,
-    clear_checked_shopping_items,
     delete_diary,
     delete_old_latency_rows,
     delete_self_memory,
-    delete_shopping_item,
     get_diary,
     get_diary_list,
     get_diary_weeks,
@@ -80,12 +79,10 @@ from felt_core.db import (
     get_self_memories,
     get_self_memory,
     get_setting,
-    get_shopping_items,
     prune_expired_proactive,
     requeue_proactive,
     save_event,
     set_setting,
-    set_shopping_item_checked,
     update_diary_entry,
     update_self_memory,
 )
@@ -215,8 +212,8 @@ _SSO_GATED = (
     ("GET", re.compile(r"/v1/shopping-list")),
     ("POST", re.compile(r"/v1/shopping-list")),
     ("DELETE", re.compile(r"/v1/shopping-list/checked")),
-    ("PATCH", re.compile(r"/v1/shopping-list/\d+")),
-    ("DELETE", re.compile(r"/v1/shopping-list/\d+")),
+    ("PATCH", re.compile(r"/v1/shopping-list/[0-9a-f]{32}")),
+    ("DELETE", re.compile(r"/v1/shopping-list/[0-9a-f]{32}")),
     # WP-42.2: the Felt app (app_api.py), which also refuses any request
     # without Caddy's X-Authentik-Username header.
     ("GET", re.compile(r"/v1/app/me")),
@@ -1040,41 +1037,45 @@ class ShoppingItemRequest(BaseModel):
     text: str
 
 
+# HA's item uids (shopping.py) - "checked" never matches, so the clear route stays apart
+_ITEM_ID = r"[0-9a-f]{32}"
+
+
+@app.exception_handler(shopping.ShoppingUnavailable)
+async def shopping_unavailable_handler(_request: Request, _exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Home Assistant didn't answer"})
+
+
 @app.get("/v1/shopping-list")
 async def get_shopping_list_endpoint() -> list[dict]:
-    config = load_config()
-    return get_shopping_items(config.db_path)
+    return await shopping.items(load_config())
 
 
 @app.post("/v1/shopping-list")
 async def add_shopping_list_item_endpoint(req: ShoppingItemRequest) -> dict:
-    config = load_config()
-    item_id = add_shopping_item(config.db_path, req.text)
-    return {"id": item_id}
+    await shopping.add(load_config(), req.text)
+    return {"ok": True}
 
 
 @app.delete("/v1/shopping-list/checked")
 async def clear_checked_shopping_list_endpoint() -> dict:
-    # Registered before the /{item_id} routes below — FastAPI matches path
-    # operations in declaration order, and "checked" would otherwise be
-    # captured as a (non-integer, 422-rejected) item_id by DELETE
-    # /v1/shopping-list/{item_id} instead of hitting this route.
-    config = load_config()
-    clear_checked_shopping_items(config.db_path)
+    await shopping.clear_checked(load_config())
     return {"ok": True}
 
 
 @app.patch("/v1/shopping-list/{item_id}")
-async def set_shopping_item_checked_endpoint(item_id: int, checked: bool) -> dict:
-    config = load_config()
-    set_shopping_item_checked(config.db_path, item_id, checked)
+async def set_shopping_item_checked_endpoint(
+    checked: bool, item_id: str = FastAPIPath(pattern=f"^{_ITEM_ID}$")
+) -> dict:
+    await shopping.set_checked(load_config(), item_id, checked)
     return {"ok": True}
 
 
 @app.delete("/v1/shopping-list/{item_id}")
-async def delete_shopping_item_endpoint(item_id: int) -> dict:
-    config = load_config()
-    delete_shopping_item(config.db_path, item_id)
+async def delete_shopping_item_endpoint(
+    item_id: str = FastAPIPath(pattern=f"^{_ITEM_ID}$"),
+) -> dict:
+    await shopping.remove(load_config(), item_id)
     return {"ok": True}
 
 

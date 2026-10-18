@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from felt_core import margins
+from felt_core import margins, shopping
 from felt_core.app_history import history_page
 from felt_core.app_stream import notices
 from felt_core.asides import current_asides, link_answer, remark_text
@@ -171,7 +171,12 @@ async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingR
     config = load_config()
     he_is_here(config)
     return StreamingResponse(
-        notices(config.db_path, SESSION, request.is_disconnected),
+        notices(
+            config.db_path,
+            SESSION,
+            request.is_disconnected,
+            lists_version=lambda: shopping.version(config),
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
