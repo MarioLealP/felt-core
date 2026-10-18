@@ -62,6 +62,7 @@ def test_not_claims(text):
         "Moving on. Honestly, I was wondering how long you'd let that one sit.",
         "It's at fifty-five percent now. Is that the sweet spot?",
         "Adding some Zutomayo to the queue. Good call.",
+        "Got it, switching gears. That last one was a bit of a chaotic leap.",
         "Sure thing, I'll add some Zutomayo to the queue.",
     ],
 )
@@ -88,6 +89,7 @@ def test_action_claims(text):
         "Your battery's at 40 percent, by the way.",
         "I think we should be moving on from this topic soon.",
         "Want me to add that to the queue?",
+        "I keep switching gears between games lately.",
     ],
 )
 def test_not_action_claims(text):

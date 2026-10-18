@@ -73,6 +73,8 @@ CASES: list[Case] = [
     # DJ, in order (state carries over)
     Case("be my DJ", None, never=["PUT /me/player/pause"], note="dj"),
     Case("less like this", ["POST /me/player/next"], note="dj"),  # skips + learns
+    Case("less llike this", ["POST /me/player/next"], note="dj"),  # Mario's typo, live
+    Case("play birdbrain by jamie paige", PLAY_NOW, note="dj"),  # mid-set: an interlude
     Case("more like this", [], note="dj"),
     Case("not this one", ["POST /me/player/next"], note="dj"),  # skips + learns
     Case("dj mode off", [], note="dj"),
@@ -93,17 +95,27 @@ class Recorder:
         self.queue: list[str] = []
         self.playing = True
         self._n = 0
+        self.known: dict[str, dict] = {}
+        self.now = {
+            "uri": FAKE_URI.format(0),
+            "id": "0" * 22,
+            "name": "Now Song",
+            "artists": [{"name": "Now Artist"}],
+            "duration_ms": 200_000,
+        }
 
     def _track(self, name: str, artist: str = "Fake Artist") -> dict:
         self._n += 1
         uri = FAKE_URI.format(self._n)
-        return {
+        track = {
             "uri": uri,
             "id": uri.rsplit(":", 1)[1],
             "name": name,
             "artists": [{"name": artist}],
             "duration_ms": 200_000,
         }
+        self.known[uri] = track
+        return track
 
     def respond(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
@@ -121,7 +133,8 @@ class Recorder:
         elif path in ("/me/player/play", "/me/player/next"):
             self.playing = True
             if path == "/me/player/next" and self.queue:
-                self.queue.pop(0)
+                uri = self.queue.pop(0)
+                self.now = self.known.get(uri, {**self.now, "uri": uri, "name": uri})
         if path == "/search":
             q = query.get("q", [""])[0]
             m = re.match(r'artist:"(.+)"', q)
@@ -137,13 +150,7 @@ class Recorder:
                 return httpx.Response(204)
             return httpx.Response(200, json={"queue": [{"uri": u} for u in self.queue]})
         if path in ("/me/player", "/me/player/currently-playing"):
-            item = {
-                "uri": FAKE_URI.format(0),
-                "id": "0" * 22,
-                "name": "Now Song",
-                "artists": [{"name": "Now Artist"}],
-                "duration_ms": 200_000,
-            }
+            item = self.now
             return httpx.Response(
                 200,
                 json={

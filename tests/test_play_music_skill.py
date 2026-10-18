@@ -39,7 +39,7 @@ async def _run(monkeypatch, params):
     async def queued(client, config, uri):
         calls.append(("queue", uri))
 
-    async def started(client, config, uri):
+    async def started(client, config, uri, name=None):
         calls.append(("start", uri))
 
     monkeypatch.setattr(skill, "search_track", search)

@@ -117,7 +117,8 @@ _NOT_MUSIC = re.compile(
 )
 _THIS = r"(?:this|that)(?:\s+(?:one|song|track))?"
 # "more like this", "less of that", "fewer songs like this one"
-_LIKE = rf"(?:(?:songs?|stuff|tracks?)\s+)?(?:like|of)\s+{_THIS}"
+# l+ike: "less llike this" (Mario, 2026-10-18 - typed fast, it paused)
+_LIKE = rf"(?:(?:songs?|stuff|tracks?)\s+)?(?:l+i+k+e+|of)\s+{_THIS}"
 _DJ: list[tuple[re.Pattern, dict]] = [
     (
         _cmd(r"(?:turn\s+)?(?:the\s+)?dj\s+mode\s+off|stop\s+(?:the\s+)?dj(?:\s+mode)?|end\s+dj"),
@@ -130,7 +131,7 @@ _DJ: list[tuple[re.Pattern, dict]] = [
         ),
         {"action": "start"},
     ),
-    (_cmd(rf"(?:no\s+)?(?:less|fewer)\s+{_LIKE}|no\s+more\s+{_LIKE}"), {"action": "less"}),
+    (_cmd(rf"(?:no\s+)?(?:l+e+s+|fewer)\s+{_LIKE}|no\s+more\s+{_LIKE}"), {"action": "less"}),
     (
         _cmd(rf"not\s+{_THIS}|i\s+don'?t\s+like\s+{_THIS}"),
         {"action": "less"},
