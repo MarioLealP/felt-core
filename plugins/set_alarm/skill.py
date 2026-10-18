@@ -3,8 +3,9 @@ distinct from set_timer, which is duration-only ("in 10 minutes").
 
 Mario, 2026-09-12: "Just use the phone alarm stuff. Its already a done
 feature from Google just need a way to call it." — prefers a real alarm
-in the phone's own Clock app (via felt-desktop-agent's adb-based
-phone_alarm.py) over felt's own SQLite-backed scheduling below, since a
+in the phone's own Clock app (since 2026-10-18 through the Home Assistant
+app, phone.py - the adb desktop agent died with Windows) over felt's own
+SQLite-backed scheduling below, since a
 phone alarm rings out loud and works even if felt-core is down.
 
 Only used when the requested time is the *next* occurrence of that
@@ -12,17 +13,17 @@ hour:minute, though — Android's SET_ALARM intent has no "on this specific
 date" extra, only a time of day, so it always means "the next time it's
 this o'clock." A further-out request ("next Friday at 9am" said on a
 Monday) can't be expressed that way and falls back to felt's own
-persisted scheduling (alarms.py), same as when no desktop agent is
-configured/reachable at all, or the phone can't be reached (adb down).
+persisted scheduling (alarms.py), same as when the phone can't be
+reached.
 """
 
 from datetime import datetime, timedelta
 
-import httpx
-
 from felt_core.alarms import schedule_alarm
 from felt_core.date_resolution import resolve_datetime
 from felt_core.params import get_single_param
+from felt_core.phone import PhoneUnavailable
+from felt_core.phone import set_alarm as phone_alarm
 from felt_core.plugin import SkillResult
 
 name = "set_alarm"
@@ -72,19 +73,12 @@ async def handle(params, ctx):
     label = params.get("label", "")
     config = ctx.config
 
-    if config.desktop_agent_url and _is_next_occurrence(fire_at, now):
-        async with httpx.AsyncClient(timeout=15) as client:
-            try:
-                response = await client.post(
-                    f"{config.desktop_agent_url}/v1/phone/alarm",
-                    json={"hour": fire_at.hour, "minute": fire_at.minute, "label": label},
-                )
-                if response.status_code == 200:
-                    return SkillResult(
-                        text=f"Alarm set on your phone for {_format(fire_at, label)}."
-                    )
-            except httpx.HTTPError:
-                pass  # phone unreachable — fall through to felt's own scheduling
+    if _is_next_occurrence(fire_at, now):
+        try:
+            await phone_alarm(config, fire_at.hour, fire_at.minute, label)
+            return SkillResult(text=f"Alarm set on your phone for {_format(fire_at, label)}.")
+        except PhoneUnavailable:
+            pass  # phone unreachable — fall through to felt's own scheduling
 
     schedule_alarm(config, fire_at, label)
     return SkillResult(text=f"Alarm set for {_format(fire_at, label)}.")
