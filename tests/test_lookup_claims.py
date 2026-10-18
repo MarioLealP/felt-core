@@ -58,6 +58,10 @@ def test_not_claims(text):
         "Throwing on some Daft Punk for you.",
         "I've queued up that song.",
         "Oh, my bad. I'll dial it back down for you.",
+        "I've set that reminder for you for the 21st to check on the semantic router.",
+        "Done, your alarm is set for 7:30.",
+        "I've added it to your calendar for Friday.",
+        "Reminder set for tomorrow at 9.",
         "I'm lowering the volume for you. How's that?",
         "Moving on. Honestly, I was wondering how long you'd let that one sit.",
         "It's at fifty-five percent now. Is that the sweet spot?",
@@ -90,6 +94,8 @@ def test_action_claims(text):
         "I think we should be moving on from this topic soon.",
         "Want me to add that to the queue?",
         "I keep switching gears between games lately.",
+        "Want me to set a reminder for that?",
+        "I set my mind on finishing this game.",
     ],
 )
 def test_not_action_claims(text):

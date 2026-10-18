@@ -119,6 +119,12 @@ CASES: list[Case] = [
         note="remind",
     ),
     Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
+    # live 2026-10-18, typos and all - she said "I've set that reminder" and set nothing
+    Case(
+        "set an reminder for 21th to check on teh semantic router",
+        ["POST /calendar/reminder"],
+        note="remind",
+    ),
     Case("set a timer for 5 minutes", ["POST /phone/SET_TIMER"], note="remind"),
     # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
     Case("what does the Chaos Orb do in poe2", None, ANY_PLAYER_WRITE, "look", ("poe2_wiki",)),
