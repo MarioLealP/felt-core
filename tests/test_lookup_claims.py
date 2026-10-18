@@ -61,6 +61,8 @@ def test_not_claims(text):
         "I'm lowering the volume for you. How's that?",
         "Moving on. Honestly, I was wondering how long you'd let that one sit.",
         "It's at fifty-five percent now. Is that the sweet spot?",
+        "Adding some Zutomayo to the queue. Good call.",
+        "Sure thing, I'll add some Zutomayo to the queue.",
     ],
 )
 def test_action_claims(text):
@@ -85,6 +87,7 @@ def test_action_claims(text):
         "Bring it on, I'm ready.",
         "Your battery's at 40 percent, by the way.",
         "I think we should be moving on from this topic soon.",
+        "Want me to add that to the queue?",
     ],
 )
 def test_not_action_claims(text):

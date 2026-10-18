@@ -181,14 +181,19 @@ async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -
     with nothing played yet has no active device (404) -> NoActivePlayer.
     The queued song lands behind anything already queued (DJ picks, his own
     adds), so it skips as far as the queue says, not just once."""
+    await add_to_queue(client, config, uri)
+    for _ in range(await _skips_to(client, config, uri)):
+        await next_track(client, config)
+
+
+async def add_to_queue(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+    """queue_track, with no active device (404) as NoActivePlayer."""
     try:
         await queue_track(client, config, uri)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise NoActivePlayer from e
         raise
-    for _ in range(await _skips_to(client, config, uri)):
-        await next_track(client, config)
 
 
 async def _skips_to(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> int:
