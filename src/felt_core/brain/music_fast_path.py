@@ -95,6 +95,16 @@ _PLAY = re.compile(
     rf"^\s*{POLITE}(?:play|(?P<put>put|throw|pop)\s+on)\s+(?:me\s+)?(?P<query>.{{2,80}}?){TAIL}",
     re.IGNORECASE,
 )
+# "queue birdbrain", "add birdbrain to the queue", "play birdbrain next" -
+# queued only, not played now (Mario 2026-10-18); "add" needs the queue named
+# ("add milk to the list" is the shopping list)
+_INTO_QUEUE = r"(?:to|in|on|into)\s+(?:the|my)\s+queue"
+_QUEUE = re.compile(
+    rf"^\s*{POLITE}(?:queue(?:\s+up)?\s+(?P<q1>.{{2,80}}?)(?:\s+{_INTO_QUEUE})?"
+    rf"|(?:add|put|stick|throw)\s+(?P<q2>.{{2,80}}?)\s+{_INTO_QUEUE}"
+    rf"|play\s+(?P<q3>.{{2,80}}?)\s+next)(?:\s+for\s+later)?{TAIL}",
+    re.IGNORECASE,
+)
 # "put on your hoodie" is an outfit (she has them), not a song
 _NOT_WORN = re.compile(
     r"^(?:your|my|her|the|a|an)\b|\b(?:clothes|outfit|pajamas|pyjamas|hoodie|jacket|coat|hat)\b",
@@ -151,6 +161,10 @@ def music_fast_path(message: str) -> tuple[str, dict] | None:
             return skill, dict(params)
     if _TRAILING_SKIP.search(message):
         return "media_control", {"action": "next"}
+    m = _QUEUE.match(message)
+    if m:
+        query = m["q1"] or m["q2"] or m["q3"]
+        return "play_music", {"query": query.strip(), "when": "queue"}
     m = _PLAY.match(message)
     if m and not _NOT_MUSIC.match(m["query"]) and not (m["put"] and _NOT_WORN.search(m["query"])):
         return "play_music", {"query": m["query"].strip()}

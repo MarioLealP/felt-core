@@ -4,6 +4,9 @@ API — the counterpart media_control's own description explicitly excludes
 (spotify_client.start_track - the plain play call doesn't work on Mario's
 Linux client); a player that hasn't played anything since it opened can't be
 woken remotely.
+
+"queue X" / "add X to the queue" / "play X next" only queues it (when=queue,
+Mario 2026-10-18: "make it different things, add to queue or play").
 """
 
 import httpx
@@ -12,6 +15,7 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 from felt_core.spotify_client import (
     NoActivePlayer,
+    add_to_queue,
     format_track_name,
     search_track,
     start_track,
@@ -20,13 +24,19 @@ from felt_core.spotify_client import (
 name = "play_music"
 description = (
     "Starts playing a specific song or artist by name on Spotify, e.g. 'play Bohemian "
-    "Rhapsody' or 'play some Daft Punk'. For transport control on whatever's already "
-    "playing (pause, skip, volume), use media_control instead."
+    "Rhapsody' or 'play some Daft Punk' - or, with when=queue, only adds it to the queue "
+    "('queue X', 'add X to the queue', 'play X next'). For transport control on whatever's "
+    "already playing (pause, skip, volume), use media_control instead."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "query": {"type": "string", "description": "The song and/or artist to play"},
+        "when": {
+            "type": "string",
+            "enum": ["now", "queue"],
+            "description": "now = play it right away (default); queue = add it to the queue",
+        },
     },
     "required": ["query"],
 }
@@ -47,8 +57,9 @@ async def handle(params, ctx):
         if track is None:
             return SkillResult(text=f"Couldn't find '{query}' on Spotify.")
 
+        queue = params.get("when") == "queue"
         try:
-            await start_track(client, config, track["uri"])
+            await (add_to_queue if queue else start_track)(client, config, track["uri"])
         except NoActivePlayer:
             return SkillResult(
                 text="Spotify's asleep on your desktop - hit play on anything once, then ask again."
@@ -56,4 +67,4 @@ async def handle(params, ctx):
         except httpx.HTTPError:
             return SkillResult(text="Spotify didn't take that right now.")
 
-    return SkillResult(text=f"Playing {format_track_name(track)}.")
+    return SkillResult(text=f"{'Queued' if queue else 'Playing'} {format_track_name(track)}.")

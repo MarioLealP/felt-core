@@ -53,6 +53,25 @@ from felt_core.brain.music_fast_path import music_fast_path
         ("make the music louder pls", "media_control", {"action": "louder"}),
         ("ugh this song sucks, next", "media_control", {"action": "next"}),
         ("meh. skip this one!", "media_control", {"action": "next"}),
+        # queue, not play (2026-10-18)
+        ("queue birdbrain", "play_music", {"query": "birdbrain", "when": "queue"}),
+        (
+            "can you queue up some daft punk",
+            "play_music",
+            {"query": "some daft punk", "when": "queue"},
+        ),
+        ("add birdbrain to the queue pls", "play_music", {"query": "birdbrain", "when": "queue"}),
+        (
+            "put one more time in my queue",
+            "play_music",
+            {"query": "one more time", "when": "queue"},
+        ),
+        ("play birdbrain next", "play_music", {"query": "birdbrain", "when": "queue"}),
+        (
+            "can you stick some zutomayo in the queue for later?",
+            "play_music",
+            {"query": "some zutomayo", "when": "queue"},
+        ),
     ],
 )
 def test_commands(message, skill, params):
@@ -76,6 +95,8 @@ def test_commands(message, skill, params):
         "that's too low a price",
         "so what's next?",
         "ok, next question",
+        "add milk to the shopping list",
+        "add birdbrain",
         "I skipped breakfast",
         "what's this song about? it sounds sad",
         "the volume on my headphones is broken",

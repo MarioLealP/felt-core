@@ -56,6 +56,13 @@ CASES: list[Case] = [
     # play by name - one queue, then nexts up to it
     Case("can you play birdbrain jamie paige", PLAY_NOW),
     Case("play some daft punk", PLAY_NOW),
+    # queue only - nothing skipped
+    Case("queue birdbrain", ["POST /me/player/queue"]),
+    Case("add one more time by daft punk to the queue", ["POST /me/player/queue"]),
+    Case("play crossfaith next", ["POST /me/player/queue"]),
+    Case(
+        "can you stick some zutomayo in the queue for later?", ["POST /me/player/queue"], note="llm"
+    ),
     # said loosely - felt-llm picks the tool
     Case("could you throw on some bring me the horizon", PLAY_NOW, note="llm"),
     Case("ugh this song sucks, next", ["POST /me/player/next"], note="llm"),
@@ -119,7 +126,9 @@ class Recorder:
             q = query.get("q", [""])[0]
             m = re.match(r'artist:"(.+)"', q)
             items = (
-                [self._track(f"{m[1]} song {i}", m[1]) for i in range(3)] if m else [self._track(q)]
+                [self._track(f"{m[1]} song {i}", m[1]) for i in range(3)]
+                if m
+                else [self._track(q, q)]
             )
             return httpx.Response(200, json={"tracks": {"items": items}})
         if path == "/me/player/queue":
