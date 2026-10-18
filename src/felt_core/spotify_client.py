@@ -178,14 +178,29 @@ async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -
     uris - on Mario's Linux desktop client that's accepted (204) and loads
     nothing, and while playing it stops the music (2026-10-18). Queue + next
     works while playing or paused (and resumes); a freshly started client
-    with nothing played yet has no active device (404) -> NoActivePlayer."""
+    with nothing played yet has no active device (404) -> NoActivePlayer.
+    The queued song lands behind anything already queued (DJ picks, his own
+    adds), so it skips as far as the queue says, not just once."""
     try:
         await queue_track(client, config, uri)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise NoActivePlayer from e
         raise
-    await next_track(client, config)
+    for _ in range(await _skips_to(client, config, uri)):
+        await next_track(client, config)
+
+
+async def _skips_to(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> int:
+    """How many nexts reach `uri` in the up-next list; 1 if it isn't listed
+    (the list is cut at ~20) or the read fails."""
+    try:
+        data = await _get(client, config, "/me/player/queue")
+    except httpx.HTTPError:
+        return 1
+    queue = data.get("queue", []) if isinstance(data, dict) else []
+    uris = [t.get("uri") for t in queue if isinstance(t, dict)]
+    return uris.index(uri) + 1 if uri in uris else 1
 
 
 async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:

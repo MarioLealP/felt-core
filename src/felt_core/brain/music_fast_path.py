@@ -85,6 +85,9 @@ _NOT_MUSIC = re.compile(
     r"|hide\b|pretend\b|fair\b|it\s+(?:cool|safe|by\s+ear)\b|on\b|for\b)",
     re.IGNORECASE,
 )
+_THIS = r"(?:this|that)(?:\s+(?:one|song|track))?"
+# "more like this", "less of that", "fewer songs like this one"
+_LIKE = rf"(?:(?:songs?|stuff|tracks?)\s+)?(?:like|of)\s+{_THIS}"
 _DJ: list[tuple[re.Pattern, dict]] = [
     (
         _cmd(r"(?:turn\s+)?(?:the\s+)?dj\s+mode\s+off|stop\s+(?:the\s+)?dj(?:\s+mode)?|end\s+dj"),
@@ -97,13 +100,12 @@ _DJ: list[tuple[re.Pattern, dict]] = [
         ),
         {"action": "start"},
     ),
-    (_cmd(r"more\s+like\s+(?:this|that)(?:\s+(?:one|song))?"), {"action": "more"}),
+    (_cmd(rf"(?:no\s+)?(?:less|fewer)\s+{_LIKE}|no\s+more\s+{_LIKE}"), {"action": "less"}),
     (
-        _cmd(
-            r"not\s+(?:this|that)(?:\s+(?:one|song))?|i\s+don'?t\s+like\s+(?:this|that)(?:\s+(?:one|song))?"
-        ),
+        _cmd(rf"not\s+{_THIS}|i\s+don'?t\s+like\s+{_THIS}"),
         {"action": "less"},
     ),
+    (_cmd(rf"more\s+{_LIKE}"), {"action": "more"}),
 ]
 _VOLUME = re.compile(
     rf"^\s*{POLITE}(?:set\s+)?(?:the\s+)?volume\s+(?:to\s+)?(?P<n>\d{{1,3}})\s*%?{TAIL}",

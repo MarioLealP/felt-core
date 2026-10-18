@@ -210,6 +210,13 @@ def test_relinked_uri_is_still_her_pick():
         ("more like this", "more"),
         ("not this one", "less"),
         ("i don't like this song", "less"),
+        # Mario, 2026-10-18 - paused the music instead
+        ("less like this", "less"),
+        ("less of this pls", "less"),
+        ("fewer songs like this", "less"),
+        ("no more like that", "less"),
+        ("more of this", "more"),
+        ("more songs like this one", "more"),
     ],
 )
 def test_dj_phrases(message, action):
@@ -227,7 +234,7 @@ def test_dj_line_prompt_sells_a_discovery():
 # --- starting a song (2026-10-18: the plain play call loads nothing on his client) ----
 
 
-async def _calls_with(monkeypatch, queue_status):
+async def _calls_with(monkeypatch, queue_status, up_next=("u:x",)):
     calls = []
 
     async def token(client, config):
@@ -236,6 +243,8 @@ async def _calls_with(monkeypatch, queue_status):
     def handler(request):
         calls.append((request.method, request.url.path))
         if request.url.path == "/v1/me/player/queue":
+            if request.method == "GET":
+                return httpx.Response(200, json={"queue": [{"uri": u} for u in up_next]})
             return httpx.Response(queue_status)
         return httpx.Response(204)
 
@@ -247,7 +256,19 @@ async def test_start_track_queues_then_skips(tmp_path, monkeypatch):
     calls, client = await _calls_with(monkeypatch, 204)
     async with client:
         await sp.start_track(client, _config(tmp_path), "u:x")
-    assert calls == [("POST", "/v1/me/player/queue"), ("POST", "/v1/me/player/next")]
+    assert calls == [
+        ("POST", "/v1/me/player/queue"),
+        ("GET", "/v1/me/player/queue"),
+        ("POST", "/v1/me/player/next"),
+    ]
+
+
+async def test_start_track_skips_past_what_was_queued_before(tmp_path, monkeypatch):
+    # Mario, 2026-10-18: "can you play X just adds it to the queue"
+    calls, client = await _calls_with(monkeypatch, 204, up_next=("u:pick", "u:old", "u:x", "u:ctx"))
+    async with client:
+        await sp.start_track(client, _config(tmp_path), "u:x")
+    assert calls.count(("POST", "/v1/me/player/next")) == 3
 
 
 async def test_a_sleeping_player_says_so(tmp_path, monkeypatch):
