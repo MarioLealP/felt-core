@@ -26,7 +26,7 @@ class FeltAgent(conversation.ConversationEntity):
     _attr_name = None
 
     def __init__(self, entry: ConfigEntry) -> None:
-        self._client: FeltClient = entry.runtime_data
+        self._client: FeltClient = entry.runtime_data.client
         self._attr_unique_id = entry.entry_id
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
