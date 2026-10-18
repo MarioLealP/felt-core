@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Felt",
+        "description": "Felt as a conversation agent. The login is the ha-felt service account in Authentik (its app password).",
+        "data": {
+          "url": "felt-core (HA route)",
+          "token_url": "Authentik token endpoint",
+          "client_id": "Authentik client id",
+          "username": "Service account",
+          "password": "App password"
+        }
+      }
+    },
+    "error": { "cannot_login": "Couldn't log in to Authentik with these details." },
+    "abort": { "already_configured": "Felt is already set up." }
+  }
+}
