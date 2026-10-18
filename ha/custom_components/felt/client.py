@@ -29,7 +29,7 @@ class FeltClient:
         password: str,
     ) -> None:
         self._session = session
-        self._url = url.rstrip("/") + "/v1/ha/chat"
+        self._base = url.rstrip("/")
         self._token_url = token_url
         self._form = {
             "grant_type": "client_credentials",
@@ -61,13 +61,13 @@ class FeltClient:
         """Config flow: can we log in at all?"""
         await self._access_token(fresh=True)
 
-    async def chat(self, text: str, language: str | None) -> str:
-        payload = {"text": text, "language": language}
+    async def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
         for attempt in (0, 1):
             token = await self._access_token(fresh=attempt == 1)
             try:
-                async with self._session.post(
-                    self._url,
+                async with self._session.request(
+                    method,
+                    self._base + path,
                     json=payload,
                     headers={"Authorization": f"Bearer {token}"},
                     timeout=aiohttp.ClientTimeout(total=90),
@@ -76,7 +76,18 @@ class FeltClient:
                         continue
                     if resp.status != 200:
                         raise FeltError(f"felt-core said {resp.status}")
-                    return (await resp.json())["reply"]
+                    return await resp.json()
             except aiohttp.ClientError as e:
                 raise FeltError(f"felt-core unreachable ({e!r})") from e
         raise FeltError("felt-core refused the token")
+
+    async def chat(self, text: str, language: str | None) -> str:
+        reply = await self._call("POST", "/v1/ha/chat", {"text": text, "language": language})
+        return reply["reply"]
+
+    async def controls(self) -> dict:
+        """{quiet, hide, dj, desktop_online, mood}"""
+        return await self._call("GET", "/v1/ha/controls")
+
+    async def set_control(self, name: str, on: bool) -> dict:
+        return await self._call("POST", "/v1/ha/controls", {"name": name, "on": on})

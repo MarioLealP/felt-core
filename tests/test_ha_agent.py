@@ -115,3 +115,59 @@ def test_the_ha_token_opens_nothing_else(client, monkeypatch):
         headers={"Authorization": f"Bearer {_token()}"},
     )
     assert r.status_code in (401, 403)
+
+
+# --- step 2: her switches in HA ---------------------------------------------------
+
+
+def _ctl(client, method="get", token=None, **body):
+    headers = {"Authorization": f"Bearer {token or _token()}"}
+    if method == "get":
+        return client.get("/v1/ha/controls", headers=headers)
+    return client.post("/v1/ha/controls", json=body, headers=headers)
+
+
+def test_controls_read(client):
+    r = _ctl(client)
+    assert r.status_code == 200
+    assert r.json() | {"mood": None} == {
+        "quiet": False,
+        "hide": False,
+        "dj": False,
+        "desktop_online": False,
+        "mood": None,
+        "message": None,
+    }
+
+
+def test_quiet_and_hide_are_the_apps_switches(client):
+    assert _ctl(client, "post", name="quiet", on=True).json()["quiet"] is True
+    assert _ctl(client, "post", name="hide", on=True).json()["hide"] is True
+    r = _ctl(client, "post", name="quiet", on=False).json()
+    assert (r["quiet"], r["hide"]) == (False, True)
+
+
+def test_dj_switch_starts_and_stops_the_set(client, monkeypatch):
+    calls = []
+
+    async def start(config):
+        calls.append("start")
+        ha_api.dj_control.SESSION.on = True
+        return "DJ mode on. First up: X by Y."
+
+    monkeypatch.setattr(ha_api.dj_control, "start", start)
+    monkeypatch.setattr(ha_api.dj_control, "stop", lambda why: calls.append(f"stop: {why}"))
+    on = _ctl(client, "post", name="dj", on=True).json()
+    assert on["dj"] is True and on["message"].startswith("DJ mode on")
+    _ctl(client, "post", name="dj", on=False)
+    assert calls == ["start", "stop: turned off in Home Assistant"]
+    ha_api.dj_control.SESSION.on = False
+
+
+def test_controls_need_the_ha_token(client):
+    assert client.get("/v1/ha/controls").status_code == 401
+    assert _ctl(client, token=_token(preferred_username="mario")).status_code == 401
+
+
+def test_unknown_control_is_refused(client):
+    assert _ctl(client, "post", name="claude_alerts", on=False).status_code == 422
