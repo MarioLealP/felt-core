@@ -23,6 +23,7 @@ Systems page.
 
 import asyncio
 import logging
+import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
@@ -244,6 +245,47 @@ def promote_due(db_path: str, now: datetime | None = None) -> list[int]:
     return ids
 
 
+# Mario 10-18: a missed one shouldn't wait on him forever - 162 piled up while
+# the responder was out of quota or down. Unseen this long, it expires...
+EXPIRE_UNSEEN_H = 48
+# ...unless it's an attack ("aside from actual we been hacked and someone has
+# been hammering our ports"); one still happening keeps its last_at fresh anyway.
+# A credential used from an unexpected place counts as one; and reminders meant
+# for him ("Zeek decision due") would be pointless if they lapsed
+_ATTACK_TYPES = ("honeypot", "authentik-bruteforce", "crowdsec")
+_ATTACK_TITLE = re.compile(r"prob(e|ing)|brute|intrusion|attack|unexpected|\bdue$", re.IGNORECASE)
+
+
+def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
+    """Open incidents that only wait on Mario by default - Claude missed them,
+    or they're hers to tell - and haven't recurred in EXPIRE_UNSEEN_H expire.
+    Claude's own "needs Mario" / "unknown" reports never expire."""
+    at = now or datetime.now(UTC)
+    cutoff = _ts(at - timedelta(hours=EXPIRE_UNSEEN_H))
+    q_types = ",".join("?" * len(_ATTACK_TYPES))
+    conn = _connect(db_path)
+    try:
+        _ensure(conn)
+        with conn:
+            rows = conn.execute(
+                "SELECT id, title FROM incidents WHERE state = 'open' AND report IS NULL"
+                " AND (handler = 'felt' OR missed_at IS NOT NULL)"
+                f" AND last_at <= ? AND type NOT IN ({q_types})",
+                (cutoff, *_ATTACK_TYPES),
+            ).fetchall()
+            ids = [r[0] for r in rows if not _ATTACK_TITLE.search(r[1])]
+            if ids:
+                q = ",".join("?" * len(ids))
+                conn.execute(
+                    "UPDATE incidents SET state = 'expired', handled_at = ?,"
+                    f" handled_by = 'expiry' WHERE id IN ({q})",
+                    [_ts(at), *ids],
+                )
+    finally:
+        conn.close()
+    return ids
+
+
 def get(db_path: str, incident_id: int) -> dict | None:
     conn = _connect(db_path)
     try:
@@ -282,6 +324,9 @@ async def watch(config) -> None:
             missed = await asyncio.to_thread(responder.mark_missed, config.db_path)
             if missed:
                 logger.warning("incidents: Claude didn't get to %s in time", missed)
+            expired = await asyncio.to_thread(expire_unseen, config.db_path)
+            if expired:
+                logger.info("incidents: %s expired (unseen %sh)", expired, EXPIRE_UNSEEN_H)
             await alert_lines.write_due(config)
         except Exception:
             logger.exception("incidents: round failed")

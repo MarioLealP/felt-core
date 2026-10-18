@@ -247,3 +247,68 @@ def test_the_switch_from_the_app(tmp_path, monkeypatch):
         assert c.get("/v1/app/settings", headers=sso).json() == {"claude_alerts": True}
         off = c.post("/v1/app/settings", headers=sso, json={"claude_alerts": False})
         assert off.json() == {"claude_alerts": False}
+
+
+FIM = "Wazuh L12 [clockmost]: clockmost: sensitive Linux file changed: /usr/local/sbin/x.sh"
+
+
+def _missed(db, title):
+    incident_id = _in(db, title)
+    responder.mark_missed(db, _at(5))
+    assert _get(db, incident_id)["missed_at"] is not None
+    return incident_id
+
+
+def test_a_missed_one_unseen_for_two_days_expires(tmp_path):
+    db = str(tmp_path / "f.db")
+    fim = _missed(db, FIM)
+    assert incidents.expire_unseen(db, _at(48 * 60 - 1)) == []
+    assert incidents.expire_unseen(db, _at(48 * 60)) == [fim]
+    incident = _get(db, fim)
+    assert (incident["state"], incident["handled_by"]) == ("expired", "expiry")
+
+
+def test_one_that_keeps_happening_stays_red(tmp_path):
+    db = str(tmp_path / "f.db")
+    fim = _missed(db, FIM)
+    again = _in(db, FIM, at=_at(47 * 60))  # after a miss, a repeat is its own incident
+    assert again != fim
+    assert incidents.expire_unseen(db, _at(48 * 60)) == [fim]
+    assert _get(db, again)["state"] == "open"
+
+
+def test_attacks_never_expire(tmp_path):
+    db = str(tmp_path / "f.db")
+    _missed(db, "HONEYPOT: ssh touched")
+    _missed(
+        db,
+        "Wazuh L12 [clockmost]: clockmost-ops: 5+ refused requests in 10 min"
+        " - agent probing the gateway?",
+    )
+    _missed(db, "vault: tray card issued to an UNEXPECTED address")
+    assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
+
+
+def test_reminders_for_mario_never_expire(tmp_path):
+    db = str(tmp_path / "f.db")
+    _missed(db, "Zeek decision due")
+    assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
+
+
+def test_claudes_needs_mario_never_expires(tmp_path):
+    db = str(tmp_path / "f.db")
+    fim = _in(db, FIM)
+    responder.claim_next(db, _at(1))
+    responder.save_report(db, fim, {**REPORT, "verdict": "needs-mario"}, "s1")
+    assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
+
+
+def test_hers_to_tell_expires_too(tmp_path):
+    db = str(tmp_path / "f.db")
+    oom = _in(
+        db,
+        "Wazuh L12 [clockmost]: System running out of memory."
+        " Availability of the system is in risk.",
+    )
+    assert _get(db, oom)["handler"] == "felt"
+    assert incidents.expire_unseen(db, _at(48 * 60)) == [oom]
