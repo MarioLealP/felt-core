@@ -59,7 +59,10 @@ async def handle(params, ctx):
 
         queue = params.get("when") == "queue"
         try:
-            await (add_to_queue if queue else start_track)(client, config, track["uri"])
+            if queue:
+                await add_to_queue(client, config, track["uri"])
+            else:
+                await start_track(client, config, track["uri"], track.get("name"))
         except NoActivePlayer:
             return SkillResult(
                 text="Spotify's asleep on your desktop - hit play on anything once, then ask again."

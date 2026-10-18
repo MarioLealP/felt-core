@@ -1,6 +1,7 @@
 """WP-48 DJ mode: learning, profile, picking, and the poll loop."""
 
 import json
+import time
 
 import httpx
 import pytest
@@ -17,6 +18,8 @@ from felt_core.events import build_prompt
 @pytest.fixture(autouse=True)
 def _off():
     control.stop("test")
+    sp._felt_skipped.clear()
+    sp._felt_started.clear()
     yield
     control.stop("test")
 
@@ -177,6 +180,22 @@ def test_something_else_playing_ends_dj_mode(tmp_path, monkeypatch):
     assert not control.is_on() and spawned == []
 
 
+def test_a_song_he_asked_for_is_an_interlude(tmp_path, monkeypatch):
+    # 2026-10-18: "play daddy daddy do" mid-set skipped past two of her picks -
+    # her skips, not his, and the set should carry on after his song
+    config, spawned = _config(tmp_path), []
+    a, b, c = _p("u:a", False), _p("u:b", True), _p("u:c", False)
+    _on(config, a, [b, c], monkeypatch, spawned)
+    for uri in ("u:a", "u:b"):
+        sp._felt_skipped[uri] = time.monotonic()
+    sp._felt_started["u:his"] = time.monotonic()
+    control.on_poll(config, _snap("u:a", "u:a", progress=30_000), _snap("u:his", "His"))
+    assert control.is_on() and control.SESSION.current is None
+    control.on_poll(config, _snap("u:his", "His"), _snap("u:c", "u:c"))
+    assert control.SESSION.current == c and control.SESSION.ahead == []
+    assert all(o["outcome"] != "skipped" for o in store.pick_outcomes(config.db_path, 5))
+
+
 def test_a_long_pause_ends_dj_mode(tmp_path, monkeypatch):
     config, spawned = _config(tmp_path), []
     _on(config, _p("u:a", False), [], monkeypatch, spawned)
@@ -212,6 +231,7 @@ def test_relinked_uri_is_still_her_pick():
         ("i don't like this song", "less"),
         # Mario, 2026-10-18 - paused the music instead
         ("less like this", "less"),
+        ("less llike this", "less"),
         ("less of this pls", "less"),
         ("fewer songs like this", "less"),
         ("no more like that", "less"),
@@ -234,56 +254,96 @@ def test_dj_line_prompt_sells_a_discovery():
 # --- starting a song (2026-10-18: the plain play call loads nothing on his client) ----
 
 
-async def _calls_with(monkeypatch, queue_status, up_next=("u:x",)):
-    calls = []
+class _Player:
+    """A fake Spotify player: queue adds land behind what's queued, next
+    takes the front, and the playing track can show the change late."""
 
+    def __init__(self, queue_status=204, up_next=(), lag=0, stuck=False, relink=None):
+        self.calls: list[tuple[str, str]] = []
+        self.now = "u:now"
+        self.queue = list(up_next)
+        self.queue_status, self.lag, self.stuck, self.relink = queue_status, lag, stuck, relink
+        self._stale = 0
+        self._shown = self.now
+
+    def handler(self, request):
+        path = request.url.path
+        self.calls.append((request.method, path))
+        if path == "/v1/me/player/queue" and request.method == "POST":
+            if self.queue_status == 204:
+                uri = request.url.params["uri"]
+                self.queue.append(self.relink.get(uri, uri) if self.relink else uri)
+            return httpx.Response(self.queue_status)
+        if path == "/v1/me/player/next":
+            if not self.stuck and self.queue:
+                self.now = self.queue.pop(0)
+                self._stale = self.lag
+            return httpx.Response(204)
+        if path == "/v1/me/player/currently-playing":
+            if self._stale:
+                self._stale -= 1
+            else:
+                self._shown = self.now
+            name = "Birdbrain" if self._shown.startswith("u:x") else self._shown
+            return httpx.Response(200, json={"item": {"uri": self._shown, "name": name}})
+        return httpx.Response(204)
+
+
+async def _start(monkeypatch, tmp_path, player, uri="u:x", name=None):
     async def token(client, config):
         return "tok"
 
-    def handler(request):
-        calls.append((request.method, request.url.path))
-        if request.url.path == "/v1/me/player/queue":
-            if request.method == "GET":
-                return httpx.Response(200, json={"queue": [{"uri": u} for u in up_next]})
-            return httpx.Response(queue_status)
-        return httpx.Response(204)
-
     monkeypatch.setattr(sp, "_get_access_token", token)
-    return calls, httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(sp, "_SKIP_SETTLE_S", 0)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(player.handler)) as client:
+        await sp.start_track(client, _config(tmp_path), uri, name)
+    return player.calls.count(("POST", "/v1/me/player/next"))
 
 
 async def test_start_track_queues_then_skips(tmp_path, monkeypatch):
-    calls, client = await _calls_with(monkeypatch, 204)
-    async with client:
-        await sp.start_track(client, _config(tmp_path), "u:x")
-    assert calls == [
-        ("POST", "/v1/me/player/queue"),
-        ("GET", "/v1/me/player/queue"),
-        ("POST", "/v1/me/player/next"),
-    ]
+    player = _Player()
+    assert await _start(monkeypatch, tmp_path, player) == 1
+    assert player.now == "u:x"
+    assert sp.felt_started("u:x") and sp.felt_skipped("u:now")
 
 
 async def test_start_track_skips_past_what_was_queued_before(tmp_path, monkeypatch):
     # Mario, 2026-10-18: "can you play X just adds it to the queue"
-    calls, client = await _calls_with(monkeypatch, 204, up_next=("u:pick", "u:old", "u:x", "u:ctx"))
-    async with client:
-        await sp.start_track(client, _config(tmp_path), "u:x")
-    assert calls.count(("POST", "/v1/me/player/next")) == 3
+    player = _Player(up_next=("u:pick", "u:old"))
+    assert await _start(monkeypatch, tmp_path, player) == 3
+    assert player.now == "u:x" and sp.felt_skipped("u:pick")
+
+
+async def test_a_lagging_player_is_not_overshot(tmp_path, monkeypatch):
+    # live 2026-10-18: Spotify showed the change late, one skip landed on a DJ pick
+    player = _Player(up_next=("u:pick", "u:old"), lag=2)
+    assert await _start(monkeypatch, tmp_path, player) == 3
+    assert player.now == "u:x"
+
+
+async def test_a_skip_that_never_shows_stops(tmp_path, monkeypatch):
+    player = _Player(up_next=("u:pick",), stuck=True)
+    assert await _start(monkeypatch, tmp_path, player) == 1
+
+
+async def test_a_relinked_track_is_found_by_name(tmp_path, monkeypatch):
+    player = _Player(up_next=("u:pick",), relink={"u:x": "u:x-relinked"})
+    assert await _start(monkeypatch, tmp_path, player, name="Birdbrain") == 2
+    assert player.queue == []
 
 
 async def test_a_sleeping_player_says_so(tmp_path, monkeypatch):
-    calls, client = await _calls_with(monkeypatch, 404)
-    async with client:
-        with pytest.raises(sp.NoActivePlayer):
-            await sp.start_track(client, _config(tmp_path), "u:x")
-    assert calls == [("POST", "/v1/me/player/queue")]  # never skips what he has on
+    player = _Player(queue_status=404)
+    with pytest.raises(sp.NoActivePlayer):
+        await _start(monkeypatch, tmp_path, player)
+    assert player.calls == [("POST", "/v1/me/player/queue")]  # never skips what he has on
 
 
 async def test_dj_start_on_a_sleeping_player(tmp_path, monkeypatch):
     async def picks(client, config, count, avoid):
         return [_p("u:a", False)]
 
-    async def asleep(client, config, uri):
+    async def asleep(client, config, uri, name=None):
         raise sp.NoActivePlayer
 
     monkeypatch.setattr(picker, "pick", picks)

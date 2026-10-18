@@ -57,6 +57,7 @@ _MUSIC = re.compile(
     r"|\b(?:putting|throwing|popping)\s+on\s+(?:some|a\s+(?:song|track)|it|that|this)\b"
     r"|^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done)\W+)*moving on\b"
     r"|\bmoving on to (?:something|the next|another)"
+    r"|^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done)\W+)*switching (?:gears|it up|things up)\b"
     r"|\b(?:adding|i'?ll add|added|i'?ve added)\b[^.!?]{0,40}?\b(?:to|in|into) (?:the|your) queue\b"
     r"|\b(?:it'?s|volume'?s|volume is)\s+(?:now\s+)?(?:at|down to|up to)\s+[\w-]+\s*(?:percent|%)"
     r"|\b(?:lowering|raising|dropping|bumping)\s+(?:the\s+)?(?:volume|it|music)\b",

@@ -29,7 +29,7 @@ from felt_core.music_taste import is_skip
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import load_plugins
 from felt_core.speech import strip_for_tts
-from felt_core.spotify_client import get_currently_playing
+from felt_core.spotify_client import felt_skipped, get_currently_playing
 from felt_core.tools import run_skill
 
 logger = logging.getLogger(__name__)
@@ -233,7 +233,9 @@ def _finished_play_from_transition(previous: dict | None, current: dict | None) 
         "artists": ", ".join(a["name"] for a in prev_track.get("artists", [])),
         "played_ms": previous["progress_ms"],
         "duration_ms": previous["duration_ms"],
-        "skipped": is_skip(previous["progress_ms"], previous["duration_ms"]),
+        # her own skips on the way to a song he asked for aren't his
+        "skipped": is_skip(previous["progress_ms"], previous["duration_ms"])
+        and not felt_skipped(prev_track.get("uri")),
     }
 
 

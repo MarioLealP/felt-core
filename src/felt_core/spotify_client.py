@@ -10,6 +10,7 @@ single account) via the shared oauth_token.refresh_access_token helper
 (WP-40) - same pattern google_calendar.py uses.
 """
 
+import asyncio
 import base64
 import time
 from typing import Any
@@ -28,6 +29,15 @@ _token_cache: dict = {"access_token": None, "expires_at": 0.0}
 # /v1/music/now endpoint felt-tray hits every ~15s, and music_taste_loop's
 # own poll) - a short cache keeps that from turning into a Spotify API call
 # per request. Same module-level pattern as _token_cache above.
+# start_track's own skips (uri -> monotonic time) and the songs it started:
+# neither is Mario's doing, so taste history and the DJ don't learn from them
+_felt_skipped: dict[str, float] = {}
+_felt_started: dict[str, float] = {}
+_FELT_MARK_S = 900.0
+_MAX_SKIPS = 12
+_SKIP_SETTLE_S = 0.3
+_SKIP_SETTLE_TRIES = 12
+
 _now_playing_cache: dict = {"data": "unset", "cached_at": 0.0}
 _NOW_PLAYING_CACHE_TTL_S = 10.0
 
@@ -173,17 +183,74 @@ class NoActivePlayer(Exception):
     """Spotify has no awake player to start the song on."""
 
 
-async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+async def start_track(
+    client: httpx.AsyncClient, config: FeltConfig, uri: str, name: str | None = None
+) -> None:
     """Plays `uri` now: queued, then skipped to. Not PUT /me/player/play with
     uris - on Mario's Linux desktop client that's accepted (204) and loads
     nothing, and while playing it stops the music (2026-10-18). Queue + next
     works while playing or paused (and resumes); a freshly started client
     with nothing played yet has no active device (404) -> NoActivePlayer.
     The queued song lands behind anything already queued (DJ picks, his own
-    adds), so it skips as far as the queue says, not just once."""
+    adds), and Spotify's queue list lags a fresh add - so it skips one at a
+    time, each time waiting for the change to show, until the song is on
+    (`name` too: Spotify can relink a track to another uri)."""
     await add_to_queue(client, config, uri)
-    for _ in range(await _skips_to(client, config, uri)):
+    _felt_started[uri] = time.monotonic()
+    playing = await _playing(client, config)
+    for _ in range(_MAX_SKIPS):
+        if _is(playing, uri, name):
+            return
+        if playing is not None:
+            _felt_skipped[playing["uri"]] = time.monotonic()
         await next_track(client, config)
+        changed = await _settled(client, config, playing)
+        if changed is None:  # the skip never showed - stop rather than overshoot
+            return
+        playing = changed
+
+
+def _is(track: dict | None, uri: str, name: str | None) -> bool:
+    if track is None:
+        return False
+    return track.get("uri") == uri or (
+        name is not None and norm_name(track.get("name", "")) == norm_name(name)
+    )
+
+
+async def _playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+    """The track on right now, uncached."""
+    token = await _get_access_token(client, config)
+    response = await client.get(
+        f"{_API_BASE}/me/player/currently-playing", headers={"Authorization": f"Bearer {token}"}
+    )
+    if response.status_code == 204:
+        return None
+    response.raise_for_status()
+    return response.json().get("item")
+
+
+async def _settled(
+    client: httpx.AsyncClient, config: FeltConfig, before: dict | None
+) -> dict | None:
+    """The track once it differs from `before`; None if it never does."""
+    old = (before or {}).get("uri")
+    for _ in range(_SKIP_SETTLE_TRIES):
+        await asyncio.sleep(_SKIP_SETTLE_S)
+        now = await _playing(client, config)
+        if now is not None and now.get("uri") != old:
+            return now
+    return None
+
+
+def felt_skipped(uri: str | None) -> bool:
+    """Did start_track skip past `uri` lately (not Mario)?"""
+    return uri is not None and time.monotonic() - _felt_skipped.get(uri, -1e9) < _FELT_MARK_S
+
+
+def felt_started(uri: str | None) -> bool:
+    """Did start_track put `uri` on lately (on Mario's ask)?"""
+    return uri is not None and time.monotonic() - _felt_started.get(uri, -1e9) < _FELT_MARK_S
 
 
 async def add_to_queue(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
@@ -194,18 +261,6 @@ async def add_to_queue(client: httpx.AsyncClient, config: FeltConfig, uri: str) 
         if e.response.status_code == 404:
             raise NoActivePlayer from e
         raise
-
-
-async def _skips_to(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> int:
-    """How many nexts reach `uri` in the up-next list; 1 if it isn't listed
-    (the list is cut at ~20) or the read fails."""
-    try:
-        data = await _get(client, config, "/me/player/queue")
-    except httpx.HTTPError:
-        return 1
-    queue = data.get("queue", []) if isinstance(data, dict) else []
-    uris = [t.get("uri") for t in queue if isinstance(t, dict)]
-    return uris.index(uri) + 1 if uri in uris else 1
 
 
 async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:

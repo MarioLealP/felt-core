@@ -65,7 +65,7 @@ async def start(config: FeltConfig) -> str:
             return "I couldn't line anything up right now."
         first, rest = picks[0], picks[1:]
         try:
-            await sp.start_track(client, config, first["uri"])
+            await sp.start_track(client, config, first["uri"], first.get("title"))
             for p in rest:
                 await sp.queue_track(client, config, p["uri"])
         except sp.NoActivePlayer:
@@ -102,7 +102,12 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
     if _uri(previous) == _uri(current):
         return
     cur = SESSION.current
-    if cur is not None and previous is not None and same_track(cur, previous):
+    if (
+        cur is not None
+        and previous is not None
+        and same_track(cur, previous)
+        and not sp.felt_skipped(_uri(previous))
+    ):
         store.set_outcome(
             config.db_path,
             cur["uri"],
@@ -112,6 +117,10 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
         return
     at = next((i for i, p in enumerate(SESSION.ahead) if same_track(p, current)), None)
     if at is None:
+        if sp.felt_started(_uri(current)):
+            # a song he asked her for mid-set: an interlude, the set goes on
+            SESSION.current = None
+            return
         if _uri(current) in store.recent_pick_uris(config.db_path, 1):
             # Spotify's queue can't be cleared: a pick left over from an
             # earlier set came up - skip past it rather than stepping back
@@ -120,7 +129,8 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
         stop("Mario played something else")
         return
     for passed in SESSION.ahead[:at]:  # skipped through within one poll
-        store.set_outcome(config.db_path, passed["uri"], "skipped")
+        if not sp.felt_skipped(passed["uri"]):
+            store.set_outcome(config.db_path, passed["uri"], "skipped")
     SESSION.current, SESSION.ahead = SESSION.ahead[at], SESSION.ahead[at + 1 :]
     _spawn(_say(config, SESSION.current))
     if len(SESSION.ahead) < AHEAD:
