@@ -13,6 +13,11 @@ you now" - and the shelf light never changed (no smart_home_control call).
 A switching verb only counts with an on/off/up/down a few words later, so
 "I'm going to turn in for the night" isn't a claim (past tense: on/off only,
 since "it turned up" is everyday English).
+
+Music too (2026-10-18 e2e run): "Playing some Bring Me The Horizon." and
+"Paused the music." with nothing sent to Spotify. Tight on purpose - a false
+alarm forces a tool call, which could pause his music: "Playing" only as the
+reply's first word, the verbs only with the music (or it/that/this) after.
 """
 
 import re
@@ -36,11 +41,24 @@ _CLAIM = re.compile(
 _ACTION = re.compile(
     r"\b("
     r"consider it done"
-    r"|(turn|switch|flip|toggle|shut|power|dimm?)(ing)?\b[^.!?]{0,40}?\b(on|off|up|down)\b"
+    r"|(turn|switch|flip|toggle|shut|power|dimm?|dial)(ing)?\b[^.!?]{0,40}?\b(on|off|up|down)\b"
     # past tense only with on/off: "the package turned up" is no claim
     r"|(turned|switched|flipped|toggled|powered|dimmed)\b[^.!?]{0,40}?\b(on|off)\b"
     r"|flipp?(ing|ed)? (that|the|this) switch"
     r")",
+    re.IGNORECASE,
+)
+
+_MUSIC = re.compile(
+    r"^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done|there)\W+)*(?:now\s+)?playing\b"
+    r"(?!\s+(?:it\s+(?:cool|safe)|along|games?|with|around|dead|nice|fair)\b)"
+    r"|\b(?:paused|skipped|queued(?:\s+up)?|resumed|pausing|skipping|queu(?:e)?ing(?:\s+up)?|resuming)"
+    r"\s+(?:it|that|this|the\s+(?:music|song|track))\b"
+    r"|\b(?:putting|throwing|popping)\s+on\s+(?:some|a\s+(?:song|track)|it|that|this)\b"
+    r"|^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done)\W+)*moving on\b"
+    r"|\bmoving on to (?:something|the next|another)"
+    r"|\b(?:it'?s|volume'?s|volume is)\s+(?:now\s+)?(?:at|down to|up to)\s+[\w-]+\s*(?:percent|%)"
+    r"|\b(?:lowering|raising|dropping|bumping)\s+(?:the\s+)?(?:volume|it|music)\b",
     re.IGNORECASE,
 )
 
@@ -50,7 +68,8 @@ def claims_a_lookup(text: str) -> bool:
 
 
 def claims_an_action(text: str) -> bool:
-    return bool(_ACTION.search((text or "")[:_OPENING_CHARS]))
+    opening = (text or "")[:_OPENING_CHARS]
+    return bool(_ACTION.search(opening) or _MUSIC.search(opening))
 
 
 def claims_a_tool_use(text: str) -> bool:
