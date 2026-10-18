@@ -1,6 +1,7 @@
 """WP-25: the proactive channel - enqueue_proactive/wait_for_next (pure
 logic against a tmp db), and the four /v1/proactive/* endpoints."""
 
+import httpx
 from fastapi.testclient import TestClient
 
 import felt_core.api as api
@@ -176,6 +177,24 @@ def test_audio_endpoint_returns_wav_from_the_tts_cache(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
     assert response.content == b"RIFF-fake-wav"
+
+
+def test_audio_endpoint_503_when_felt_voice_is_off(tmp_path, monkeypatch):
+    # the laptop is off: was an unhandled ConnectError -> 500
+    client = _client(tmp_path, monkeypatch, debug=True)
+    monkeypatch.setenv("FELT_VOICE_URL", "http://felt-voice.invalid:1")
+
+    async def unreachable(config, text, emotion=None):
+        raise httpx.ConnectError("All connection attempts failed")
+
+    monkeypatch.setattr(api, "proactive_audio", unreachable)
+    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()[
+        "id"
+    ]
+
+    response = client.get(f"/v1/proactive/{item_id}/audio")
+
+    assert response.status_code == 503 and response.json()["detail"] == "voice_unavailable"
 
 
 def test_audio_endpoint_503_without_voice_url(tmp_path, monkeypatch):

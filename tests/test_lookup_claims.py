@@ -172,3 +172,20 @@ async def test_forced_retry_error_keeps_the_reply(tmp_path, monkeypatch, fake_ll
 
     assert result.reply == "Let me check... it rerolls modifiers."
     assert "forced retry failed" in caplog.text
+
+
+async def test_a_skill_whose_service_is_down_says_so(tmp_path, monkeypatch):
+    # e2e 2026-10-18: poe2-rag/drive search/weather/searxng down -> the whole chat 500'd
+    import httpx
+
+    from felt_core.brain import orchestrator
+
+    async def down(name, params, registry, ctx):
+        raise httpx.ConnectError("All connection attempts failed")
+
+    monkeypatch.setattr(orchestrator, "run_skill", down)
+    result, output = await orchestrator._run_skill_call(
+        ("poe2_wiki", {"query": "chaos orb"}), {}, _config(tmp_path), "what does the chaos orb do"
+    )
+    assert result is None
+    assert "couldn't reach" in output and "poe2_wiki" in output

@@ -38,6 +38,8 @@ class Case:
     # writes that must not happen (checked when `writes` is None)
     never: list[str] = field(default_factory=list)
     note: str = ""
+    # lookups: one of these skills has to be called (a reply from memory fails)
+    skills: tuple[str, ...] = ()
 
 
 ANY_PLAYER_WRITE = ["POST /me/player/", "PUT /me/player/"]
@@ -84,6 +86,32 @@ CASES: list[Case] = [
     Case("what's this song about?", None, never=ANY_PLAYER_WRITE),
     Case("play a game with me", None, never=ANY_PLAYER_WRITE),
     Case("I skipped breakfast", None, never=ANY_PLAYER_WRITE),
+    # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
+    Case("what does the Chaos Orb do in poe2", None, ANY_PLAYER_WRITE, "look", ("poe2_wiki",)),
+    Case(
+        "how does the gemling legionnaire work in poe 2",
+        None,
+        ANY_PLAYER_WRITE,
+        "look",
+        ("poe2_wiki",),
+    ),
+    Case("my cv on google drive", None, ANY_PLAYER_WRITE, "look", ("search_documents",)),
+    Case("find my cv in my documents", None, ANY_PLAYER_WRITE, "look", ("search_documents",)),
+    Case("what's the weather like tomorrow?", None, ANY_PLAYER_WRITE, "look", ("get_weather",)),
+    Case(
+        "who won the last f1 race?",
+        None,
+        ANY_PLAYER_WRITE,
+        "look",
+        ("web_search", "news_digest"),
+    ),
+    Case(
+        "is anything down on the server?",
+        None,
+        ANY_PLAYER_WRITE,
+        "look",
+        ("get_container_status", "get_recent_alerts"),
+    ),
 ]
 
 
@@ -195,7 +223,9 @@ def _writes(calls: list[str]) -> list[str]:
     return [c for c in calls if not c.startswith("GET ")]
 
 
-def _verdict(case: Case, writes: list[str]) -> bool:
+def _verdict(case: Case, writes: list[str], route: list[str]) -> bool:
+    if case.skills and not any(f"skill call: {k}" in r for r in route for k in case.skills):
+        return False
     stripped = [w.split("?")[0] for w in writes]
     if case.writes is not None:
         return set(stripped) == set(case.writes) and (
@@ -208,6 +238,7 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only")
+    ap.add_argument("--note", help="only cases with this note, e.g. look / dj / llm")
     args = ap.parse_args()
 
     tmp = tempfile.mkdtemp(prefix="felt-e2e-")
@@ -218,19 +249,38 @@ async def main() -> int:
     logging.getLogger("felt_core").addHandler(log)
     logging.getLogger("felt_core").setLevel(logging.INFO)
 
-    cases = [c for c in CASES if not args.only or args.only.lower() in c.say.lower()]
+    cases = [
+        c
+        for c in CASES
+        if (not args.only or args.only.lower() in c.say.lower())
+        and (not args.note or c.note == args.note)
+    ]
     failed = 0
     for run in range(args.repeat):
-        for case in cases:
+        for i, case in enumerate(cases):
             recorder.calls.clear()
             log.lines.clear()
             try:
-                result = await chat(case.say, config, session_id=f"e2e-{run}")
+                # a conversation per case: earlier "couldn't reach" replies in
+                # the history taught the model not to try (DJ state isn't
+                # per-session, so the DJ cases still carry over)
+                result = await chat(case.say, config, session_id=f"e2e-{run}-{i}")
                 reply = result.reply
             except Exception as e:  # noqa: BLE001 - a crash is a result here
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)
-            ok = _verdict(case, writes) and not reply.startswith("CRASH")
+            ok = _verdict(case, writes, log.lines) and not reply.startswith("CRASH")
+            if case.skills and ok and any(" /" not in c for c in recorder.calls):
+                # a service she called was down (all faked): she has to say
+                # so, not answer anyway
+                ok = bool(
+                    re.search(
+                        r"couldn'?t|can'?t|unable|down|trouble"
+                        r"|not (?:able|working|responding|getting|seeing)",
+                        reply,
+                        re.I,
+                    )
+                )
             failed += not ok
             print(
                 json.dumps(
@@ -239,13 +289,7 @@ async def main() -> int:
                         "say": case.say,
                         "route": log.lines,
                         "spotify": writes,
-                        "other": [
-                            c
-                            for c in recorder.calls
-                            if " api." not in c
-                            and "/" in c.split(" ", 1)[1]
-                            and not c.split(" ", 1)[1].startswith("/")
-                        ],
+                        "other": [c for c in recorder.calls if " /" not in c],
                         "reply": reply[:160],
                     },
                     ensure_ascii=False,
