@@ -94,6 +94,8 @@ CASES: list[Case] = [
     Case("where's my phone", ["POST /phone/NOTIFY"], note="phone"),
     Case("ring my phone pls", ["POST /phone/NOTIFY"], note="phone"),
     Case("how much battery does my phone have?", [], [], "phone", ("get_phone_battery",)),
+    Case("when's my alarm?", [], [], "phone", ("list_alarms",)),
+    Case("what time is my alarm set for tomorrow", [], [], "phone", ("list_alarms",)),
     # reminders -> calendar events the phone notifies for (WP-46)
     Case("remind me friday at 3pm to call the dentist", ["POST /calendar/reminder"], note="remind"),
     # short and relative: a labelled phone timer rings just the same
@@ -188,6 +190,9 @@ class Recorder:
         if path.endswith("_battery_level"):
             self.calls.append(f"GET /phone{path}")
             return httpx.Response(200, json={"state": "64"})
+        if path.endswith("_next_alarm"):
+            self.calls.append(f"GET /phone{path}")
+            return httpx.Response(200, json={"state": "2026-10-19T05:30:00+00:00"})
         if path.endswith("_battery_state"):
             return httpx.Response(200, json={"state": "charging"})
         self.calls.append(f"{request.method} /ha{path}")
@@ -349,7 +354,7 @@ async def main() -> int:
                 # so, not answer anyway
                 ok = bool(
                     re.search(
-                        r"couldn'?t|can'?t|unable|down|trouble"
+                        r"couldn'?t|can'?t|unable|down|trouble|hard time"
                         r"|not (?:able|working|responding|getting|seeing)",
                         reply,
                         re.I,

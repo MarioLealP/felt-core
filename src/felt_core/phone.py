@@ -10,6 +10,8 @@ felt-core being down. `config.phone` is the app's device name in HA
 (`notify.mobile_app_<phone>`, `sensor.<phone>_battery_level`).
 """
 
+from datetime import datetime
+
 import httpx
 
 from felt_core.config import FeltConfig
@@ -87,6 +89,25 @@ async def ring(config: FeltConfig) -> None:
         "Here! - Felt",
         {"ttl": 0, "priority": "high", "channel": "alarm_stream", "tag": "felt-find-phone"},
     )
+
+
+async def next_alarm(config: FeltConfig) -> datetime | None:
+    """The phone's next alarm (the app's Next alarm sensor - Google Clock or
+    whatever app set it), or None when there's none set."""
+    headers = _headers(config)
+    try:
+        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+            response = await client.get(
+                f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm"
+            )
+    except httpx.HTTPError as e:
+        raise PhoneUnavailable(repr(e)) from e
+    if response.status_code != 200:
+        raise PhoneUnavailable(f"HA {response.status_code}")
+    try:
+        return datetime.fromisoformat(response.json()["state"])
+    except (KeyError, ValueError):  # "unavailable": no alarm set
+        return None
 
 
 async def battery(config: FeltConfig) -> tuple[int, bool]:
