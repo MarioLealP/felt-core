@@ -171,3 +171,46 @@ def test_controls_need_the_ha_token(client):
 
 def test_unknown_control_is_refused(client):
     assert _ctl(client, "post", name="claude_alerts", on=False).status_code == 422
+
+
+# --- the Systems summary ----------------------------------------------------------
+
+
+def test_systems_summary(client, monkeypatch):
+    page = {
+        "areas": [
+            {"name": "server", "status": "needs-you", "count": 2, "incident_id": 7},
+            {"name": "security", "status": "watching", "count": 1, "incident_id": 9},
+            {"name": "router", "status": "fine", "count": 0, "incident_id": None},
+        ],
+        "circled": 7,
+        "incidents": [
+            {
+                "id": 9,
+                "area": "security",
+                "status": "watching",
+                "tier": "high",
+                "title": "Wazuh L12",
+                "last_at": "2026-10-18 20:21:07",
+            },
+            {
+                "id": 7,
+                "area": "server",
+                "status": "needs-you",
+                "tier": "high",
+                "title": "felt-core health",
+                "last_at": "2026-10-18 19:47:18",
+            },
+        ],
+    }
+    monkeypatch.setattr(ha_api.systems, "page", lambda db, before, limit: page)
+    r = client.get("/v1/ha/systems", headers={"Authorization": f"Bearer {_token()}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["areas"]["server"] == {"status": "needs-you", "count": 2}
+    assert body["needs_you"] == 2
+    assert [i["id"] for i in body["latest"]] == [9, 7]
+
+
+def test_systems_needs_the_ha_token(client):
+    assert client.get("/v1/ha/systems").status_code == 401

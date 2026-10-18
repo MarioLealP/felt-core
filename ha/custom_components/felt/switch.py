@@ -45,14 +45,15 @@ class FeltSwitch(CoordinatorEntity[FeltCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        return (self.coordinator.data or {}).get(self._key)
+        return ((self.coordinator.data or {}).get("controls") or {}).get(self._key)
 
     async def _set(self, on: bool) -> None:
         try:
             state = await self.coordinator.client.set_control(self._key, on)
         except FeltError as e:
             raise HomeAssistantError(f"Felt: {e}") from e
-        self.coordinator.async_set_updated_data(state)
+        data = {**(self.coordinator.data or {}), "controls": state}
+        self.coordinator.async_set_updated_data(data)
         if self._key == "dj" and on and not state.get("dj") and state.get("message"):
             # she couldn't start (e.g. Spotify asleep) - say why instead of a silent flip back
             raise HomeAssistantError(state["message"])

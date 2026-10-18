@@ -22,7 +22,12 @@ from felt_core.config import FeltConfig
 logger = logging.getLogger(__name__)
 
 HA_ROUTES = frozenset(
-    {("POST", "/v1/ha/chat"), ("GET", "/v1/ha/controls"), ("POST", "/v1/ha/controls")}
+    {
+        ("POST", "/v1/ha/chat"),
+        ("GET", "/v1/ha/controls"),
+        ("POST", "/v1/ha/controls"),
+        ("GET", "/v1/ha/systems"),
+    }
 )
 _ALGORITHMS = ["RS256", "ES256"]
 

@@ -89,5 +89,9 @@ class FeltClient:
         """{quiet, hide, dj, desktop_online, mood}"""
         return await self._call("GET", "/v1/ha/controls")
 
+    async def systems(self) -> dict:
+        """{areas: {name: {status, count}}, needs_you, latest: [...]}"""
+        return await self._call("GET", "/v1/ha/systems")
+
     async def set_control(self, name: str, on: bool) -> dict:
         return await self._call("POST", "/v1/ha/controls", {"name": name, "on": on})
