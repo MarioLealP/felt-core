@@ -1,4 +1,5 @@
-"""Polls Felt's switches (quiet, hide, DJ mode) from felt-core."""
+"""Polls felt-core: her switches (quiet, hide, DJ mode) and the Systems
+summary (Zabbix/Wazuh/ntfy as triaged incidents), as {"controls", "systems"}."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ class FeltCoordinator(DataUpdateCoordinator[dict]):
 
     async def _async_update_data(self) -> dict:
         try:
-            return await self.client.controls()
+            controls = await self.client.controls()
+            return {"controls": controls, "systems": await self.client.systems()}
         except FeltError as e:
             raise UpdateFailed(str(e)) from e

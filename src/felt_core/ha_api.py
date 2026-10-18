@@ -7,6 +7,10 @@ conversation (session `ha`), same brain, skills and memory as everywhere.
 Step 2 (2026-10-18): her own switches as HA switches - quiet, hide (the same
 controls the app and the tray use, controls.py) and DJ mode - so the HA app
 and automations can flip them without asking her.
+
+The Systems summary (2026-10-18, Mario: "zabbix and wazuh and ntfy on it"):
+the app's Systems page - Zabbix/Wazuh/ntfy alerts as triaged incidents -
+per area plus the latest few, for the HA dashboard.
 """
 
 import asyncio
@@ -15,7 +19,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from felt_core import controls, local_llm
+from felt_core import controls, local_llm, systems
 from felt_core.brain import chat
 from felt_core.config import FeltConfig, load_config
 from felt_core.dj import control as dj_control
@@ -90,3 +94,44 @@ async def ha_set_control(req: HaSetControl) -> HaControls:
     else:
         await asyncio.to_thread(controls.set_control, config.db_path, req.name, req.on)
     return await _controls(config, message)
+
+
+class HaArea(BaseModel):
+    status: str
+    count: int
+
+
+class HaIncident(BaseModel):
+    id: int
+    area: str
+    status: str
+    tier: str | None = None
+    title: str
+    last_at: str | None = None
+
+
+class HaSystems(BaseModel):
+    areas: dict[str, HaArea]
+    needs_you: int
+    latest: list[HaIncident]
+
+
+@router.get("/systems", response_model=HaSystems)
+async def ha_systems() -> HaSystems:
+    page = await asyncio.to_thread(systems.page, load_config().db_path, None, 5)
+    areas = {a["name"]: HaArea(status=a["status"], count=a["count"]) for a in page["areas"]}
+    return HaSystems(
+        areas=areas,
+        needs_you=sum(a.count for a in areas.values() if a.status == "needs-you"),
+        latest=[
+            HaIncident(
+                id=r["id"],
+                area=r["area"],
+                status=r["status"],
+                tier=r.get("tier"),
+                title=r["title"],
+                last_at=r.get("last_at"),
+            )
+            for r in page["incidents"][:5]
+        ],
+    )

@@ -13,7 +13,7 @@ from .client import FeltClient
 from .const import CONF_CLIENT_ID, CONF_PASSWORD, CONF_TOKEN_URL, CONF_URL, CONF_USERNAME
 from .coordinator import FeltCoordinator
 
-PLATFORMS = [Platform.CONVERSATION, Platform.SWITCH]
+PLATFORMS = [Platform.CONVERSATION, Platform.SENSOR, Platform.SWITCH]
 
 
 @dataclass
