@@ -1,5 +1,7 @@
 from datetime import date, datetime
 
+import pytest
+
 from felt_core.date_resolution import resolve_date, resolve_datetime, upcoming_weekend
 
 # A fixed Wednesday, so weekday-relative phrases are unambiguous.
@@ -85,3 +87,29 @@ def test_resolve_datetime_explicit_day_and_time():
 
 def test_resolve_datetime_unparseable_returns_none():
     assert resolve_datetime("asdkjfh not a time", _NOW) is None
+
+
+# --- bare hours + lone days (2026-10-18: "monday at 9" was September 2027) ---
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("monday at 9", datetime(2026, 10, 19, 9, 0)),
+        ("tomorrow at 9", datetime(2026, 10, 19, 9, 0)),
+        ("friday at 3", datetime(2026, 10, 23, 15, 0)),  # 1-7 = afternoon
+        ("at 9 o'clock", datetime(2026, 10, 19, 9, 0)),
+        ("friday at 3pm", datetime(2026, 10, 23, 15, 0)),
+        ("at 7:30", datetime(2026, 10, 19, 7, 30)),
+        ("the 1st at 9", datetime(2026, 11, 1, 9, 0)),
+        ("on the 31st at 9am", datetime(2026, 10, 31, 9, 0)),
+        ("the 1st of december at 9", datetime(2026, 12, 1, 9, 0)),
+    ],
+)
+def test_bare_hours_and_lone_days(text, expected):
+    assert resolve_datetime(text, datetime(2026, 10, 18, 15, 20)) == expected
+
+
+def test_an_alarm_bare_hour_is_morning():
+    now = datetime(2026, 10, 18, 22, 0)
+    assert resolve_datetime("at 6", now, pm_below=0) == datetime(2026, 10, 19, 6, 0)
