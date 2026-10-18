@@ -49,6 +49,18 @@ def test_not_claims(text):
         "Dimming the lights down a bit.",
         "I already flipped that switch for you, but I can do it again.",
         "Done - I switched the shelf light off.",
+        # 2026-10-18 e2e: nothing reached Spotify for any of these
+        "Playing some Bring Me The Horizon. This is quite the shift in mood.",
+        "Paused the music. I'm staying put, just let me know.",
+        "Moving on to something a bit different.",
+        "Okay, now playing Birdbrain.",
+        "Sure, skipping this one.",
+        "Throwing on some Daft Punk for you.",
+        "I've queued up that song.",
+        "Oh, my bad. I'll dial it back down for you.",
+        "I'm lowering the volume for you. How's that?",
+        "Moving on. Honestly, I was wondering how long you'd let that one sit.",
+        "It's at fifty-five percent now. Is that the sweet spot?",
     ],
 )
 def test_action_claims(text):
@@ -64,6 +76,15 @@ def test_action_claims(text):
         "Your package turned up, by the way.",
         "Morning! Coffee first?",
         "Ha, nice one. " * 15 + "Want me to turn the fan on?",
+        "Playing it cool, huh?",
+        "You've been playing Endfield all day.",
+        "I paused for a second there, sorry.",
+        "Skipped breakfast again?",
+        "Want me to skip this one?",
+        "Playing along, are we?",
+        "Bring it on, I'm ready.",
+        "Your battery's at 40 percent, by the way.",
+        "I think we should be moving on from this topic soon.",
     ],
 )
 def test_not_action_claims(text):

@@ -11,6 +11,11 @@ from felt_core.brain.command_words import POLITE, TAIL
 _MUSIC = r"(?:the\s+)?(?:music|song|track|spotify|this(?:\s+(?:song|one|track))?|it)"
 # the music by name only - "stop it" / "turn it off" could mean her
 _NAMED = r"(?:the\s+)?(?:music|song|spotify)"
+# "it's way too loud", "ugh the music is too quiet"
+_TOO = (
+    r"(?:ugh,?\s+)?(?:(?:it|that|this|the\s+(?:music|song))(?:'s|\s+is)\s+)?"
+    r"(?:way\s+|a\s+bit\s+|kinda\s+|so\s+)?too\s+"
+)
 
 
 def _cmd(body: str) -> re.Pattern:
@@ -40,6 +45,7 @@ _COMMANDS: list[tuple[re.Pattern, str, dict]] = [
         # "stop it" is left alone (more likely aimed at her than the music)
         _cmd(
             rf"pause(?:\s+{_MUSIC})?|stop\s+{_NAMED}"
+            rf"|hold\s+{_NAMED}(?:\s+(?:a\s+sec(?:ond)?|for\s+a\s+(?:sec(?:ond)?|bit|moment)))?"
             rf"|turn\s+off\s+{_NAMED}|turn\s+{_NAMED}\s+off"
         ),
         "media_control",
@@ -54,12 +60,18 @@ _COMMANDS: list[tuple[re.Pattern, str, dict]] = [
         {"action": "resume"},
     ),
     (
-        _cmd(rf"(?:turn\s+{_MUSIC}\s+up|louder|volume\s+up|turn\s+up\s+{_MUSIC})"),
+        _cmd(
+            rf"(?:turn\s+{_MUSIC}\s+up|louder|volume\s+up|turn\s+up\s+{_MUSIC}"
+            rf"|{_TOO}(?:quiet|soft|low)|make\s+{_MUSIC}\s+(?:a\s+(?:bit|little)\s+)?louder)"
+        ),
         "media_control",
         {"action": "louder"},
     ),
     (
-        _cmd(rf"(?:turn\s+{_MUSIC}\s+down|quieter|softer|volume\s+down|turn\s+down\s+{_MUSIC})"),
+        _cmd(
+            rf"(?:turn\s+{_MUSIC}\s+down|quieter|softer|volume\s+down|turn\s+down\s+{_MUSIC}"
+            rf"|{_TOO}loud|make\s+{_MUSIC}\s+(?:a\s+(?:bit|little)\s+)?(?:quieter|softer))"
+        ),
         "media_control",
         {"action": "quieter"},
     ),
@@ -79,7 +91,15 @@ _COMMANDS: list[tuple[re.Pattern, str, dict]] = [
 ]
 # "play birdbrain jamie paige" -> play_music by name; tried after the fixed
 # commands ("play the music" is resume). Not "play a game with me" & co.
-_PLAY = re.compile(rf"^\s*{POLITE}play\s+(?:me\s+)?(?P<query>.{{2,80}}?){TAIL}", re.IGNORECASE)
+_PLAY = re.compile(
+    rf"^\s*{POLITE}(?:play|(?P<put>put|throw|pop)\s+on)\s+(?:me\s+)?(?P<query>.{{2,80}}?){TAIL}",
+    re.IGNORECASE,
+)
+# "put on your hoodie" is an outfit (she has them), not a song
+_NOT_WORN = re.compile(
+    r"^(?:your|my|her|the|a|an)\b|\b(?:clothes|outfit|pajamas|pyjamas|hoodie|jacket|coat|hat)\b",
+    re.IGNORECASE,
+)
 _NOT_MUSIC = re.compile(
     r"^(?:a\s+)?(?:games?\b|with\b|along\b|nice\b|around\b|dead\b|chess\b|tag\b"
     r"|hide\b|pretend\b|fair\b|it\s+(?:cool|safe|by\s+ear)\b|on\b|for\b)",
@@ -113,6 +133,12 @@ _VOLUME = re.compile(
 )
 
 
+# "ugh this song sucks, next" - a skip tacked onto a complaint
+_TRAILING_SKIP = re.compile(
+    r"[,.!]\s*(?:next|skip(?:\s+(?:it|this|this\s+one))?)\s*[.!?]*$", re.IGNORECASE
+)
+
+
 def music_fast_path(message: str) -> tuple[str, dict] | None:
     for pattern, params in _DJ:
         if pattern.match(message):
@@ -123,7 +149,9 @@ def music_fast_path(message: str) -> tuple[str, dict] | None:
     for pattern, skill, params in _COMMANDS:
         if pattern.match(message):
             return skill, dict(params)
+    if _TRAILING_SKIP.search(message):
+        return "media_control", {"action": "next"}
     m = _PLAY.match(message)
-    if m and not _NOT_MUSIC.match(m["query"]):
+    if m and not _NOT_MUSIC.match(m["query"]) and not (m["put"] and _NOT_WORN.search(m["query"])):
         return "play_music", {"query": m["query"].strip()}
     return None
