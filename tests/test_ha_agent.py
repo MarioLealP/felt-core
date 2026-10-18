@@ -1,0 +1,117 @@
+"""Felt as Home Assistant's conversation agent (felt-ha-hub D3): only a
+valid Authentik token for the ha-felt service account opens /v1/ha/chat."""
+
+import time
+from types import SimpleNamespace
+
+import jwt
+import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi.testclient import TestClient
+
+import felt_core.api as api
+from felt_core import ha_api, ha_auth
+from felt_core.brain.result import ChatResult
+
+ISS = "https://auth.clockmost.com/application/o/ha-felt/"
+AUD = "ha-felt-client-id"
+KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+OTHER_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def _token(key=KEY, **over):
+    now = int(time.time())
+    claims = {
+        "iss": ISS,
+        "aud": AUD,
+        "iat": now,
+        "exp": now + 900,
+        "sub": "x",
+        "preferred_username": "ha-felt",
+    }
+    claims.update(over)
+    claims = {k: v for k, v in claims.items() if v is not None}
+    return jwt.encode(claims, key, algorithm="RS256")
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
+    monkeypatch.setenv("FELT_HA_AGENT_ISSUER", ISS)
+    monkeypatch.setenv("FELT_HA_AGENT_CLIENT_ID", AUD)
+    jwks = SimpleNamespace(get_signing_key_from_jwt=lambda t: SimpleNamespace(key=KEY.public_key()))
+    monkeypatch.setattr(ha_auth, "_jwks", lambda url: jwks)
+    said = []
+
+    async def fake_chat(text, config, session_id):
+        said.append((text, session_id))
+        return ChatResult(reply="shelf's off.")
+
+    monkeypatch.setattr(ha_api, "chat", fake_chat)
+    c = TestClient(api.app)
+    c.said = said
+    return c
+
+
+def _post(client, token, **headers):
+    return client.post(
+        "/v1/ha/chat",
+        json={"text": "turn off the shelf"},
+        headers={"Authorization": f"Bearer {token}", **headers},
+    )
+
+
+def test_a_valid_token_reaches_felt(client):
+    r = _post(client, _token())
+    assert r.status_code == 200 and r.json() == {"reply": "shelf's off."}
+    assert client.said == [("turn off the shelf", "ha")]
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        _token(exp=int(time.time()) - 10),  # expired
+        _token(aud="some-other-app"),
+        _token(iss="https://auth.clockmost.com/application/o/felt/"),
+        _token(preferred_username="mario"),  # another account's token
+        _token(preferred_username=None),
+        _token(key=OTHER_KEY),  # not signed by Authentik
+        jwt.encode({"iss": ISS, "aud": AUD, "exp": int(time.time()) + 900}, "", algorithm="none"),
+        "not-a-jwt",
+    ],
+)
+def test_bad_tokens_are_refused(client, token):
+    assert _post(client, token).status_code == 401
+    assert client.said == []
+
+
+def test_no_token_is_refused(client):
+    assert client.post("/v1/ha/chat", json={"text": "hi"}).status_code == 401
+
+
+def test_proxy_identity_headers_dont_open_it(client):
+    # rule 2: an independently token-authenticated route never trusts proxy identity
+    r = client.post(
+        "/v1/ha/chat",
+        json={"text": "hi"},
+        headers={
+            "X-Felt-Identity": "spiffe://clockmost.internal/workload/tray",
+            "X-Authentik-Username": "akadmin",
+        },
+    )
+    assert r.status_code == 401
+
+
+def test_closed_when_not_configured(client, monkeypatch):
+    monkeypatch.setenv("FELT_HA_AGENT_ISSUER", "")
+    assert _post(client, _token()).status_code == 401
+
+
+def test_the_ha_token_opens_nothing_else(client, monkeypatch):
+    monkeypatch.setenv("FELT_AUTH_MODE", "identity")  # production's mode
+    r = client.post(
+        "/v1/text-chat",
+        json={"message": "hi"},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+    assert r.status_code in (401, 403)

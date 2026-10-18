@@ -165,6 +165,14 @@ class FeltConfig(BaseSettings):
     def ha_entities_list(self) -> list[str]:
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
+    # Home Assistant calling Felt (ha_auth.py, felt-ha-hub D3): Authentik's
+    # `ha-felt` OAuth provider - its issuer URL (ends in /), client id, and the
+    # service account its tokens must belong to. Empty issuer = route closed.
+    ha_agent_issuer: str = ""
+    ha_agent_jwks_url: str = ""  # default: <issuer>jwks/
+    ha_agent_client_id: str = ""
+    ha_agent_username: str = "ha-felt"
+
     # Mario's phone in HA's companion app (phone.py): notify.mobile_app_<phone>,
     # sensor.<phone>_battery_level. Renamed when the app is re-registered.
     phone: str = "pocox7"
