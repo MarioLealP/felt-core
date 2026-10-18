@@ -91,6 +91,12 @@ async def ring(config: FeltConfig) -> None:
     )
 
 
+async def notify(config: FeltConfig, title: str, message: str, tag: str) -> None:
+    """A plain notification on the phone (the HA app), high priority so it
+    shows at once; the same tag replaces the previous one."""
+    await _notify(config, message, {"title": title, "tag": tag, "priority": "high", "ttl": 0})
+
+
 async def next_alarm(config: FeltConfig) -> datetime | None:
     """The phone's next alarm (the app's Next alarm sensor - Google Clock or
     whatever app set it), or None when there's none set."""
