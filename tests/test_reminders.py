@@ -140,3 +140,17 @@ def test_reminder_due_window():
 def test_reminder_prompt_and_fallback():
     assert "remind him now" in ch.build_prompt("call the dentist", 0, None, None, reminder=True)
     assert ch.fallback_line("call the dentist", 0, reminder=True) == "reminder: call the dentist."
+
+
+async def test_a_day_without_a_time_is_nine_am(monkeypatch, tmp_path):
+    # live 2026-10-18: "set an reminder for 21th to check on teh semantic router"
+    created, _ = await _run(
+        monkeypatch, tmp_path, {"what": "check on the semantic router", "when": "the 21st"}
+    )
+    start = created[0]["start"]
+    assert (start.day, start.hour, start.minute) == (21, 9, 0)
+
+
+async def test_a_given_time_is_kept(monkeypatch, tmp_path):
+    created, _ = await _run(monkeypatch, tmp_path, {"what": "x", "when": "friday at 3pm"})
+    assert created[0]["start"].hour == 15

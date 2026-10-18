@@ -60,7 +60,12 @@ _MUSIC = re.compile(
     r"|^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done)\W+)*switching (?:gears|it up|things up)\b"
     r"|\b(?:adding|i'?ll add|added|i'?ve added)\b[^.!?]{0,40}?\b(?:to|in|into) (?:the|your) queue\b"
     r"|\b(?:it'?s|volume'?s|volume is)\s+(?:now\s+)?(?:at|down to|up to)\s+[\w-]+\s*(?:percent|%)"
-    r"|\b(?:lowering|raising|dropping|bumping)\s+(?:the\s+)?(?:volume|it|music)\b",
+    r"|\b(?:lowering|raising|dropping|bumping)\s+(?:the\s+)?(?:volume|it|music)\b"
+    # 2026-10-18 live: "I've set that reminder for you for the 21st" - nothing set
+    r"|\b(?:i'?ve|i have|i)\s+(?:just\s+)?(?:set|added|scheduled|created|put)\b[^.!?]{0,30}?"
+    r"\b(?:reminder|alarm|timer|event|appointment|calendar)"
+    r"|\b(?:reminder|alarm|timer)\s+(?:is\s+)?(?:set|added|scheduled)\b"
+    r"|\b(?:added|put)\b[^.!?]{0,40}?\bto (?:your|the) (?:calendar|shopping list|list)\b",
     re.IGNORECASE,
 )
 

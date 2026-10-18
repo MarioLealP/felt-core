@@ -59,6 +59,12 @@ _EVERY = {
 
 
 _EVERY_WHEN = re.compile(r"^\s*(?:every|each)\s+(?P<rest>.+)$", re.IGNORECASE)
+# a time of day in the text ("at 9", "3pm", "15:30", "noon", "in 20 minutes")
+_HAS_CLOCK = re.compile(
+    r"\d\s*(?:am|pm|a\.m|p\.m)\b|\d:\d|\bat\s+\d|\b(?:noon|midnight|morning|evening|tonight)\b"
+    r"|\bin\s+\d+\s*(?:mins?|minutes?|hours?|h)\b|\bin\s+an?\s+(?:hour|minute)",
+    re.IGNORECASE,
+)
 _DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
 
 
@@ -115,6 +121,9 @@ async def handle(params, ctx):
         repeat = "none"
 
     when_text, repeat = split_every(str(when_text), repeat)
+    if not _HAS_CLOCK.search(when_text):
+        # "for the 21st" - a day, no time: morning, not midnight (2026-10-18)
+        when_text = f"{when_text} at 9:00"
     now = datetime.now(tz=TZ)
     start = resolve_datetime(when_text, now)
     if start is None:
