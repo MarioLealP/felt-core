@@ -29,6 +29,7 @@ def ha(monkeypatch):
         states = {
             "sensor.pocox7_battery_level": "20",
             "sensor.pocox7_battery_state": "discharging",
+            "sensor.pocox7_next_alarm": "2026-10-19T05:30:00+00:00",
         }
 
     def handler(request):
@@ -152,3 +153,16 @@ async def test_phone_battery_skill(tmp_path, ha):
     skill = load_plugin_module("get_phone_battery/skill.py")
     result = await skill.handle({}, _ctx(tmp_path))
     assert result.text == "Phone battery: 20% (not charging)"
+
+
+async def test_list_alarms_says_the_phones_next_one(tmp_path, ha):
+    skill = load_plugin_module("list_alarms/skill.py")
+    result = await skill.handle({}, _ctx(tmp_path))
+    assert result.text == "Alarms: next on your phone: Monday 6:30 AM"  # Lisbon time
+
+
+async def test_list_alarms_without_one(tmp_path, ha):
+    skill = load_plugin_module("list_alarms/skill.py")
+    ha.states["sensor.pocox7_next_alarm"] = "unavailable"
+    result = await skill.handle({}, _ctx(tmp_path))
+    assert result.text == "Alarms: none on your phone"
