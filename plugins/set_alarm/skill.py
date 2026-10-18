@@ -66,7 +66,8 @@ async def handle(params, ctx):
         return SkillResult(text="I need a time to set an alarm for.")
 
     now = datetime.now()
-    fire_at = resolve_datetime(str(time_text), now)
+    # "wake me at 6" is morning, not 18:00
+    fire_at = resolve_datetime(str(time_text), now, pm_below=0)
     if fire_at is None:
         return SkillResult(text=f'I couldn\'t figure out what time "{time_text}" means.')
 

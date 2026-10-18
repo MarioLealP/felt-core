@@ -115,15 +115,35 @@ async def create_event(
     start: datetime,
     end: datetime,
     description: str | None = None,
+    *,
+    recurrence: list[str] | None = None,
+    popup_minutes: int | None = None,
+    transparent: bool = False,
+    private: dict[str, str] | None = None,
 ) -> dict:
+    """`recurrence`: RRULE lines (needs the start's timeZone, always sent);
+    `popup_minutes`: the phone's own notification that many minutes before,
+    instead of the calendar's default; `transparent`: doesn't block the
+    time as busy; `private`: extendedProperties.private (Felt's own tags)."""
     token = await _get_access_token(client, config)
-    body = {
+    body: dict = {
         "summary": summary,
-        "start": {"dateTime": start.isoformat()},
-        "end": {"dateTime": end.isoformat()},
+        "start": {"dateTime": start.isoformat(), "timeZone": str(TZ)},
+        "end": {"dateTime": end.isoformat(), "timeZone": str(TZ)},
     }
     if description:
         body["description"] = description
+    if recurrence:
+        body["recurrence"] = recurrence
+    if popup_minutes is not None:
+        body["reminders"] = {
+            "useDefault": False,
+            "overrides": [{"method": "popup", "minutes": popup_minutes}],
+        }
+    if transparent:
+        body["transparency"] = "transparent"
+    if private:
+        body["extendedProperties"] = {"private": private}
     response = await client.post(
         events_url(calendar_id),
         headers={"Authorization": f"Bearer {token}"},

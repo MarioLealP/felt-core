@@ -12,6 +12,10 @@ Sent heads-ups are remembered in the settings table, keyed on event id
 + start time + stage, so a restart doesn't repeat them. All-day events
 and ones Mario declined are skipped. Explicit alarms (alarms.py) are
 untouched - this is only a gentle reminder.
+
+Reminders Mario asked for (set_reminder, WP-46, tagged REMINDER_TAG) get
+one urgent line right on time instead - "call the dentist" at 3:00, not a
+heads-up at 2:30.
 """
 
 from __future__ import annotations
@@ -50,6 +54,12 @@ class Stage:
 NORMAL = Stage("30", 30 * 60, "calendar")
 URGENT = Stage("10", 10 * 60, "urgent")
 STAGES = (NORMAL, URGENT)
+# set_reminder's events: one line at the time itself
+REMINDER = Stage("0", 0, "urgent")
+REMINDER_TAG = "felt_reminder"
+# a reminder still counts this long after its time (a slow poll, a restart)
+_REMINDER_GRACE_S = 5 * 60
+_REMINDER_TTL_S = 10 * 60
 
 # Keys scheduled in this process but not yet delivered - stops the next
 # poll from scheduling the same heads-up a second time.
@@ -74,11 +84,23 @@ def is_relevant(event: dict) -> bool:
     )
 
 
-def due_stage(start: datetime, now: datetime) -> Stage | None:
+def is_reminder(event: dict) -> bool:
+    """Pure: one of set_reminder's events (recurring instances keep the tag)."""
+    return event.get("extendedProperties", {}).get("private", {}).get(REMINDER_TAG) == "1"
+
+
+def stages_for(event: dict) -> tuple[Stage, ...]:
+    return (REMINDER,) if is_reminder(event) else STAGES
+
+
+def due_stage(start: datetime, now: datetime, reminder: bool = False) -> Stage | None:
     """Pure: which heads-up is right for `now` - URGENT inside the last
     10 min, NORMAL between 30 and 10 min out, else none. A late first
-    sight (8 min out) skips the 30-min one rather than sending both."""
+    sight (8 min out) skips the 30-min one rather than sending both.
+    A reminder: REMINDER from a minute before its time to a few after."""
     left = (start - now).total_seconds()
+    if reminder:
+        return REMINDER if -_REMINDER_GRACE_S <= left <= 60 else None
     if left <= 0:
         return None
     if left <= URGENT.lead_s:
@@ -111,7 +133,7 @@ def plan(
             continue
         start = event_start(event)
         assert start is not None
-        for stage in STAGES:
+        for stage in stages_for(event):
             key = dedupe_key(event, stage)
             if key in _pending or sent(key):
                 continue
@@ -125,7 +147,9 @@ def minutes_left(start: datetime, now: datetime) -> int:
     return max(1, round((start - now).total_seconds() / 60))
 
 
-def fallback_line(title: str, minutes: int) -> str:
+def fallback_line(title: str, minutes: int, reminder: bool = False) -> str:
+    if reminder:
+        return f"reminder: {title}."
     return f"heads up, {title} in {minutes} minutes."
 
 
@@ -150,9 +174,16 @@ def current_game(config: FeltConfig, now: datetime) -> str | None:
     return None
 
 
-def build_prompt(title: str, minutes: int, location: str | None, game: str | None) -> str:
+def build_prompt(
+    title: str, minutes: int, location: str | None, game: str | None, reminder: bool = False
+) -> str:
     where = f" at {location}" if location else ""
     context = f" He's in the middle of {game} right now." if game else ""
+    if reminder:
+        return (
+            f'Mario asked you to remind him now: "{title}".{context} Remind him in your own '
+            "voice - one short sentence, say what it is. Don't invent details."
+        )
     return (
         f'Calendar heads-up: Mario has "{title}"{where} in {minutes} minutes.{context} '
         "Give him a short, natural heads-up in your own voice - one sentence, say what "
@@ -161,21 +192,23 @@ def build_prompt(title: str, minutes: int, location: str | None, game: str | Non
 
 
 async def phrase(
-    config: FeltConfig, title: str, minutes: int, location: str | None, game: str | None
+    config: FeltConfig,
+    title: str,
+    minutes: int,
+    location: str | None,
+    game: str | None,
+    reminder: bool = False,
 ) -> str:
     from felt_core.brain.replies import local_reply
 
+    prompt = build_prompt(title, minutes, location, game, reminder)
     try:
-        line = await local_reply(
-            [{"role": "user", "content": build_prompt(title, minutes, location, game)}],
-            config,
-            include_facts=False,
-        )
+        line = await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)
     except local_llm.LocalLLMUnavailable:
         logger.info("calendar heads-up: felt-llm unavailable, using the plain line")
-        return fallback_line(title, minutes)
+        return fallback_line(title, minutes, reminder)
     line = line.strip(" \n\"'")
-    return line or fallback_line(title, minutes)
+    return line or fallback_line(title, minutes, reminder)
 
 
 async def deliver(
@@ -198,17 +231,20 @@ async def deliver(
             )
             return False
         assert start is not None
-        if due_stage(start, now) is not stage or already_sent(config, key):
+        reminder = is_reminder(fresh)
+        if due_stage(start, now, reminder) is not stage or already_sent(config, key):
             return False
         db.set_setting(config.db_path, key, now.isoformat())
         minutes = minutes_left(start, now)
         title = str(fresh.get("summary") or "something on your calendar")
         line = await phrase(
-            config, title, minutes, fresh.get("location"), current_game(config, now)
+            config, title, minutes, fresh.get("location"), current_game(config, now), reminder
         )
         ttl = (start - now).total_seconds()
         if stage is NORMAL:
             ttl = min(ttl, _NORMAL_TTL_S)
+        elif stage is REMINDER:
+            ttl = _REMINDER_TTL_S
         enqueue_proactive(config, stage.kind, line, ttl_s=ttl)
         logger.info(
             "calendar heads-up: %s-min for %r enqueued as %s", stage.name, title, stage.kind

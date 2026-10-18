@@ -94,6 +94,28 @@ CASES: list[Case] = [
     Case("where's my phone", ["POST /phone/NOTIFY"], note="phone"),
     Case("ring my phone pls", ["POST /phone/NOTIFY"], note="phone"),
     Case("how much battery does my phone have?", [], [], "phone", ("get_phone_battery",)),
+    # reminders -> calendar events the phone notifies for (WP-46)
+    Case("remind me friday at 3pm to call the dentist", ["POST /calendar/reminder"], note="remind"),
+    # short and relative: a labelled phone timer rings just the same
+    Case(
+        "remind me in 20 minutes to check the oven",
+        None,
+        [],
+        "remind",
+        ("set_reminder", "set_timer"),
+    ),
+    Case(
+        "every monday at 9 remind me to take the bins out",
+        ["POST /calendar/reminder weekly"],
+        note="remind",
+    ),
+    Case(
+        "remind me every day at 10pm to take my meds",
+        ["POST /calendar/reminder daily"],
+        note="remind",
+    ),
+    Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
+    Case("set a timer for 5 minutes", ["POST /phone/SET_TIMER"], note="remind"),
     # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
     Case("what does the Chaos Orb do in poe2", None, ANY_PLAYER_WRITE, "look", ("poe2_wiki",)),
     Case(
@@ -171,6 +193,25 @@ class Recorder:
         self.calls.append(f"{request.method} /ha{path}")
         return httpx.Response(503)
 
+    def _calendar(self, request: httpx.Request, path: str) -> httpx.Response:
+        """Google Calendar: one primary calendar; a created event is recorded
+        as 'POST /calendar/event' (+ ' weekly' etc. when it repeats)."""
+        if path == "/users/me/calendarList":
+            cal = {"id": "primary-id", "summary": "Mario", "primary": True, "accessRole": "owner"}
+            return httpx.Response(200, json={"items": [cal]})
+        if request.method == "POST" and path.endswith("/events"):
+            body = json.loads(request.content or b"{}")
+            rule = (body.get("recurrence") or [""])[0]
+            freq = re.search(r"FREQ=(\w+)", rule)
+            tag = "reminder" if body.get("extendedProperties") else "event"
+            repeat = f" {freq[1].lower()}" if freq else ""
+            self.calls.append(f"POST /calendar/{tag}{repeat}")
+            return httpx.Response(200, json={"id": "new"})
+        if request.method == "GET":
+            return httpx.Response(200, json={"items": []})
+        self.calls.append(f"{request.method} /calendar{path}")
+        return httpx.Response(503)
+
     def respond(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
         path = request.url.path
@@ -179,6 +220,10 @@ class Recorder:
             return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
             return self._ha(request, path)
+        if host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
+        if host == "www.googleapis.com" and path.startswith("/calendar/v3"):
+            return self._calendar(request, path.removeprefix("/calendar/v3"))
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
             return httpx.Response(503)
