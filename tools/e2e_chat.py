@@ -86,6 +86,14 @@ CASES: list[Case] = [
     Case("what's this song about?", None, never=ANY_PLAYER_WRITE),
     Case("play a game with me", None, never=ANY_PLAYER_WRITE),
     Case("I skipped breakfast", None, never=ANY_PLAYER_WRITE),
+    # the phone, through the Home Assistant app (fake - the real one never rings)
+    Case("set a timer for 10 minutes", ["POST /phone/SET_TIMER"], note="phone"),
+    Case("can you time 25 min for my pasta", ["POST /phone/SET_TIMER"], note="phone"),
+    Case("wake me up at 7:30", ["POST /phone/SET_ALARM"], note="phone"),
+    Case("set an alarm for 6am tomorrow", ["POST /phone/SET_ALARM"], note="phone"),
+    Case("where's my phone", ["POST /phone/NOTIFY"], note="phone"),
+    Case("ring my phone pls", ["POST /phone/NOTIFY"], note="phone"),
+    Case("how much battery does my phone have?", [], [], "phone", ("get_phone_battery",)),
     # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
     Case("what does the Chaos Orb do in poe2", None, ANY_PLAYER_WRITE, "look", ("poe2_wiki",)),
     Case(
@@ -124,6 +132,7 @@ class Recorder:
         self.playing = True
         self._n = 0
         self.known: dict[str, dict] = {}
+        self.ha_host = ""
         self.now = {
             "uri": FAKE_URI.format(0),
             "id": "0" * 22,
@@ -145,12 +154,31 @@ class Recorder:
         self.known[uri] = track
         return track
 
+    def _ha(self, request: httpx.Request, path: str) -> httpx.Response:
+        """Home Assistant: the phone (companion app) part - recorded as
+        'POST /phone/SET_TIMER' etc., never reaching the real phone."""
+        if path.startswith("/api/services/notify/mobile_app_"):
+            body = json.loads(request.content or b"{}")
+            action = (body.get("data") or {}).get("intent_action", "")
+            what = action.rsplit(".", 1)[-1] if action else "NOTIFY"
+            self.calls.append(f"POST /phone/{what}")
+            return httpx.Response(200, json=[])
+        if path.endswith("_battery_level"):
+            self.calls.append(f"GET /phone{path}")
+            return httpx.Response(200, json={"state": "64"})
+        if path.endswith("_battery_state"):
+            return httpx.Response(200, json={"state": "charging"})
+        self.calls.append(f"{request.method} /ha{path}")
+        return httpx.Response(503)
+
     def respond(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
         path = request.url.path
         query = parse_qs(request.url.query.decode())
         if host == "accounts.spotify.com":
             return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
+        if host == self.ha_host:
+            return self._ha(request, path)
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
             return httpx.Response(503)
@@ -244,6 +272,7 @@ async def main() -> int:
     tmp = tempfile.mkdtemp(prefix="felt-e2e-")
     config = load_config().model_copy(update={"db_path": f"{tmp}/felt.db"})
     recorder = Recorder()
+    recorder.ha_host = httpx.URL(config.ha_url or "http://-").host
     _install(recorder)
     log = _SkillLog()
     logging.getLogger("felt_core").addHandler(log)

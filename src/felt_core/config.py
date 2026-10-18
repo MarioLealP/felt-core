@@ -165,6 +165,10 @@ class FeltConfig(BaseSettings):
     def ha_entities_list(self) -> list[str]:
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
+    # Mario's phone in HA's companion app (phone.py): notify.mobile_app_<phone>,
+    # sensor.<phone>_battery_level. Renamed when the app is re-registered.
+    phone: str = "pocox7"
+
     # ComfyUI (image generation) — the Nitro5's raw LAN address, same
     # direct-not-through-SSO pattern as local_llm_url (comfy.clockmost.com is
     # Authentik-gated for Mario's own browser use; a backend skill talks
