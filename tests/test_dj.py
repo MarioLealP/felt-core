@@ -358,3 +358,76 @@ def test_a_leftover_from_an_earlier_set_is_skipped_not_the_end(tmp_path, monkeyp
     _on(config, _p("u:a", False), [_p("u:b", False)], monkeypatch, spawned)
     control.on_poll(config, _snap("u:a", "u:a"), _snap("u:old", "Old"))
     assert control.is_on() and spawned == ["_skip_leftover"]
+
+
+# --- search by "<title> by/from <artist>" (live 2026-10-18) -----------------
+
+
+def _hit(name, *artists):
+    return {"uri": f"u:{name}", "name": name, "artists": [{"name": a} for a in artists]}
+
+
+async def _search(monkeypatch, tmp_path, query, results):
+    seen = []
+
+    async def get(client, config, path, **params):
+        seen.append(params["q"])
+        return {"tracks": {"items": results.get(params["q"], [])}}
+
+    monkeypatch.setattr(sp, "_get", get)
+    async with httpx.AsyncClient() as client:
+        track = await sp.search_track(client, _config(tmp_path), query)
+    return track, seen
+
+
+async def test_search_uses_title_and_artist_fields(tmp_path, monkeypatch):
+    voices = _hit("Voices In My Head", "NIJUUGO*A", "重音テト")
+    track, seen = await _search(
+        monkeypatch,
+        tmp_path,
+        "voices in my head from nijuugo*a",
+        {'track:"voices in my head" artist:"nijuugo*a"': [voices]},
+    )
+    assert track == voices and len(seen) == 1
+
+
+async def test_search_skips_hits_that_dont_look_like_it(tmp_path, monkeypatch):
+    wrong = _hit("Last Shot", "VALORANT", "templuv")
+    voices = _hit("Voices In My Head", "NIJUUGO*A")
+    track, _ = await _search(
+        monkeypatch,
+        tmp_path,
+        "voices in my head by nijuugo*a",
+        {"voices in my head nijuugo*a": [wrong, voices]},
+    )
+    assert track == voices
+
+
+async def test_search_falls_back_to_the_top_hit(tmp_path, monkeypatch):
+    top = _hit("Daddy! Daddy! Do!", "Masayuki Suzuki")
+    track, seen = await _search(
+        monkeypatch, tmp_path, "daddy daddy do from kaguya", {"daddy daddy do kaguya": [top]}
+    )
+    assert track == top and len(seen) == 3
+
+
+async def test_no_match_prefers_the_plain_searchs_top_hit(tmp_path, monkeypatch):
+    # "kaikai kitan from jujutsu kaisen": "from" names the anime, not the artist
+    cover = _hit("JUJUTSU KAISEN - KAIKAI KITAN", "Kevin Remisch")
+    eve = _hit("Kaikai Kitan", "Eve")
+    track, _ = await _search(
+        monkeypatch,
+        tmp_path,
+        "kaikai kitan from jujutsu kaisen",
+        {
+            'track:"kaikai kitan" artist:"jujutsu kaisen"': [cover],
+            "kaikai kitan jujutsu kaisen": [eve, cover],
+        },
+    )
+    assert track == eve
+
+
+async def test_plain_search_drops_some(tmp_path, monkeypatch):
+    dp = _hit("One More Time", "Daft Punk")
+    track, seen = await _search(monkeypatch, tmp_path, "some daft punk", {"daft punk": [dp]})
+    assert track == dp and seen == ["daft punk"]

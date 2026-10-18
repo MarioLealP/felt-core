@@ -12,6 +12,7 @@ single account) via the shared oauth_token.refresh_access_token helper
 
 import asyncio
 import base64
+import re
 import time
 from typing import Any
 
@@ -55,16 +56,51 @@ async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> st
     )
 
 
+# "voices in my head from nijuugo*a" - the "from" sent Spotify's search to
+# a VALORANT track (live 2026-10-18); "<title> by/from <artist>" searches
+# with fields first, and the hit has to look like what he asked for
+_BY = re.compile(r"^(?P<title>.+?)\s+(?:by|from)\s+(?P<artist>.+)$", re.IGNORECASE)
+_FILLER = re.compile(r"^(?:some|a\s+bit\s+of|the\s+song)\s+", re.IGNORECASE)
+
+
 async def search_track(client: httpx.AsyncClient, config: FeltConfig, query: str) -> dict | None:
-    token = await _get_access_token(client, config)
-    response = await client.get(
-        f"{_API_BASE}/search",
-        headers={"Authorization": f"Bearer {token}"},
-        params={"q": query, "type": "track", "limit": 1},
-    )
-    response.raise_for_status()
-    items = response.json().get("tracks", {}).get("items", [])
-    return items[0] if items else None
+    query = _FILLER.sub("", query.strip())
+    m = _BY.match(query)
+    tries = [query]
+    if m:
+        tries = [
+            f'track:"{m["title"]}" artist:"{m["artist"]}"',
+            f"{m['title']} {m['artist']}",
+            query,
+        ]
+    # no title + artist match: the plain search's top hit (ranked by
+    # popularity - Eve's "Kaikai Kitan", not the field search's cover)
+    fallback = strict = None
+    for q in tries:
+        # plain: the top hit is the answer; by/from: a few to check against
+        data = await _get(client, config, "/search", q=q, type="track", limit=5 if m else 1)
+        items = data.get("tracks", {}).get("items", []) if isinstance(data, dict) else []
+        if not items:
+            continue
+        if m is None:
+            return items[0]
+        if q == tries[0]:
+            strict = items[0]
+        else:
+            fallback = fallback or items[0]
+        hit = next((t for t in items if _looks_like(t, m["title"], m["artist"])), None)
+        if hit is not None:
+            return hit
+    return fallback or strict
+
+
+def _looks_like(track: dict, title: str, artist: str) -> bool:
+    """Pure: the title is in the track's name and the artist among its artists."""
+    want_t, want_a = norm_name(title), norm_name(artist)
+    if not want_t or want_t not in norm_name(track.get("name", "")):
+        return False
+    names = [norm_name(a.get("name", "")) for a in track.get("artists", [])]
+    return any(n and (want_a in n or n in want_a) for n in names)
 
 
 async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
