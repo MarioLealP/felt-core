@@ -36,7 +36,16 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from felt_core import diary, incidents, local_llm, machine_auth, metrics, reply_stream, tts_cache
+from felt_core import (
+    diary,
+    ha_auth,
+    incidents,
+    local_llm,
+    machine_auth,
+    metrics,
+    reply_stream,
+    tts_cache,
+)
 from felt_core.alarms import reschedule_pending_alarms
 from felt_core.app_api import SESSION as APP_SESSION
 from felt_core.app_api import router as app_router
@@ -83,6 +92,7 @@ from felt_core.db import (
 from felt_core.email_watcher import watch as email_watch
 from felt_core.events import react_to_event
 from felt_core.felt_tls import voice_client
+from felt_core.ha_api import router as ha_router
 from felt_core.incident_api import router as incident_router
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, with_end_times
 from felt_core.notices_api import router as notices_router
@@ -162,6 +172,7 @@ app.include_router(systems_router)
 app.include_router(notices_router)
 app.include_router(calendar_router)
 app.include_router(controls_router)
+app.include_router(ha_router)
 
 # No CORS (WP-62 phase 0.2, 2026-10-05): every browser client is same-origin
 # - the Felt app is served from felt.clockmost.com/app next to this API, and
@@ -274,6 +285,14 @@ async def auth_middleware(request: Request, call_next):
     config = load_config()
     token = config.api_token
     path = request.url.path
+    # felt-ha-hub D3: Home Assistant's route takes only its Authentik token -
+    # decided first, so no proxy identity header or other path can open it
+    if ha_auth.is_ha_route(request.method, path):
+        why = ha_auth.check(config, request.headers.get("authorization", ""))
+        if why:
+            logger.warning("ha agent refused on %s %s: %s", request.method, path, why)
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+        return await call_next(request)
     # WP-62 M2b B5.4 (D3): a Felt machine identity, set only by Caddy's
     # machine host (every other site strips it): per identity per route,
     # deny by default - checked before anything else, token or not.

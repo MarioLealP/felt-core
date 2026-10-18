@@ -1,0 +1,12 @@
+{
+  "domain": "felt",
+  "name": "Felt",
+  "codeowners": ["@benylin"],
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "documentation": "https://git.clockmost.com/Benylin/felt-core",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}
