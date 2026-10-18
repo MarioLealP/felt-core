@@ -103,6 +103,15 @@ def _looks_like(track: dict, title: str, artist: str) -> bool:
     return any(n and (want_a in n or n in want_a) for n in names)
 
 
+def music_playing_cached() -> bool | None:
+    """Whether music is playing per the last poll (no API call); None when
+    nothing's been read yet or the read is stale."""
+    data = _now_playing_cache["data"]
+    if data == "unset" or time.monotonic() > _now_playing_cache["cached_at"] + 60:
+        return None
+    return bool(data and data.get("is_playing"))
+
+
 async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
     """WP-16 Part 2: `{track, progress_ms, duration_ms, is_playing}` or
     None when nothing's loaded (204 No Content, or no `item` in the body -

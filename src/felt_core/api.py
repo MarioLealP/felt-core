@@ -48,6 +48,7 @@ from felt_core.brain import (
     music_taste_loop,
     process_screen_context,
     react_to_screen,
+    router,
     weather_precompute_loop,
 )
 from felt_core.calendar_api import router as calendar_router
@@ -115,6 +116,8 @@ async def lifespan(app: FastAPI):
     # WP-16 Part 2: builds the skip/full-play listening history that
     # music_taste.summarize_taste folds back into the chat prompt.
     music_taste_task = asyncio.create_task(music_taste_loop(config))
+    # cm-6b0: the semantic router, shadow mode - loads off the event loop
+    router_task = asyncio.create_task(router.warm(config))
     # WP-36 D'': primes felt-llm's prompt cache at startup and whenever it
     # comes back after being unreachable (checked every 60 s).
     warmup_task = asyncio.create_task(llm_warmup_loop(config))
@@ -146,6 +149,7 @@ async def lifespan(app: FastAPI):
     poe_cache_task.cancel()
     weather_task.cancel()
     music_taste_task.cancel()
+    router_task.cancel()
     warmup_task.cancel()
     calendar_task.cancel()
     incidents_task.cancel()

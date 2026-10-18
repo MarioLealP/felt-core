@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "dateparser>=1.2.2",
     "fastapi>=0.141.1",
+    "fastembed>=0.9.0",
     "feedparser>=6.0.14",
     "httpx>=0.28.1",
     "pydantic-settings>=2.15.0",

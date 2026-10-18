@@ -25,6 +25,7 @@ import httpx
 
 from felt_core import local_llm, metrics
 from felt_core.animation import resolve_animation_tag
+from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
 from felt_core.brain.home_fast_path import home_fast_path
 from felt_core.brain.lookup_claims import claims_a_tool_use
@@ -47,9 +48,11 @@ from felt_core.db import (
     mark_email_resolved,
     save_message,
 )
+from felt_core.dj import control as dj_control
 from felt_core.email_watcher import fetch_email_body
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import LoadedSkill, load_plugins
+from felt_core.spotify_client import music_playing_cached
 from felt_core.tools import run_skill
 
 logger = logging.getLogger(__name__)
@@ -238,6 +241,15 @@ def _skill_chat_result(
     )
 
 
+def _router_context(history: list[dict]) -> router.Context:
+    previous = next((m.get("content") for m in reversed(history) if m.get("role") == "user"), None)
+    return router.Context(
+        previous=previous if isinstance(previous, str) else None,
+        music_playing=music_playing_cached(),
+        dj_on=dj_control.is_on(),
+    )
+
+
 async def _chat_local(
     message: str,
     config: FeltConfig,
@@ -254,6 +266,9 @@ async def _chat_local(
     any point (the API answers 503)."""
     prefix = local_turn_messages(message, history, config, tone)
     tools = skill_tools(registry)
+    # cm-6b0: the semantic router's pick, recorded next to what she does -
+    # shadow only, never awaited
+    shadow = router.start_shadow(message, _router_context(history))
 
     # The presence fast path skips the model entirely (WP-09): "shut up"
     # must never wait on, or be second-guessed by, a model round trip.
@@ -298,6 +313,9 @@ async def _chat_local(
             call = (name, params) if name else None
 
     call = _apply_call_guards(call, fast_call, message)
+    router.finish_shadow(
+        config, shadow, message, call[0] if call else None, fast=fast_call is not None
+    )
 
     precompute = _weather_fast_line(call)
     if precompute is not None:

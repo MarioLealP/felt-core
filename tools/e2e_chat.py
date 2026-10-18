@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 import sys
 import tempfile
@@ -23,6 +24,7 @@ from urllib.parse import parse_qs
 
 import httpx
 
+from felt_core.brain import router
 from felt_core.brain.orchestrator import chat
 from felt_core.config import load_config
 
@@ -293,7 +295,7 @@ class _SkillLog(logging.Handler):
 
     def emit(self, record):
         msg = record.getMessage()
-        if "skill call" in msg or "fast path" in msg or "claimed" in msg:
+        if "skill call" in msg or "fast path" in msg or "claimed" in msg or "router shadow" in msg:
             self.lines.append(msg)
 
 
@@ -321,6 +323,16 @@ async def main() -> int:
 
     tmp = tempfile.mkdtemp(prefix="felt-e2e-")
     config = load_config().model_copy(update={"db_path": f"{tmp}/felt.db"})
+    # the semantic router in shadow mode (cm-6b0): the image's model, or a
+    # one-off copy for a run before it's deployed
+    if not os.path.isdir(config.router_model_dir):
+        from fastembed import TextEmbedding
+
+        config = config.model_copy(update={"router_model_dir": "/tmp/e2e-router-model"})
+        await asyncio.to_thread(
+            TextEmbedding, config.router_model, cache_dir=config.router_model_dir
+        )
+    await router.warm(config)
     recorder = Recorder()
     recorder.ha_host = httpx.URL(config.ha_url or "http://-").host
     _install(recorder)
@@ -345,6 +357,7 @@ async def main() -> int:
                 # per-session, so the DJ cases still carry over)
                 result = await chat(case.say, config, session_id=f"e2e-{run}-{i}")
                 reply = result.reply
+                await router.drain()
             except Exception as e:  # noqa: BLE001 - a crash is a result here
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)
