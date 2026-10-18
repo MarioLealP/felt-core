@@ -188,3 +188,135 @@ async def test_poll_schedules_and_marks_pending(tmp_path, monkeypatch):
     assert sorted(started) == [(0.0, "30"), (120.0, "10")]
     # A second poll before delivery doesn't schedule them again.
     assert await ch.poll_once(config, now=NOW) == 0
+
+
+# -- leave-by (2026-10-18) ---------------------------------------------------------
+
+ADDRESS = "Hospital da Luz Arrábida, Praceta Henrique Moreira, 150, 4400-346 Vila Nova de Gaia"
+
+
+def _trip(minutes_out: float, event_id="trip1", location=ADDRESS):
+    return _event(minutes_out, event_id, summary="TAC", location=location)
+
+
+def _patch_trip(monkeypatch, fresh, drive=30.0, line="time to head out"):
+    prompts = _patch(monkeypatch, fresh, line)
+    notified = []
+
+    async def fake_drive(config, destination, now=None):
+        return drive
+
+    async def fake_notify(config, title, message, tag):
+        notified.append((title, message, tag))
+
+    monkeypatch.setattr(ch.leave_by, "drive_minutes", fake_drive)
+    monkeypatch.setattr(ch.phone, "notify", fake_notify)
+    return prompts, notified
+
+
+@pytest.mark.parametrize(
+    ("location", "address"),
+    [
+        (ADDRESS, True),
+        ("Rua de Santa Catarina 112, Porto", True),
+        ("Mom's place", False),
+        ("Google Meet", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_has_address(location, address):
+    assert ch.leave_by.has_address({"location": location}) is address
+
+
+def test_leave_time_keeps_marios_buffer():
+    # 30 min drive + 20 min buffer (Mario: "15-20min ... I prefer get there early")
+    assert ch.leave_by.leave_time(NOW, 30) == NOW - timedelta(minutes=50)
+    assert ch.leave_by.leave_time(NOW, 29.2) == NOW - timedelta(minutes=50)  # rounded up
+
+
+def test_plan_gives_a_routable_event_leave_nudges_not_heads_ups():
+    trip = _trip(80)  # leave at 80-30-20 = 30 out; "soon" at 15 out
+    planned = ch.plan([("cal", trip)], NOW, 3600, lambda k: False, {"trip1": 30.0})
+    assert [(st, round(d / 60)) for d, _, _, st in planned] == [
+        (ch.LEAVE_SOON, 15),
+        (ch.LEAVE_NOW, 30),
+    ]
+
+
+def test_an_unroutable_event_keeps_the_heads_ups():
+    planned = ch.plan([("cal", _trip(25))], NOW, 3600, lambda k: False, {})
+    assert {st for _, _, _, st in planned} == {ch.NORMAL, ch.URGENT}
+    planned = ch.plan([("cal", _event(25))], NOW, 3600, lambda k: False, {"ev1": 10.0})
+    assert {st for _, _, _, st in planned} == {ch.NORMAL, ch.URGENT}  # no address
+
+
+def test_seen_late_only_time_to_go():
+    trip = _trip(40)  # leave was 10 min ago (40-30-20)
+    planned = ch.plan([("cal", trip)], NOW, 3600, lambda k: False, {"trip1": 30.0})
+    assert [(st, d) for d, _, _, st in planned] == [(ch.LEAVE_NOW, 0.0)]
+
+
+async def test_leave_soon_goes_to_desk_and_phone(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    trip = _trip(65)  # leave at 65-50 = 15 out
+    prompts, notified = _patch_trip(monkeypatch, trip, line="leave in 15 for the TAC")
+    assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
+    item = _queued(config)
+    assert item["kind"] == "urgent" and item["text"] == "leave in 15 for the TAC"
+    assert "leave in 15 minutes" in prompts[0] and "30 minutes" in prompts[0]
+    assert notified == [("TAC", "leave in 15 for the TAC", "felt-leave-trip1")]
+    assert not await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)  # once
+
+
+async def test_traffic_eased_waits_for_the_new_time(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    trip = _trip(65)
+    _patch_trip(monkeypatch, trip, drive=20.0)  # leave now 10 min later
+    assert not await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
+    assert _queued(config) is None
+
+
+async def test_traffic_worse_goes_out_now(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    trip = _trip(80)  # planned for 15 out at 30 min drive
+    prompts, _ = _patch_trip(monkeypatch, trip, drive=45.0)  # leave now in 15
+    assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
+    assert "45 minutes" in prompts[0]
+
+
+async def test_time_to_go_plain_line_when_her_model_is_down(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    trip = _trip(50)
+    _patch_trip(monkeypatch, trip, line=None)
+    assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_NOW, now=NOW)
+    assert _queued(config)["text"].startswith("time to go: TAC at ")
+
+
+async def test_poll_asks_drive_times_only_for_addresses(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    asked = []
+
+    async def fake_drive(config, destination, now=None):
+        asked.append(destination)
+        return 30.0
+
+    monkeypatch.setattr(ch.leave_by, "drive_minutes", fake_drive)
+    drive = await ch._drive_times(config, [("cal", _trip(80)), ("cal", _event(80, "plain"))], NOW)
+    assert drive == {"trip1": 30.0} and asked == [ADDRESS]
+
+
+async def test_an_appointment_entered_twice_is_one(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    twin_a, twin_b = _trip(80, "a"), _trip(80, "b")
+
+    async def cals(client, config):
+        return [{"id": "c1"}, {"id": "c2"}]
+
+    async def events(client, config, cid, start, end):
+        return [twin_a, _event(90, "other")] if cid == "c1" else [twin_b]
+
+    monkeypatch.setattr(ch.google_calendar, "list_calendars", cals)
+    monkeypatch.setattr(ch.google_calendar, "list_events", events)
+    got = await ch.fetch_upcoming(config, NOW)
+    assert [e["id"] for _, e in got] == ["a", "other"]
