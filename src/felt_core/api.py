@@ -87,6 +87,7 @@ from felt_core.db import (
     update_self_memory,
 )
 from felt_core.email_watcher import watch as email_watch
+from felt_core.ender import watch as ender_watch
 from felt_core.events import react_to_event
 from felt_core.felt_tls import voice_client
 from felt_core.ha_api import router as ha_router
@@ -133,6 +134,8 @@ async def lifespan(app: FastAPI):
     # WP-44: self-fixing alerts that didn't fix themselves become open, and
     # she writes her line about each incident that counts
     incidents_task = asyncio.create_task(incidents.watch(config))
+    # the Ender (via HA): says when a print finishes, fails, is cancelled or pauses
+    ender_task = asyncio.create_task(ender_watch(config))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -160,6 +163,7 @@ async def lifespan(app: FastAPI):
     warmup_task.cancel()
     calendar_task.cancel()
     incidents_task.cancel()
+    ender_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)

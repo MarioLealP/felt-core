@@ -99,11 +99,6 @@ class FeltConfig(BaseSettings):
     # felt-desktop-agent — KDE Connect etc. lives on the desktop, not here.
     desktop_agent_url: str | None = None
 
-    # OctoPrint (the Ender 3) — vendor-agnostic on purpose: if the Ender 3
-    # is ever replaced, this integration keeps working unchanged.
-    octoprint_url: str | None = None
-    octoprint_api_key: str | None = None
-
     # HP ENVY 6000 — plain IPP (Get-Printer-Attributes), no API key needed
     # at all; confirmed reachable from the server and unauthenticated
     # 2026-09-12. Host only (an IP or hostname), not a full URL — IPP has
