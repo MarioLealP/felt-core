@@ -79,7 +79,9 @@ async def handle(params, ctx):
         start = start.replace(tzinfo=TZ)
     end = start + timedelta(minutes=duration_minutes)
 
-    waiting = appointment_hold.claim_same(start) if said else None
+    # called again for the appointment that's waiting for its place: his answer
+    # (e2e 2026-10-19: after "none" felt-llm re-called it without any place)
+    waiting = appointment_hold.claim_same(start)
     if waiting is not None:
         if not await appointment_hold.add(config, waiting, place):
             return SkillResult(text="I couldn't reach the calendar to add it.")

@@ -120,6 +120,16 @@ async def test_1_none_through_create_again_is_the_answer(monkeypatch, tmp_path, 
     assert appointment_hold.claim() is None
 
 
+async def test_1_create_again_without_a_place_is_the_answer(monkeypatch, tmp_path, cal):
+    # e2e 2026-10-19: after "none" felt-llm called create again with no place at all
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle(DENTIST, ctx)
+    answer = await create.handle(DENTIST, ctx)
+    assert cal.calls == ["create None"] and "no place" in (answer.text or "")
+    assert appointment_hold.claim() is None
+
+
 async def test_3_a_place_through_create_again_is_the_answer(monkeypatch, tmp_path, cal):
     create, _ = _skills(monkeypatch, cal)
     ctx = _ctx(tmp_path)

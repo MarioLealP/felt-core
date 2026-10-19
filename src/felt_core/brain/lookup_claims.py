@@ -44,6 +44,10 @@ _ACTION = re.compile(
     r"|(turn|switch|flip|toggle|shut|power|dimm?|dial)(ing)?\b[^.!?]{0,40}?\b(on|off|up|down)\b"
     # past tense only with on/off: "the package turned up" is no claim
     r"|(turned|switched|flipped|toggled|powered|dimmed)\b[^.!?]{0,40}?\b(on|off)\b"
+    # 2026-10-19: "Setting the chandelier to thirty percent." - nothing was called
+    # (an offer - "want me to set it to 30%?", "should I dim them" - isn't one)
+    r"|(?<!me to )(?<!should i )(?<!shall i )"
+    r"(set|setting|dimm?(ed|ing)?|lower(ed|ing)?|brought|bringing)\b[^.!?]{0,40}?(%|\bpercent\b)"
     r"|flipp?(ing|ed)? (that|the|this) switch"
     r")",
     re.IGNORECASE,

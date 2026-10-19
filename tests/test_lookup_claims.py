@@ -68,6 +68,10 @@ def test_not_claims(text):
         "Adding some Zutomayo to the queue. Good call.",
         "Got it, switching gears. That last one was a bit of a chaotic leap.",
         "Sure thing, I'll add some Zutomayo to the queue.",
+        # 2026-10-19 live: a typo'd "30 percente" went to her, she called nothing
+        "Setting the chandelier to thirty percent. There, that's a much more civilized level.",
+        "I've dimmed the lights to 30%.",
+        "Brought the chandelure down to 20 percent for you.",
     ],
 )
 def test_action_claims(text):
@@ -96,6 +100,8 @@ def test_action_claims(text):
         "I keep switching gears between games lately.",
         "Want me to set a reminder for that?",
         "I set my mind on finishing this game.",
+        "Want me to set the lights to 30 percent?",
+        "Should I dim them to 20 percent?",
     ],
 )
 def test_not_action_claims(text):
