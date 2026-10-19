@@ -10,7 +10,7 @@ def _load_skill(plugin_name: str):
 
 async def test_list_calendar_events_reports_unconfigured():
     skill = _load_skill("list_calendar_events")
-    config = FeltConfig(google_calendar_refresh_token=None)
+    config = FeltConfig(ha_url=None)
     ctx = ExecutionContext(config=config, original_message="what's on my calendar today?")
 
     result = await skill.handle({}, ctx)
@@ -20,7 +20,7 @@ async def test_list_calendar_events_reports_unconfigured():
 
 async def test_create_calendar_event_reports_unconfigured():
     skill = _load_skill("create_calendar_event")
-    config = FeltConfig(google_calendar_refresh_token=None)
+    config = FeltConfig(ha_url=None)
     ctx = ExecutionContext(config=config, original_message="add a meeting")
 
     result = await skill.handle({"title": "Meeting", "when": "tomorrow at 3pm"}, ctx)
@@ -30,7 +30,7 @@ async def test_create_calendar_event_reports_unconfigured():
 
 async def test_create_calendar_event_requires_both_title_and_when():
     skill = _load_skill("create_calendar_event")
-    config = FeltConfig(google_calendar_refresh_token="dummy-token")
+    config = FeltConfig(ha_url="http://ha", ha_token="dummy-token")
     ctx = ExecutionContext(config=config, original_message="add an event")
 
     result = await skill.handle({"title": "Meeting"}, ctx)
@@ -40,7 +40,7 @@ async def test_create_calendar_event_requires_both_title_and_when():
 
 async def test_create_calendar_event_rejects_unparseable_time():
     skill = _load_skill("create_calendar_event")
-    config = FeltConfig(google_calendar_refresh_token="dummy-token")
+    config = FeltConfig(ha_url="http://ha", ha_token="dummy-token")
     ctx = ExecutionContext(config=config, original_message="add an event")
 
     result = await skill.handle({"title": "Meeting", "when": "asdfghjkl"}, ctx)

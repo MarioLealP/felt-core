@@ -1,7 +1,8 @@
 """The desktop's agenda (2026-10-15): read-only upcoming events for the tray,
-which hands them to the bar's calendar over D-Bus. Felt keeps the one Google
-login (server-side) and the reminders (calendar_headsup.py); the desktop only
-shows. Minimal fields on purpose: no descriptions, no attendees."""
+which hands them to the bar's calendar over D-Bus. Felt reads Home Assistant's
+calendars (ha_calendar.py; HA holds the Google login) and does the reminders
+(calendar_headsup.py); the desktop only shows. Minimal fields on purpose: no
+descriptions, no attendees."""
 
 import asyncio
 import time
@@ -10,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from felt_core import google_calendar
+from felt_core import ha_calendar
 from felt_core.config import load_config
 
 router = APIRouter()
@@ -21,34 +22,20 @@ _lock = asyncio.Lock()
 
 
 def _when(part: dict) -> tuple[str | None, bool]:
-    """(ISO start/end, all_day) from a Google `start`/`end` object."""
+    """(ISO start/end, all_day) from an event's `start`/`end` object."""
     if "dateTime" in part:
         return part["dateTime"], False
     return part.get("date"), True
 
 
-def _link(event: dict) -> str | None:
-    """The meeting link, if any (Meet, or a video entry point)."""
-    if event.get("hangoutLink"):
-        return event["hangoutLink"]
-    for ep in (event.get("conferenceData") or {}).get("entryPoints", []):
-        if ep.get("entryPointType") == "video" and ep.get("uri"):
-            return ep["uri"]
-    return None
-
-
 def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]:
-    """Pure: Google events -> the bar's items, sorted by start. Cancelled
-    events and ones Mario declined are left out; all-day events stay."""
+    """Pure: events -> the bar's items, sorted by start. Cancelled events
+    are left out (HA already drops the ones Mario declined); all-day
+    events stay."""
     keyed: list[tuple[tuple[str, bool, str], dict]] = []
     for calendar, events in events_by_calendar:
         for e in events:
             if e.get("status") == "cancelled":
-                continue
-            if any(
-                a.get("self") and a.get("responseStatus") == "declined"
-                for a in e.get("attendees", [])
-            ):
                 continue
             start, all_day = _when(e.get("start", {}))
             end, _ = _when(e.get("end", {}))
@@ -61,7 +48,7 @@ def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]
                 "end": end,
                 "all_day": all_day,
                 "location": e.get("location"),
-                "link": _link(e),
+                "link": ha_calendar.link(e),
             }
             # by day, all-day first on its day, then by time
             keyed.append(((start[:10], not all_day, start), item))
@@ -77,15 +64,15 @@ async def upcoming(days: int = 14) -> dict:
         if hit and time.monotonic() - hit[0] < _CACHE_S:
             return {"events": hit[1]}
         config = load_config()
-        if not config.google_calendar_refresh_token:
+        if not ha_calendar.connected(config):
             raise HTTPException(status_code=503, detail="calendar not connected")
         now = datetime.now(UTC)
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         async with httpx.AsyncClient(timeout=20) as client:
-            cals = await google_calendar.list_calendars(client, config)
+            cals = await ha_calendar.list_calendars(client, config)
             per_cal = await asyncio.gather(
                 *(
-                    google_calendar.list_events(
+                    ha_calendar.list_events(
                         client, config, c["id"], start, now + timedelta(days=days)
                     )
                     for c in cals

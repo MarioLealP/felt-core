@@ -1,8 +1,6 @@
-"""Google Calendar, write side ("add a dentist appointment Friday at
-3pm") — Mario, 2026-09-14: "add event creation, if you want we can just
-oauth fresh, if it[']s less effort." It was: Noctalia's own stored
-token turned out to be read-only, so Felt got its own dedicated OAuth
-client requesting full read/write scope (see google_calendar.py).
+"""Calendar, write side ("add a dentist appointment Friday at 3pm") —
+Mario, 2026-09-14: "add event creation". Through Home Assistant since
+2026-10-19 (ha_calendar.py).
 
 Defaults to Mario's primary calendar; a named calendar ("add it to my
 professional calendar") is matched against his real calendar list, not
@@ -15,13 +13,21 @@ from datetime import datetime, timedelta
 import httpx
 
 from felt_core.date_resolution import resolve_datetime
-from felt_core.google_calendar import TZ, create_event, list_calendars, resolve_calendar
+from felt_core.ha_calendar import (
+    TZ,
+    CalendarUnavailable,
+    connected,
+    create_event,
+    list_calendars,
+    resolve_calendar,
+    writable,
+)
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "create_calendar_event"
 description = (
-    "Creates a new event on Mario's Google Calendar, e.g. 'add a dentist appointment "
+    "Creates a new event on Mario's calendar, e.g. 'add a dentist appointment "
     "Friday at 3pm'. Adds to his primary calendar by default, or a named one if he says "
     "which (e.g. 'on my professional calendar')."
 )
@@ -51,8 +57,8 @@ parameters_schema = {
 
 async def handle(params, ctx):
     config = ctx.config
-    if not config.google_calendar_refresh_token:
-        return SkillResult(text="Google Calendar isn't connected yet.")
+    if not connected(config):
+        return SkillResult(text="The calendar isn't connected yet.")
 
     title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar"))
     when_text = get_single_param(
@@ -78,12 +84,15 @@ async def handle(params, ctx):
         if calendar is None:
             target = f"'{calendar_name}'" if calendar_name else "your primary calendar"
             return SkillResult(text=f"Couldn't find {target} to add the event to.")
-        if calendar.get("accessRole") not in ("owner", "writer"):
+        if not await writable(client, config, calendar["id"]):
             return SkillResult(
                 text=f"'{calendar.get('summary', calendar['id'])}' is read-only — I can't add events to it."
             )
 
-        await create_event(client, config, calendar["id"], str(title), start, end)
+    try:
+        await create_event(config, calendar["id"], str(title), start, end)
+    except CalendarUnavailable:
+        return SkillResult(text="I couldn't reach the calendar to add it.")
 
     formatted = start.strftime("%A %I:%M %p").replace(" 0", " ")
     return SkillResult(

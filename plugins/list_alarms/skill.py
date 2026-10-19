@@ -6,7 +6,7 @@ was unreachable, or a date further out than a phone alarm can hold)."""
 from datetime import datetime
 
 from felt_core.db import get_pending_alarms
-from felt_core.google_calendar import TZ
+from felt_core.ha_calendar import TZ
 from felt_core.phone import PhoneUnavailable, next_alarm
 from felt_core.plugin import SkillResult
 

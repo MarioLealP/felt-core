@@ -169,6 +169,11 @@ class FeltConfig(BaseSettings):
     # Its own setting, not in ha_entities (those are devices to switch).
     ha_shopping_list: str = "todo.shopping_list"
 
+    # Calendars (ha_calendar.py): all of HA's are read; new events go to the
+    # default (Mario's Google primary), reminders to their own calendar.
+    ha_calendar_default: str = "calendar.lealmario47_gmail_com"
+    ha_calendar_reminders: str = "calendar.felt_reminders"
+
     # Home Assistant calling Felt (ha_auth.py, felt-ha-hub D3): Authentik's
     # `ha-felt` OAuth provider - its issuer URL (ends in /), client id, and the
     # service account its tokens must belong to. Empty issuer = route closed.
@@ -212,16 +217,6 @@ class FeltConfig(BaseSettings):
     # his Obsidian vault). Unset = the skill reports itself unconfigured,
     # same convention as everything else here.
     drive_rag_url: str | None = None
-
-    # Google Calendar — Felt's own dedicated OAuth client (2026-09-14),
-    # not a shared/borrowed credential. Mario's "Desktop app" OAuth
-    # client from Google Cloud Console; refresh_token was minted via a
-    # one-time local consent flow requesting the full read/write
-    # "calendar" scope. Unset = the skill reports itself unconfigured,
-    # same convention as everything else here.
-    google_calendar_client_id: str | None = None
-    google_calendar_client_secret: str | None = None
-    google_calendar_refresh_token: str | None = None
 
     # Spotify — Felt's own dedicated OAuth client (2026-09-14), for
     # play_music (search + start new playback by name). Distinct from
