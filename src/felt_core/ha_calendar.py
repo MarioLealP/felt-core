@@ -16,7 +16,8 @@ also gives `uid`, `recurrence_id` and `rrule`. `id` is added: the occurrence's
 recurrence_id, else the uid. HA's Google integration already drops events
 Mario declined. HA syncs Google on a timer, so `get_event` asks it to
 refresh first. Creating goes through HA's websocket (`calendar/event/create`),
-the only way to pass a repeat rule.
+the only way to pass a repeat rule. HA can't edit an event, so changing one
+(set_event_location) is create-then-delete.
 """
 
 import json
@@ -27,9 +28,13 @@ from zoneinfo import ZoneInfo
 import httpx
 import websockets
 
+from felt_core import db
 from felt_core.config import FeltConfig
 
 TZ = ZoneInfo("Europe/Lisbon")
+# the appointment create_calendar_event made last, for "where is it?"
+_LAST_KEY = "calendar_last_created"
+_LAST_TTL = timedelta(hours=2)
 # HA's CalendarEntityFeature.CREATE_EVENT
 _CREATE_EVENT = 1
 _URL = re.compile(r"https?://\S+")
@@ -148,17 +153,55 @@ async def create_event(
     description: str | None = None,
     *,
     rrule: str | None = None,
+    location: str | None = None,
 ) -> None:
     """`rrule`: an iCal repeat rule without the "RRULE:" prefix, e.g.
     "FREQ=WEEKLY"."""
     event: dict = {"summary": summary, "dtstart": start.isoformat(), "dtend": end.isoformat()}
     if description:
         event["description"] = description
+    if location:
+        event["location"] = location
     if rrule:
         event["rrule"] = rrule
     await _ws_call(
         config, {"type": "calendar/event/create", "entity_id": calendar_id, "event": event}
     )
+
+
+async def delete_event(config: FeltConfig, calendar_id: str, uid: str) -> None:
+    await _ws_call(config, {"type": "calendar/event/delete", "entity_id": calendar_id, "uid": uid})
+
+
+def remember_created(
+    config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime
+) -> None:
+    """Note the appointment just made, so a "where is it?" answer finds it."""
+    last = {
+        "calendar": calendar_id,
+        "summary": summary,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "at": datetime.now(TZ).isoformat(),
+    }
+    db.set_setting(config.db_path, _LAST_KEY, json.dumps(last))
+
+
+def last_created(config: FeltConfig, now: datetime) -> dict | None:
+    """The appointment create_calendar_event made in the last 2 h, if any."""
+    raw = db.get_setting(config.db_path, _LAST_KEY)
+    if not raw:
+        return None
+    last = json.loads(raw)
+    if now - datetime.fromisoformat(last["at"]) > _LAST_TTL:
+        return None
+    return last
+
+
+def event_start(event: dict) -> datetime | None:
+    """Pure: a timed event's start, None for an all-day one."""
+    raw = event.get("start", {}).get("dateTime")
+    return datetime.fromisoformat(raw) if raw else None
 
 
 def link(event: dict) -> str | None:

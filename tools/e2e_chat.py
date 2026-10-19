@@ -24,7 +24,7 @@ from urllib.parse import parse_qs
 
 import httpx
 
-from felt_core import ha_calendar
+from felt_core import appointment_hold, ha_calendar
 from felt_core.brain import router
 from felt_core.brain.orchestrator import chat
 from felt_core.config import load_config
@@ -43,6 +43,11 @@ class Case:
     note: str = ""
     # lookups: one of these skills has to be called (a reply from memory fails)
     skills: tuple[str, ...] = ()
+    # a second message in the same conversation (her follow-up question's answer)
+    then: str | None = None
+    # calendar cases: the appointment that has to be there at the end, with a
+    # place (True) or without (False)
+    place: bool | None = None
 
 
 ANY_PLAYER_WRITE = ["POST /me/player/", "PUT /me/player/"]
@@ -127,6 +132,35 @@ CASES: list[Case] = [
     ),
     Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
     Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
+    # an appointment's place, Mario's four cases (2026-10-19): no place -> she
+    # asks where and holds it; "none" adds it at once, a place adds it with it,
+    # no answer adds it after 30 s (the case's end stands in for that)
+    Case(
+        "schedule my dentist to tomorrow at 11",
+        ["POST /calendar/event"],
+        note="remind",
+        then="none",
+        place=False,
+    ),
+    Case(
+        "schedule my dentist to tomorrow at 11 at Clínica Sorriso in Gaia",
+        ["POST /calendar/event @place"],
+        note="remind",
+        place=True,
+    ),
+    Case(
+        "schedule my dentist to tomorrow at 11",
+        ["POST /calendar/event @place"],
+        note="remind",
+        then="it's at Clínica Sorriso in Gaia",
+        place=True,
+    ),
+    Case(
+        "schedule my dentist to tomorrow at 11",
+        ["POST /calendar/event"],
+        note="remind",
+        place=False,
+    ),
     # live 2026-10-18, typos and all - she said "I've set that reminder" and set nothing
     Case(
         "set an reminder for 21th to check on teh semantic router",
@@ -174,6 +208,8 @@ class Recorder:
         self.known: dict[str, dict] = {}
         self.ha_host = ""
         self.config = load_config()
+        # HA's calendar events she created this case
+        self.events: list[dict] = []
         self.now = {
             "uri": FAKE_URI.format(0),
             "id": "0" * 22,
@@ -231,12 +267,14 @@ class Recorder:
         return httpx.Response(503)
 
     def _calendar(self, request: httpx.Request, path: str) -> httpx.Response | None:
-        """HA's calendars: Mario's primary and the reminders one, both empty."""
+        """HA's calendars: Mario's primary and the reminders one, holding only
+        what she created this case."""
         if path == "/api/calendars":
             cals = [self.config.ha_calendar_default, self.config.ha_calendar_reminders]
             return httpx.Response(200, json=[{"entity_id": c, "name": c} for c in cals])
         if path.startswith("/api/calendars/"):
-            return httpx.Response(200, json=[])
+            cal = path.removeprefix("/api/calendars/")
+            return httpx.Response(200, json=[e for e in self.events if e["calendar"] == cal])
         if path.startswith("/api/states/calendar."):
             return httpx.Response(200, json={"attributes": {"supported_features": 3}})
         if path == "/api/services/homeassistant/update_entity":
@@ -246,11 +284,27 @@ class Recorder:
     async def ws_call(self, config, message: dict) -> dict:
         """ha_calendar's websocket: a created event is recorded as 'POST
         /calendar/event' (reminder when in the reminders calendar, + ' weekly'
-        etc. when it repeats), never reaching HA."""
+        etc. when it repeats, + ' @place' with a place), a deleted one as
+        'POST /calendar/delete', never reaching HA."""
+        cal = message.get("entity_id", "")
+        if message.get("type") == "calendar/event/delete":
+            self.calls.append("POST /calendar/delete")
+            self.events = [e for e in self.events if e["uid"] != message.get("uid")]
+            return {"success": True}
         event = message.get("event") or {}
-        tag = "reminder" if message.get("entity_id") == config.ha_calendar_reminders else "event"
+        tag = "reminder" if cal == config.ha_calendar_reminders else "event"
         freq = re.search(r"FREQ=(\w+)", event.get("rrule") or "")
-        self.calls.append(f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}")
+        place = " @place" if event.get("location") else ""
+        self.calls.append(f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}{place}")
+        self.events.append(
+            {
+                "calendar": cal,
+                "uid": f"uid{len(self.events)}-{len(self.calls)}",
+                "summary": event.get("summary"),
+                "start": {"dateTime": event.get("dtstart")},
+                "location": event.get("location"),
+            }
+        )
         return {"success": True}
 
     def respond(self, request: httpx.Request) -> httpx.Response:
@@ -261,6 +315,11 @@ class Recorder:
             return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
             return self._ha(request, path)
+        if host.startswith("felt-voice."):
+            # her proactive lines (a held appointment going in) pre-render
+            # their voice in the background - not a write, and it lands in
+            # whichever case runs next
+            return httpx.Response(503)
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
             return httpx.Response(503)
@@ -382,6 +441,7 @@ async def main() -> int:
     for run in range(args.repeat):
         for i, case in enumerate(cases):
             recorder.calls.clear()
+            recorder.events.clear()
             log.lines.clear()
             try:
                 # a conversation per case: earlier "couldn't reach" replies in
@@ -390,10 +450,19 @@ async def main() -> int:
                 result = await chat(case.say, config, session_id=f"e2e-{run}-{i}")
                 reply = result.reply
                 await router.drain()
+                if case.then:
+                    result = await chat(case.then, config, session_id=f"e2e-{run}-{i}")
+                    reply = f"{reply} || {result.reply}"
+                    await router.drain()
+                # no (further) answer: what she held goes in now, not in 30 s
+                await appointment_hold.add_unanswered(config)
             except Exception as e:  # noqa: BLE001 - a crash is a result here
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)
             ok = _verdict(case, writes, log.lines) and not reply.startswith("CRASH")
+            if case.place is not None:
+                # one appointment at the end, with or without its place
+                ok = ok and [bool(e["location"]) for e in recorder.events] == [case.place]
             if case.skills and ok and any(" /" not in c for c in recorder.calls):
                 # a service she called was down (all faked): she has to say
                 # so, not answer anyway
