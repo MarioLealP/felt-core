@@ -1,8 +1,9 @@
-"""Google Calendar, read side ("what's on my calendar today/tomorrow/
-on Friday"). Checks every calendar Mario has (main account, professional,
-public holidays — Mario, 2026-09-14: "get all calendars"), not just the
-primary one, since a holiday or a professional-calendar meeting is just
-as real an answer as a personal-calendar event.
+"""Calendar, read side ("what's on my calendar today/tomorrow/on Friday").
+Checks every calendar Mario has in Home Assistant (both accounts, holidays,
+birthdays, Felt's reminders - Mario, 2026-09-14: "get all calendars"), not
+just the primary one, since a holiday or a professional-calendar meeting is
+just as real an answer as a personal-calendar event. Through HA since
+2026-10-19 (ha_calendar.py).
 """
 
 from datetime import datetime
@@ -10,8 +11,9 @@ from datetime import datetime
 import httpx
 
 from felt_core.date_resolution import resolve_date
-from felt_core.google_calendar import (
+from felt_core.ha_calendar import (
     TZ,
+    connected,
     day_bounds,
     list_calendars,
     list_events,
@@ -22,7 +24,7 @@ from felt_core.plugin import SkillResult
 
 name = "list_calendar_events"
 description = (
-    "Lists what's on Mario's Google Calendar for a given day — defaults to today if no "
+    "Lists what's on Mario's calendar for a given day — defaults to today if no "
     "day is mentioned. Covers all of his calendars, not just one."
 )
 parameters_schema = {
@@ -41,8 +43,8 @@ parameters_schema = {
 
 async def handle(params, ctx):
     config = ctx.config
-    if not config.google_calendar_refresh_token:
-        return SkillResult(text="Google Calendar isn't connected yet.")
+    if not connected(config):
+        return SkillResult(text="The calendar isn't connected yet.")
 
     day_text = get_single_param(params, "day", "when", "date")
     today = datetime.now(tz=TZ).date()

@@ -90,28 +90,11 @@ def vcr_config():
 
 
 @pytest.fixture
-def google_calendar_config():
-    """Real credentials only matter for the one-time `--record-mode=once`
-    recording pass (export FELT_GOOGLE_CALENDAR_* first) — on ordinary
-    replay runs the HTTP layer is intercepted before any real request
-    goes out, so these dummy fallbacks are all a normal `pytest` run
-    ever needs."""
-    return FeltConfig(
-        google_calendar_client_id=os.environ.get(
-            "FELT_GOOGLE_CALENDAR_CLIENT_ID", "dummy-client-id"
-        ),
-        google_calendar_client_secret=os.environ.get(
-            "FELT_GOOGLE_CALENDAR_CLIENT_SECRET", "dummy-client-secret"
-        ),
-        google_calendar_refresh_token=os.environ.get(
-            "FELT_GOOGLE_CALENDAR_REFRESH_TOKEN", "dummy-refresh-token"
-        ),
-    )
-
-
-@pytest.fixture
 def spotify_config():
-    """Same real-credentials-only-for-recording story as google_calendar_config."""
+    """Real credentials only matter for the one-time `--record-mode=once`
+    recording pass (export FELT_SPOTIFY_* first) — on ordinary replay runs
+    the HTTP layer is intercepted before any real request goes out, so these
+    dummy fallbacks are all a normal `pytest` run ever needs."""
     return FeltConfig(
         spotify_client_id=os.environ.get("FELT_SPOTIFY_CLIENT_ID", "dummy-client-id"),
         spotify_client_secret=os.environ.get("FELT_SPOTIFY_CLIENT_SECRET", "dummy-client-secret"),

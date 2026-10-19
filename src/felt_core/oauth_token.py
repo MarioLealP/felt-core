@@ -1,5 +1,6 @@
 """Shared OAuth refresh-token flow (WP-40) - spotify_client.py and
-google_calendar.py each had an identical, independently-written
+google_calendar.py (gone since 2026-10-19: the calendar is read through
+Home Assistant) each had an identical, independently-written
 `_get_access_token`: a module-level `{"access_token", "expires_at"}`
 cache dict, a 60s expiry safety margin so a token that's about to expire
 mid-request isn't handed out as still-good, and a `grant_type=

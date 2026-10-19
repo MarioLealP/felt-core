@@ -24,6 +24,7 @@ from urllib.parse import parse_qs
 
 import httpx
 
+from felt_core import ha_calendar
 from felt_core.brain import router
 from felt_core.brain.orchestrator import chat
 from felt_core.config import load_config
@@ -125,6 +126,7 @@ CASES: list[Case] = [
         note="remind",
     ),
     Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
+    Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
     # live 2026-10-18, typos and all - she said "I've set that reminder" and set nothing
     Case(
         "set an reminder for 21th to check on teh semantic router",
@@ -171,6 +173,7 @@ class Recorder:
         self._n = 0
         self.known: dict[str, dict] = {}
         self.ha_host = ""
+        self.config = load_config()
         self.now = {
             "uri": FAKE_URI.format(0),
             "id": "0" * 22,
@@ -195,6 +198,9 @@ class Recorder:
     def _ha(self, request: httpx.Request, path: str) -> httpx.Response:
         """Home Assistant: the phone (companion app) part - recorded as
         'POST /phone/SET_TIMER' etc., never reaching the real phone."""
+        calendar = self._calendar(request, path)
+        if calendar is not None:
+            return calendar
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
             action = (body.get("data") or {}).get("intent_action", "")
@@ -224,24 +230,28 @@ class Recorder:
         self.calls.append(f"{request.method} /ha{path}")
         return httpx.Response(503)
 
-    def _calendar(self, request: httpx.Request, path: str) -> httpx.Response:
-        """Google Calendar: one primary calendar; a created event is recorded
-        as 'POST /calendar/event' (+ ' weekly' etc. when it repeats)."""
-        if path == "/users/me/calendarList":
-            cal = {"id": "primary-id", "summary": "Mario", "primary": True, "accessRole": "owner"}
-            return httpx.Response(200, json={"items": [cal]})
-        if request.method == "POST" and path.endswith("/events"):
-            body = json.loads(request.content or b"{}")
-            rule = (body.get("recurrence") or [""])[0]
-            freq = re.search(r"FREQ=(\w+)", rule)
-            tag = "reminder" if body.get("extendedProperties") else "event"
-            repeat = f" {freq[1].lower()}" if freq else ""
-            self.calls.append(f"POST /calendar/{tag}{repeat}")
-            return httpx.Response(200, json={"id": "new"})
-        if request.method == "GET":
-            return httpx.Response(200, json={"items": []})
-        self.calls.append(f"{request.method} /calendar{path}")
-        return httpx.Response(503)
+    def _calendar(self, request: httpx.Request, path: str) -> httpx.Response | None:
+        """HA's calendars: Mario's primary and the reminders one, both empty."""
+        if path == "/api/calendars":
+            cals = [self.config.ha_calendar_default, self.config.ha_calendar_reminders]
+            return httpx.Response(200, json=[{"entity_id": c, "name": c} for c in cals])
+        if path.startswith("/api/calendars/"):
+            return httpx.Response(200, json=[])
+        if path.startswith("/api/states/calendar."):
+            return httpx.Response(200, json={"attributes": {"supported_features": 3}})
+        if path == "/api/services/homeassistant/update_entity":
+            return httpx.Response(200, json=[])
+        return None
+
+    async def ws_call(self, config, message: dict) -> dict:
+        """ha_calendar's websocket: a created event is recorded as 'POST
+        /calendar/event' (reminder when in the reminders calendar, + ' weekly'
+        etc. when it repeats), never reaching HA."""
+        event = message.get("event") or {}
+        tag = "reminder" if message.get("entity_id") == config.ha_calendar_reminders else "event"
+        freq = re.search(r"FREQ=(\w+)", event.get("rrule") or "")
+        self.calls.append(f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}")
+        return {"success": True}
 
     def respond(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
@@ -251,10 +261,6 @@ class Recorder:
             return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
             return self._ha(request, path)
-        if host == "oauth2.googleapis.com":
-            return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
-        if host == "www.googleapis.com" and path.startswith("/calendar/v3"):
-            return self._calendar(request, path.removeprefix("/calendar/v3"))
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
             return httpx.Response(503)
@@ -359,7 +365,9 @@ async def main() -> int:
     await router.warm(config)
     recorder = Recorder()
     recorder.ha_host = httpx.URL(config.ha_url or "http://-").host
+    recorder.config = config
     _install(recorder)
+    ha_calendar._ws_call = recorder.ws_call  # type: ignore[method-assign]
     log = _SkillLog()
     logging.getLogger("felt_core").addHandler(log)
     logging.getLogger("felt_core").setLevel(logging.INFO)

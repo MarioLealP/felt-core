@@ -14,7 +14,7 @@ NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
 def _config(tmp_path):
-    return FeltConfig(db_path=str(tmp_path / "felt.db"), google_calendar_refresh_token="x")
+    return FeltConfig(db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="x")
 
 
 def _event(minutes_out: float, event_id="ev1", **extra):
@@ -41,11 +41,10 @@ def test_due_stage_boundaries():
     assert ch.due_stage(NOW, NOW) is None
 
 
-def test_all_day_cancelled_and_declined_events_are_skipped():
+def test_all_day_and_cancelled_events_are_skipped():
     assert not ch.is_relevant({"id": "a", "start": {"date": "2026-10-01"}})
     assert not ch.is_relevant(_event(20, status="cancelled"))
-    assert not ch.is_relevant(_event(20, attendees=[{"self": True, "responseStatus": "declined"}]))
-    assert ch.is_relevant(_event(20, attendees=[{"self": True, "responseStatus": "accepted"}]))
+    assert ch.is_relevant(_event(20, status="confirmed"))
 
 
 def test_plan_schedules_stages_firing_before_the_next_poll():
@@ -84,7 +83,7 @@ def test_current_game_is_the_unstopped_game_start(tmp_path):
 
 
 def _patch(monkeypatch, fresh, line="dentist in ten, go"):
-    async def fake_get_event(client, config, calendar_id, event_id):
+    async def fake_get_event(client, config, calendar_id, event_id, around):
         return fresh
 
     prompts = []
@@ -95,7 +94,7 @@ def _patch(monkeypatch, fresh, line="dentist in ten, go"):
             raise local_llm.LocalLLMUnavailable("down")
         return line
 
-    monkeypatch.setattr(ch.google_calendar, "get_event", fake_get_event)
+    monkeypatch.setattr(ch.ha_calendar, "get_event", fake_get_event)
     monkeypatch.setattr("felt_core.brain.replies.local_reply", fake_local_reply)
     return prompts
 
@@ -164,7 +163,7 @@ async def test_plain_line_when_her_model_is_down(tmp_path, monkeypatch):
 
 
 async def test_loop_is_off_without_calendar(tmp_path):
-    config = FeltConfig(db_path=str(tmp_path / "felt.db"), google_calendar_refresh_token=None)
+    config = FeltConfig(db_path=str(tmp_path / "felt.db"), ha_url=None)
     await ch.calendar_headsup_loop(config)  # returns instead of looping
 
 
@@ -311,12 +310,16 @@ async def test_an_appointment_entered_twice_is_one(tmp_path, monkeypatch):
     twin_a, twin_b = _trip(80, "a"), _trip(80, "b")
 
     async def cals(client, config):
-        return [{"id": "c1"}, {"id": "c2"}]
+        return [{"id": "c1"}, {"id": "c2"}, {"id": config.ha_calendar_reminders}]
 
     async def events(client, config, cid, start, end):
+        if cid == config.ha_calendar_reminders:
+            return [_event(30, "rem")]
         return [twin_a, _event(90, "other")] if cid == "c1" else [twin_b]
 
-    monkeypatch.setattr(ch.google_calendar, "list_calendars", cals)
-    monkeypatch.setattr(ch.google_calendar, "list_events", events)
+    monkeypatch.setattr(ch.ha_calendar, "list_calendars", cals)
+    monkeypatch.setattr(ch.ha_calendar, "list_events", events)
     got = await ch.fetch_upcoming(config, NOW)
-    assert [e["id"] for _, e in got] == ["a", "other"]
+    assert [e["id"] for _, e in got] == ["a", "other", "rem"]
+    # being in the reminders calendar is what makes a reminder
+    assert [ch.is_reminder(e) for _, e in got] == [False, False, True]

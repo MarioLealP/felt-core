@@ -1,19 +1,20 @@
-"""WP-31: calendar heads-up. A background loop polls every Google Calendar
-Mario has (same set as the list_calendar_events skill) every 5 min for
+"""WP-31: calendar heads-up. A background loop polls every calendar Mario
+has in Home Assistant (same set as the list_calendar_events skill) every 5 min for
 the next 2 h and schedules a proactive (WP-25) heads-up per event at
 T-30 min (`calendar`, normal) and T-10 min (`urgent` - felt-tray delivers
 those even while she's hidden or away).
 
 Each heads-up is timed to the second with its own sleep rather than
 waiting for the next poll, and re-fetches the event right before it's
-phrased: a deleted event is dropped, and a moved one is dropped too
-(the next poll schedules it at its new time, under a new dedupe key).
-Sent heads-ups are remembered in the settings table, keyed on event id
-+ start time + stage, so a restart doesn't repeat them. All-day events
-and ones Mario declined are skipped. Explicit alarms (alarms.py) are
-untouched - this is only a gentle reminder.
+phrased (HA re-syncs it from Google first): a deleted event is dropped,
+and a moved one is dropped too (the next poll schedules it at its new
+time, under a new dedupe key). Sent heads-ups are remembered in the
+settings table, keyed on event id + start time + stage, so a restart
+doesn't repeat them. All-day and cancelled events are skipped (HA leaves
+out the ones Mario declined). Explicit alarms (alarms.py) are untouched -
+this is only a gentle reminder.
 
-Reminders Mario asked for (set_reminder, WP-46, tagged REMINDER_TAG) get
+Reminders Mario asked for (set_reminder, WP-46, in the reminders calendar) get
 one urgent line right on time instead - "call the dentist" at 3:00, not a
 heads-up at 2:30.
 
@@ -34,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from felt_core import db, google_calendar, leave_by, local_llm, phone
+from felt_core import db, ha_calendar, leave_by, local_llm, phone
 from felt_core.config import FeltConfig
 from felt_core.events import _game_name
 from felt_core.proactive import enqueue_proactive
@@ -63,7 +64,6 @@ URGENT = Stage("10", 10 * 60, "urgent")
 STAGES = (NORMAL, URGENT)
 # set_reminder's events: one line at the time itself
 REMINDER = Stage("0", 0, "urgent")
-REMINDER_TAG = "felt_reminder"
 # a reminder still counts this long after its time (a slow poll, a restart)
 _REMINDER_GRACE_S = 5 * 60
 _REMINDER_TTL_S = 10 * 60
@@ -84,23 +84,20 @@ _tasks: set[asyncio.Task] = set()
 
 def event_start(event: dict) -> datetime | None:
     """Pure: the event's start as an aware datetime, or None for an
-    all-day event (Google gives those a `date`, not a `dateTime`)."""
+    all-day event (those have a `date`, not a `dateTime`)."""
     raw = event.get("start", {}).get("dateTime")
     return datetime.fromisoformat(raw) if raw else None
 
 
 def is_relevant(event: dict) -> bool:
-    """Pure: a timed, not-cancelled event Mario hasn't declined."""
-    if event.get("status") == "cancelled" or event_start(event) is None:
-        return False
-    return not any(
-        a.get("self") and a.get("responseStatus") == "declined" for a in event.get("attendees", [])
-    )
+    """Pure: a timed, not-cancelled event."""
+    return event.get("status") != "cancelled" and event_start(event) is not None
 
 
 def is_reminder(event: dict) -> bool:
-    """Pure: one of set_reminder's events (recurring instances keep the tag)."""
-    return event.get("extendedProperties", {}).get("private", {}).get(REMINDER_TAG) == "1"
+    """Pure: one of set_reminder's events (fetch_upcoming marks the ones from
+    the reminders calendar)."""
+    return event.get("_reminder") is True
 
 
 def stages_for(event: dict, routable: bool = False) -> tuple[Stage, ...]:
@@ -246,6 +243,14 @@ async def phrase(
     return line or fallback_line(title, minutes, reminder)
 
 
+async def _fresh(config: FeltConfig, calendar_id: str, event: dict) -> dict | None:
+    """The event as it is now, or None if it's gone."""
+    start = event_start(event)
+    assert start is not None
+    async with httpx.AsyncClient(timeout=15) as client:
+        return await ha_calendar.get_event(client, config, calendar_id, event["id"], start)
+
+
 async def deliver(
     config: FeltConfig, calendar_id: str, event: dict, stage: Stage, now: datetime | None = None
 ) -> bool:
@@ -253,8 +258,7 @@ async def deliver(
     whether it was enqueued."""
     key = dedupe_key(event, stage)
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            fresh = await google_calendar.get_event(client, config, calendar_id, event["id"])
+        fresh = await _fresh(config, calendar_id, event)
         now = now or datetime.now(UTC)
         if fresh is None or not is_relevant(fresh):
             logger.info("calendar heads-up: %s deleted/cancelled, dropping", event.get("id"))
@@ -266,7 +270,7 @@ async def deliver(
             )
             return False
         assert start is not None
-        reminder = is_reminder(fresh)
+        reminder = is_reminder(event)
         if due_stage(start, now, reminder) is not stage or already_sent(config, key):
             return False
         db.set_setting(config.db_path, key, now.isoformat())
@@ -320,8 +324,7 @@ async def deliver_leave(
     for the next poll; one pushed earlier goes out at once."""
     key = dedupe_key(event, stage)
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            fresh = await google_calendar.get_event(client, config, calendar_id, event["id"])
+        fresh = await _fresh(config, calendar_id, event)
         now = now or datetime.now(UTC)
         if fresh is None or not is_relevant(fresh) or event_start(fresh) != event_start(event):
             return False
@@ -342,7 +345,7 @@ async def deliver_leave(
             return False  # past the leave time already - "time to go" says it
         db.set_setting(config.db_path, key, now.isoformat())
         title = str(fresh.get("summary") or "your appointment")
-        at = start.astimezone(google_calendar.TZ).strftime("%H:%M")
+        at = start.astimezone(ha_calendar.TZ).strftime("%H:%M")
         drive_min = math.ceil(minutes)
         leave_in = max(0, round((leave - now).total_seconds() / 60))
         go = stage is LEAVE_NOW
@@ -418,11 +421,12 @@ def same_event_key(event: dict) -> tuple:
 
 async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, dict]]:
     async with httpx.AsyncClient(timeout=15) as client:
-        calendars = await google_calendar.list_calendars(client, config)
+        calendars = await ha_calendar.list_calendars(client, config)
         out: list[tuple[str, dict]] = []
         seen: set[tuple] = set()
         for cal in calendars:
-            for event in await google_calendar.list_events(
+            reminders = cal["id"] == config.ha_calendar_reminders
+            for event in await ha_calendar.list_events(
                 client, config, cal["id"], now, now + LOOKAHEAD
             ):
                 # 2026-10-18: Tuesday's appointment was in the calendar twice -
@@ -431,7 +435,7 @@ async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, d
                 if key in seen:
                     continue
                 seen.add(key)
-                out.append((cal["id"], event))
+                out.append((cal["id"], {**event, "_reminder": True} if reminders else event))
     return out
 
 
@@ -456,8 +460,8 @@ async def poll_once(config: FeltConfig, now: datetime | None = None) -> int:
 
 
 async def calendar_headsup_loop(config: FeltConfig) -> None:
-    if not config.google_calendar_refresh_token:
-        logger.info("calendar heads-up: Google Calendar not connected, loop off")
+    if not ha_calendar.connected(config):
+        logger.info("calendar heads-up: Home Assistant not connected, loop off")
         return
     while True:
         try:

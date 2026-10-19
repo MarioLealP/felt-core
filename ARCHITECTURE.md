@@ -28,7 +28,6 @@ conversation/state persistence, and the local-vs-cloud routing policy.
   volume; plugins mount read-only (`./plugins:/app/plugins:ro`).
 - Secrets live in `clockmost-infra`'s **sops** `secrets.env` (not read for
   this audit). By key name: `FELT_GEMINI_API_KEY`,
-  `FELT_GOOGLE_CALENDAR_CLIENT_SECRET`, `FELT_GOOGLE_CALENDAR_REFRESH_TOKEN`,
   `FELT_SPOTIFY_CLIENT_SECRET`, `FELT_SPOTIFY_REFRESH_TOKEN`,
   `FELT_ZABBIX_API_TOKEN`, `FELT_OCTOPRINT_API_KEY`, `FELT_IMAP_PASSWORD`,
   `FELT_NTFY_PASSWORD`, `FELT_NTFY_PUBLISH_PASSWORD`,
@@ -63,7 +62,7 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 | `router.py` | 257 | Tool-vs-chat routing: builds a ~160-line few-shot prompt for the router model, parses its JSON reply. |
 | `config.py` | 227 | `FeltConfig` (pydantic-settings), every env-driven setting. |
 | `lyrics_client.py` | 204 | LRCLIB lookup + disk cache (one JSON file per track). |
-| `google_calendar.py` | 173 | Calendar OAuth token cache + list/create-event REST calls. |
+| `ha_calendar.py` | 220 | Calendars through Home Assistant (2026-10-19): list/read events over REST, create over HA's websocket. |
 | `metrics.py` | 164 | Per-request `Server-Timing` instrumentation, backed by the `latency` table. |
 | `email_watcher.py` | 138 | IMAP poll loop, pending-email confirmation flow. |
 | `poe_trade_cache.py` | 134 | Weekly-refreshed PoE2 trade reference-data cache. |
@@ -94,13 +93,13 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 | `felt_presence` | 133 | Mario-triggered hush/unhush/hide/come/look/repeat → felt-tray UIAction. |
 | `smart_home_control` | 122 | Home Assistant entity status/service call (explicit allowlist). |
 | `printer_status` | 112 | OctoPrint (Ender 3) + raw IPP (HP printer) status. |
-| `create_calendar_event` | 89 | Google Calendar write. |
+| `create_calendar_event` | 100 | Calendar write (via HA). |
 | `set_alarm` | 88 | Time-of-day alarm, persisted. |
 | `get_container_status` | 85 | Docker container health via Zabbix. |
 | `media_control` | 75 | Play/pause/skip/volume via felt-desktop-agent (MPRIS). |
 | `now_playing` | 62 | Read-only "what's this song" via Spotify. |
 | `news_digest` | 60 | RSS/Atom feed digest. |
-| `list_calendar_events` | 59 | Google Calendar read, all calendars. |
+| `list_calendar_events` | 61 | Calendar read, all of HA's calendars. |
 | `play_music` | 58 | Start named track/artist via Spotify. |
 | `shopping_list` | 64 | Add/remove/list items in Home Assistant's `todo.shopping_list` via `shopping.py` (same list as the HA app, the Felt app's Lists page and `/shopping-list`). |
 | `delegate_research` | 55 | Explicit cloud-delegation tool (via ninerouter). |
@@ -166,7 +165,7 @@ Ollama/ComfyUI elsewhere on clockmost). All routes are one file, `api.py`.
 | Spotify | `spotify_client.py`; `plugins/play_music`, `plugins/now_playing` |
 | LRCLIB | `lyrics_client.py` |
 | Gmail (IMAP) | `email_watcher.py` |
-| Google Calendar | `google_calendar.py`; `plugins/list_calendar_events`, `plugins/create_calendar_event` |
+| Calendar (through Home Assistant) | `ha_calendar.py`; `plugins/list_calendar_events`, `plugins/create_calendar_event`, `plugins/set_reminder` |
 | Zabbix | `zabbix_client.py` (parsing) + `plugins/get_container_status/skill.py` (the actual HTTP call) |
 | ntfy | `ntfy_listener.py` (subscribe), `notify.py` (publish); `plugins/get_recent_alerts`, `plugins/set_timer` |
 | ComfyUI | `plugins/generate_image/skill.py` |

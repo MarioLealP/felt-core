@@ -26,7 +26,7 @@ from felt_core.config import FeltConfig
 logger = logging.getLogger(__name__)
 
 # Shared with felt_core.diary (Mario's local timezone - felt-core's own
-# container runs UTC, same convention as google_calendar.py/
+# container runs UTC, same convention as ha_calendar.py/
 # poe_trade_cache.py's own Europe/Lisbon ZoneInfo).
 LISBON = ZoneInfo("Europe/Lisbon")
 

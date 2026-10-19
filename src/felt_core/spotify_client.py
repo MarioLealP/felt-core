@@ -7,7 +7,7 @@ Web API is public internet, not a local-network call.
 
 Access tokens are refreshed on demand and cached in-process (module-level,
 single account) via the shared oauth_token.refresh_access_token helper
-(WP-40) - same pattern google_calendar.py uses.
+(WP-40).
 """
 
 import asyncio

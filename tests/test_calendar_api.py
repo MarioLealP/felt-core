@@ -31,7 +31,7 @@ def test_shapes_sorts_and_keeps_all_day_first_on_its_day():
     assert items[1]["all_day"] is True and items[2]["all_day"] is False
 
 
-def test_drops_cancelled_and_declined_and_keeps_only_minimal_fields():
+def test_drops_cancelled_and_keeps_only_minimal_fields():
     items = agenda_items(
         [
             (
@@ -39,16 +39,10 @@ def test_drops_cancelled_and_declined_and_keeps_only_minimal_fields():
                 [
                     _ev("Gone", {"dateTime": "2026-10-16T10:00:00Z"}, status="cancelled"),
                     _ev(
-                        "Nope",
-                        {"dateTime": "2026-10-16T11:00:00Z"},
-                        attendees=[{"self": True, "responseStatus": "declined"}],
-                    ),
-                    _ev(
                         "Call",
                         {"dateTime": "2026-10-16T12:00:00Z"},
-                        description="secret notes",
+                        description="secret notes, join https://meet.google.com/abc.",
                         attendees=[{"email": "x@y"}],
-                        hangoutLink="https://meet.google.com/abc",
                     ),
                 ],
             )

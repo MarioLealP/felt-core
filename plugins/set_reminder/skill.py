@@ -1,19 +1,18 @@
 """Reminders (WP-46): "remind me Friday at 3 to call the dentist", "every
-Monday at 9 remind me to take the bins out". Each one is a Google Calendar
-event (Mario 2026-10-18: linked to the phone, not a Felt-only list) - the
-phone's Calendar app notifies right on time, recurring ones repeat there,
-and it doesn't mark the time busy. Tagged so calendar_headsup speaks it at
-the desk on time too, instead of the 30/10-minute heads-ups.
+Monday at 9 remind me to take the bins out". Each one is an event in
+the "Felt reminders" calendar, through Home Assistant (Mario 2026-10-18:
+linked to the phone, not a Felt-only list) - that calendar's own 0-minute
+notification makes the phone's Calendar app ring right on time, recurring
+ones repeat there, and the main calendar's time isn't filled. Being in that
+calendar is what makes calendar_headsup speak it at the desk on time too,
+instead of the 30/10-minute heads-ups.
 """
 
 import re
 from datetime import datetime, timedelta
 
-import httpx
-
-from felt_core.calendar_headsup import REMINDER_TAG
 from felt_core.date_resolution import resolve_datetime
-from felt_core.google_calendar import TZ, create_event, list_calendars, resolve_calendar
+from felt_core.ha_calendar import TZ, CalendarUnavailable, connected, create_event
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -45,10 +44,10 @@ parameters_schema = {
 }
 
 _RRULE = {
-    "daily": "RRULE:FREQ=DAILY",
-    "weekdays": "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
-    "weekly": "RRULE:FREQ=WEEKLY",
-    "monthly": "RRULE:FREQ=MONTHLY",
+    "daily": "FREQ=DAILY",
+    "weekdays": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    "weekly": "FREQ=WEEKLY",
+    "monthly": "FREQ=MONTHLY",
 }
 _EVERY = {
     "daily": "every day",
@@ -109,8 +108,8 @@ def _ordinal(n: int) -> str:
 
 async def handle(params, ctx):
     config = ctx.config
-    if not config.google_calendar_refresh_token:
-        return SkillResult(text="Google Calendar isn't connected yet.")
+    if not connected(config):
+        return SkillResult(text="The calendar isn't connected yet.")
 
     what = get_single_param(params, "what", "title", "text", ignore_keys=("when", "repeat"))
     when_text = get_single_param(params, "when", "time", ignore_keys=("what", "repeat"))
@@ -135,21 +134,16 @@ async def handle(params, ctx):
     if start <= now and repeat == "none":
         return SkillResult(text=f"'{when_text}' is already past.")
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        calendar = resolve_calendar(await list_calendars(client, config), None)
-        if calendar is None:
-            return SkillResult(text="Couldn't find your calendar to put the reminder on.")
+    try:
         await create_event(
-            client,
             config,
-            calendar["id"],
+            config.ha_calendar_reminders,
             str(what),
             start,
             start + timedelta(minutes=15),
             "Reminder set by Felt.",
-            recurrence=[_RRULE[repeat]] if repeat in _RRULE else None,
-            popup_minutes=0,
-            transparent=True,
-            private={REMINDER_TAG: "1"},
+            rrule=_RRULE.get(repeat),
         )
+    except CalendarUnavailable:
+        return SkillResult(text="I couldn't reach the calendar to set that reminder.")
     return SkillResult(text=f"I'll remind you {describe(start, repeat)}: {what}.")
