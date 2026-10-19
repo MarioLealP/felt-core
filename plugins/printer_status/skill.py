@@ -2,8 +2,9 @@
 media_control's Spotify/YouTube split (assistant-skills.md, 2026-09-11:
 Mario has three actual printers, each gets its own provider).
 
-- **Ender 3, via OctoPrint** — vendor-agnostic REST API, blocked on an API
-  key (not yet provided).
+- **Ender, via Home Assistant** (since 2026-10-19: Klipper's moonraker ->
+  MQTT -> HA's `sensor.ender_*`, read with Felt's HA token; felt_core.ender
+  also says when a print ends). OctoPrint is gone.
 - **HP ENVY 6000, via plain IPP** (Get-Printer-Attributes) — no API key
   needed at all; confirmed reachable from the server, unauthenticated,
   live 2026-09-12. Ink levels come back as a standard IPP attribute this
@@ -13,53 +14,28 @@ Mario has three actual printers, each gets its own provider).
   remains the fallback per assistant-skills.md, not attempted here.
 """
 
-import httpx
 from pyipp import IPP
 from pyipp.exceptions import IPPError
 
+from felt_core import ender
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "printer_status"
-description = "Status of the 3D printer (Ender 3) or the HP printer."
+description = "Status of the 3D printer (Ender) or the HP printer."
 parameters_schema = {
     "type": "object",
     "properties": {"printer": {"type": "string", "description": "'3d printer' or 'hp' (optional)"}},
 }
 
 
-async def _octoprint_status(config) -> str | None:
-    if not config.octoprint_url or not config.octoprint_api_key:
+async def _ender_status(config) -> str | None:
+    if not (config.ha_url and config.ha_token):
         return None
-    headers = {"X-Api-Key": config.octoprint_api_key}
-    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
-        try:
-            printer = await client.get(f"{config.octoprint_url}/api/printer")
-            job = await client.get(f"{config.octoprint_url}/api/job")
-        except httpx.HTTPError:
-            return "Couldn't reach the Ender 3 right now."
-
-    if printer.status_code == 409:
-        return "The Ender 3 is not currently connected/operational."
-    if printer.status_code != 200 or job.status_code != 200:
-        return "Couldn't get the Ender 3's status right now."
-
-    printer_data = printer.json()
-    job_data = job.json()
-    state = job_data.get("state", "Unknown")
-    temps = printer_data.get("temperature", {})
-    tool0 = temps.get("tool0", {})
-    bed = temps.get("bed", {})
-
-    parts = [f"Ender 3 — {state}"]
-    if tool0:
-        parts.append(f"nozzle {tool0.get('actual', '?')}°C/{tool0.get('target', '?')}°C")
-    if bed:
-        parts.append(f"bed {bed.get('actual', '?')}°C/{bed.get('target', '?')}°C")
-    completion = job_data.get("progress", {}).get("completion")
-    if completion is not None:
-        parts.append(f"{completion:.1f}% done")
-    return ", ".join(parts)
+    try:
+        return ender.describe(await ender.snapshot(config))
+    except ender.EnderUnavailable:
+        return "Couldn't reach Home Assistant for the Ender right now."
 
 
 async def _hp_status(config) -> str | None:
@@ -91,7 +67,7 @@ async def handle(params, ctx):
 
     results = []
     if wants_ender:
-        result = await _octoprint_status(config)
+        result = await _ender_status(config)
         if result:
             results.append(result)
     if wants_hp:

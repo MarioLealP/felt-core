@@ -68,6 +68,19 @@ HA_MATCHES = {
     "is the fan on": "query_answer",
 }
 # what the model path's smart_home_control sees (FELT_HA_ENTITIES' states)
+# the Ender mid-print (2026-10-19: printer_status reads HA's sensor.ender_*)
+ENDER = {
+    "state": "printing",
+    "file": "hexwall_tile_07.gcode",
+    "progress": "62.4",
+    "layer": "84 / 136",
+    "time_left": "3960",
+    "done_at": "2026-10-19T20:40:00+00:00",
+    "nozzle": "214.8",
+    "nozzle_target": "215.0",
+    "bed": "60.1",
+    "bed_target": "60.0",
+}
 HA_DEVICES = {
     "switch.shelf": "Shelf",
     "switch.extraplug": "Dehumidifier Plug",
@@ -139,6 +152,10 @@ CASES: list[Case] = [
     Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
     Case("what's on my shopping list?", [], [], "shop", ("shopping_list",)),
     Case("take oat milk off the shopping list", ["POST /todo/remove_item"], note="shop"),
+    # the Ender, read from HA (2026-10-19)
+    Case("how's the 3d printer doing?", [], [], "printer", ("printer_status",)),
+    Case("is my print done yet?", [], [], "printer", ("printer_status",)),
+    Case("how long left on the ender", [], [], "printer", ("printer_status",)),
     # home: plain commands go to HA's matcher (ha_assist), the rest to the model
     Case("turn off the shelf light", ["POST /ha-assist turn off the shelf light"], note="home"),
     Case(
@@ -332,6 +349,12 @@ class Recorder:
             dim = f" {body['brightness_pct']}%" if "brightness_pct" in body else ""
             self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}")
             return httpx.Response(200, json=[])
+        if path.startswith("/api/states/sensor.ender_"):
+            field = path.removeprefix("/api/states/sensor.ender_")
+            if field not in ENDER:
+                return httpx.Response(404)
+            self.calls.append(f"GET /ender/{field}")
+            return httpx.Response(200, json={"state": ENDER[field]})
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
             action = (body.get("data") or {}).get("intent_action", "")
