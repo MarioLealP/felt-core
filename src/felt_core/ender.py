@@ -6,8 +6,10 @@ Klipper's moonraker publishes the printer over MQTT into HA (device "Ender",
 `sensor.ender_*`; workspace runbooks/ender3-max-neo-klipper.md), so she reads
 it with her own non-admin HA token like the phone and leave-by. `watch`
 polls the state and says it - desk + phone - when a print finishes, fails,
-is cancelled or pauses. The last state is kept in the db, so a felt-core
-restart neither misses nor repeats one.
+is cancelled or pauses, in her own words (her model; Mario: "everything that
+comes through felt should be routed through her llm so it gets her
+personality"), a plain line only when felt-llm is down. The last state is
+kept in the db, so a felt-core restart neither misses nor repeats one.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from felt_core import db, phone
+from felt_core import db, local_llm, phone
 from felt_core.config import FeltConfig
 from felt_core.proactive import enqueue_proactive
 
@@ -180,8 +182,38 @@ def event_for(prev: str | None, cur: str) -> str | None:
     return None
 
 
+def build_prompt(event: str, s: Snapshot) -> str:
+    """Pure: the facts for her model - she words it."""
+    name = f' "{job_name(s.file)}"' if s.file else ""
+    if event == "complete":
+        took = f" It took {duration(s.elapsed_s)}." if s.elapsed_s else ""
+        what = f"Mario's 3D printer (the Ender) just finished printing{name}.{took}"
+    elif event == "cancelled":
+        what = f"Mario's 3D printer (the Ender) print{name} was just cancelled."
+    elif event == "error":
+        why = f' Klipper says: "{s.message}".' if s.message else ""
+        what = f"Mario's 3D printer (the Ender) stopped with an error while printing{name}.{why}"
+    else:
+        why = f' Klipper says: "{s.message}".' if s.message else ""
+        what = f"Mario's 3D printer (the Ender) paused while printing{name}.{why}"
+    return f"{what} Tell him, in your own voice - one short sentence. Don't invent details."
+
+
+async def phrase(config: FeltConfig, event: str, s: Snapshot) -> str:
+    """Her line for an event; the plain one if felt-llm can't answer."""
+    from felt_core.brain.replies import local_reply
+
+    try:
+        line = await local_reply(
+            [{"role": "user", "content": build_prompt(event, s)}], config, include_facts=False
+        )
+    except local_llm.LocalLLMUnavailable:
+        line = ""
+    return line.strip(" \n\"'") or line_for(event, s)
+
+
 def line_for(event: str, s: Snapshot) -> str:
-    """Pure: what she says for an event."""
+    """Pure: the plain line, when felt-llm is down."""
     name = f" ({job_name(s.file)})" if s.file else ""
     if event == "complete":
         took = f" after {duration(s.elapsed_s)}" if s.elapsed_s else ""
@@ -207,7 +239,7 @@ async def check(config: FeltConfig) -> str | None:
     event = event_for(prev, cur)
     if event is None:
         return None
-    line = line_for(event, await snapshot(config))
+    line = await phrase(config, event, await snapshot(config))
     enqueue_proactive(config, "printer", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Ender", line, tag="felt-ender")
