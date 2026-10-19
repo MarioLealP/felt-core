@@ -6,12 +6,20 @@ Defaults to Mario's primary calendar; a named calendar ("add it to my
 professional calendar") is matched against his real calendar list, not
 guessed — and rejected up front if it turns out not to be writable
 (the public-holidays calendar, for instance, is subscribed/read-only).
+
+The place is optional. Without one she holds the appointment and asks
+where it is (Mario 2026-10-19: one add, not two; "If no reply in 30s
+create"): his answer goes to set_event_location, which adds it with the
+place, and with no answer it goes in without one (appointment_hold.py). A
+place is what gives an appointment leave-by nudges instead of plain
+heads-ups.
 """
 
 from datetime import datetime, timedelta
 
 import httpx
 
+from felt_core import appointment_hold
 from felt_core.date_resolution import resolve_datetime
 from felt_core.ha_calendar import (
     TZ,
@@ -19,6 +27,7 @@ from felt_core.ha_calendar import (
     connected,
     create_event,
     list_calendars,
+    remember_created,
     resolve_calendar,
     writable,
 )
@@ -50,6 +59,13 @@ parameters_schema = {
             "type": "string",
             "description": "Which calendar to add it to, if Mario names one. Defaults to his primary calendar.",
         },
+        "place": {
+            "type": "string",
+            "description": (
+                "Where it is - a place name and/or address, exactly as Mario said it. Leave "
+                "out if he didn't say."
+            ),
+        },
     },
     "required": ["title", "when"],
 }
@@ -60,15 +76,19 @@ async def handle(params, ctx):
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")
 
-    title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar"))
+    title = get_single_param(
+        params, "title", ignore_keys=("when", "duration_minutes", "calendar", "place")
+    )
     when_text = get_single_param(
-        params, "when", ignore_keys=("title", "duration_minutes", "calendar")
+        params, "when", ignore_keys=("title", "duration_minutes", "calendar", "place")
     )
     if not title or not when_text:
         return SkillResult(text="I need both a title and a time to create a calendar event.")
 
     duration_minutes = params.get("duration_minutes") or 60
     calendar_name = params.get("calendar")
+    said = str(params.get("place") or "").strip()
+    place = None if not said or appointment_hold.no_place(said) else said
 
     now = datetime.now(tz=TZ)
     start = resolve_datetime(str(when_text), now)
@@ -77,6 +97,14 @@ async def handle(params, ctx):
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
     end = start + timedelta(minutes=duration_minutes)
+
+    waiting = appointment_hold.claim_same(start) if said else None
+    if waiting is not None:
+        if not await appointment_hold.add(config, waiting, place):
+            return SkillResult(text="I couldn't reach the calendar to add it.")
+        added = f"Added '{waiting['summary']}', {appointment_hold.when(start)}"
+        where = f"at {place}" if place else "no place"
+        return SkillResult(text=f"{added}, {where}. Read it back to Mario as written.")
 
     async with httpx.AsyncClient(timeout=20) as client:
         calendars = await list_calendars(client, config)
@@ -89,12 +117,21 @@ async def handle(params, ctx):
                 text=f"'{calendar.get('summary', calendar['id'])}' is read-only — I can't add events to it."
             )
 
+    at = appointment_hold.when(start)
+    where = calendar.get("summary", "your calendar")
+    if not said:
+        appointment_hold.hold(config, calendar["id"], str(title), start, end)
+        return SkillResult(
+            text=f"Not added yet: '{title}', {at}, for {where}. Ask Mario where it is - don't "
+            f"say it's added. If he doesn't answer within {appointment_hold.PLACE_WAIT_S} "
+            "seconds it's added without a place."
+        )
     try:
-        await create_event(config, calendar["id"], str(title), start, end)
+        await create_event(config, calendar["id"], str(title), start, end, location=place)
     except CalendarUnavailable:
         return SkillResult(text="I couldn't reach the calendar to add it.")
-
-    formatted = start.strftime("%A %I:%M %p").replace(" 0", " ")
+    remember_created(config, calendar["id"], str(title), start, end)
+    spot = f"at {place}" if place else "no place"
     return SkillResult(
-        text=f"Added '{title}' to {calendar.get('summary', 'your calendar')} for {formatted}."
+        text=f"Added '{title}', {at}, {spot}, to {where}. Read it back to Mario as written."
     )

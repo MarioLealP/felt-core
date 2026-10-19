@@ -99,6 +99,11 @@ EXAMPLES: dict[str | None, list[str]] = {
         "put my haircut on the calendar for tuesday 3pm",
         "schedule a call tomorrow at 10",
     ],
+    "set_event_location": [
+        "it's at the dental clinic in gaia",
+        "at hospital de santo antonio",
+        "the address is rua de santa catarina 100, porto",
+    ],
     "list_calendar_events": [
         "what do I have today",
         "any meetings tomorrow?",
