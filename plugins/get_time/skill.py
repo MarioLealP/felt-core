@@ -9,7 +9,7 @@ from datetime import datetime
 from felt_core.plugin import SkillResult
 
 name = "get_time"
-description = "Returns the current local date and time. No parameters."
+description = "Current local date and time."
 parameters_schema = {"type": "object", "properties": {}}
 
 

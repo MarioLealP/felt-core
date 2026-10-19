@@ -32,16 +32,10 @@ from felt_core.plugin import SkillResult
 from felt_core.poe_trade_cache import load_cache
 
 name = "poe_price_check"
-description = (
-    "Checks the current market price of a Path of Exile 2 item or currency "
-    "by name. For unique items, reports the real lowest listing and the "
-    "average of the 3 cheapest, from live trade-site listings."
-)
+description = "Current market price of a Path of Exile 2 item or currency."
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "item_name": {"type": "string", "description": "The item or currency name to check"}
-    },
+    "properties": {"item_name": {"type": "string", "description": "Item or currency name"}},
     "required": ["item_name"],
 }
 

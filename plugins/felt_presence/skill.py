@@ -20,21 +20,28 @@ from felt_core.plugin import SkillResult, UIAction
 
 name = "felt_presence"
 description = (
-    "Mario controlling Felt's own presence/behavior on his desktop: telling her to "
-    "stop talking ('shut up', 'shh', 'be quiet', 'quiet please', 'stop talking') or "
-    "resume ('you can talk again', 'ok talk'); go away for a while ('go away for a "
-    "bit') or for a set time ('give me five minutes'); come back ('come back'); walk "
-    "to a specific spot ('come here', 'move over'); react to what's on screen right "
-    "now ('look at this'); or repeat her last line ('what did you say?'). NOT for "
-    "anything else - only these specific presence/behavior controls."
+    "Felt's own presence on the desktop only: be quiet ('shh') or talk again, go away "
+    "(for a while: 'give me five minutes'), come back, come here / move over, look at the"
+    " screen ('look at this'), or repeat her last line ('what did you say?')."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "intent": {
             "type": "string",
-            "description": "one of: shut_up, unhush, hide, brb, come_back, come, move, look, repeat",
-        },
+            "description": "What he wants",
+            "enum": [
+                "shut_up",
+                "unhush",
+                "hide",
+                "brb",
+                "come_back",
+                "come",
+                "move",
+                "look",
+                "repeat",
+            ],
+        }
     },
 }
 

@@ -9,17 +9,11 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "cancel_alarm"
-description = (
-    "Cancels a pending alarm that hasn't fired yet. If more than one alarm is set, "
-    "say which one by its label or time."
-)
+description = "Cancels an alarm that hasn't rung yet."
 parameters_schema = {
     "type": "object",
     "properties": {
-        "which": {
-            "type": "string",
-            "description": "Which alarm to cancel, by label (optional if only one alarm is set)",
-        }
+        "which": {"type": "string", "description": "Its label or time, if more than one is set"}
     },
 }
 

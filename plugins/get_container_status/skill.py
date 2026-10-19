@@ -16,18 +16,12 @@ from felt_core.zabbix_client import (
 
 name = "get_container_status"
 description = (
-    "Checks whether a specific service/container on the clockmost server is "
-    "running and healthy, or (with no name given) reports any containers "
-    "currently failing their health check."
+    "Whether a server service/container is running and healthy; with no name, which ones "
+    "are failing."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "container": {
-            "type": "string",
-            "description": "name of the service/container to check (optional — omit for an overall health summary)",
-        }
-    },
+    "properties": {"container": {"type": "string", "description": "Service name (optional)"}},
 }
 
 

@@ -18,12 +18,12 @@ from felt_core.phone import PhoneUnavailable, start_timer
 from felt_core.plugin import SkillResult
 
 name = "set_timer"
-description = "Sets a timer for N minutes from now in the Clock app on Mario's phone (rings there)."
+description = "Sets a countdown timer for N minutes on Mario's phone."
 parameters_schema = {
     "type": "object",
     "properties": {
-        "minutes": {"type": "number", "description": "How many minutes from now"},
-        "label": {"type": "string", "description": "What the timer is for"},
+        "minutes": {"type": "number", "description": "Minutes from now"},
+        "label": {"type": "string", "description": "What it's for"},
     },
     "required": ["minutes"],
 }

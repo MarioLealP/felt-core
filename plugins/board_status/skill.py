@@ -16,18 +16,25 @@ from felt_core.plugin import SkillResult
 
 name = "board_status"
 description = (
-    "Reads Mario's work board (the open-work list the agents keep): what's in progress, what "
-    "needs his review, what's next, the backlog or the polish pile. Read-only."
+    "Mario's work board (the agents' open-work list): in progress, needs review, next, "
+    "backlog. Read-only."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "focus": {
             "type": "string",
-            "description": (
-                "What to look at: 'overview' (default), 'in progress', 'review', 'next', "
-                "'backlog', 'polish', 'parked' or 'done'"
-            ),
+            "description": "What to look at (default overview)",
+            "enum": [
+                "overview",
+                "in progress",
+                "review",
+                "next",
+                "backlog",
+                "polish",
+                "parked",
+                "done",
+            ],
         }
     },
 }

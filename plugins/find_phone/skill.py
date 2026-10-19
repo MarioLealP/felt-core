@@ -6,7 +6,7 @@ from felt_core.phone import PhoneUnavailable, ring
 from felt_core.plugin import SkillResult
 
 name = "find_phone"
-description = "Makes Mario's phone ring loudly to help find it."
+description = "Makes Mario's phone ring loudly so he can find it."
 parameters_schema = {"type": "object", "properties": {}}
 
 

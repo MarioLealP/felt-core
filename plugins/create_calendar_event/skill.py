@@ -35,36 +35,17 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "create_calendar_event"
-description = (
-    "Creates a new event on Mario's calendar, e.g. 'add a dentist appointment "
-    "Friday at 3pm'. Adds to his primary calendar by default, or a named one if he says "
-    "which (e.g. 'on my professional calendar')."
-)
+description = "Adds an appointment or event to Mario's calendar, e.g. 'dentist Friday at 3pm'."
 parameters_schema = {
     "type": "object",
     "properties": {
-        "title": {"type": "string", "description": "What the event is called"},
-        "when": {
-            "type": "string",
-            "description": (
-                "The date and time, exactly as phrased ('friday at 3pm', 'tomorrow at "
-                "9am'). Never reformat or invent a value."
-            ),
-        },
-        "duration_minutes": {
-            "type": "integer",
-            "description": "How long the event lasts, in minutes. Defaults to 60 if not mentioned.",
-        },
-        "calendar": {
-            "type": "string",
-            "description": "Which calendar to add it to, if Mario names one. Defaults to his primary calendar.",
-        },
+        "title": {"type": "string", "description": "What it is"},
+        "when": {"type": "string", "description": "Date and time, as Mario said it"},
+        "duration_minutes": {"type": "integer", "description": "Length in minutes (default 60)"},
+        "calendar": {"type": "string", "description": "Calendar name, only if he names one"},
         "place": {
             "type": "string",
-            "description": (
-                "Where it is - a place name and/or address, exactly as Mario said it. Leave "
-                "out if he didn't say."
-            ),
+            "description": "Where, as Mario said it; leave out if he didn't say",
         },
     },
     "required": ["title", "when"],

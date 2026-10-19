@@ -18,26 +18,19 @@ from felt_core.plugin import SkillResult
 
 name = "set_reminder"
 description = (
-    "Reminds Mario about something at a date/time, once or repeating - e.g. 'remind me "
-    "Friday at 3pm to call the dentist', 'remind me every Monday at 9 to take the bins "
-    "out', 'remind me in 20 minutes to check the oven'. His phone notifies him. For a "
-    "plain countdown use set_timer; for waking up, set_alarm."
+    "Reminds Mario of something at a date/time, once or repeating ('remind me Friday at "
+    "3pm to call the dentist', 'every Monday at 9 remind me to...'). His phone notifies "
+    "him. A plain countdown: set_timer; waking up: set_alarm."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "what": {"type": "string", "description": "What to remind him about"},
-        "when": {
-            "type": "string",
-            "description": (
-                "The (first) date and time, exactly as phrased ('friday at 3pm', 'in 20 "
-                "minutes', 'monday at 9'). Never reformat or invent a value."
-            ),
-        },
+        "what": {"type": "string", "description": "What to remind him of"},
+        "when": {"type": "string", "description": "The (first) date and time, as Mario said it"},
         "repeat": {
             "type": "string",
+            "description": "Default none; weekly = same weekday",
             "enum": ["none", "daily", "weekdays", "weekly", "monthly"],
-            "description": "How it repeats; 'weekly' = every week on that day. Default none.",
         },
     },
     "required": ["what", "when"],

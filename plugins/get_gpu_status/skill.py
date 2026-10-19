@@ -8,10 +8,7 @@ import httpx
 from felt_core.plugin import SkillResult
 
 name = "get_gpu_status"
-description = (
-    "Gets GPU utilization, VRAM usage, and temperature of the Nitro5 AI compute "
-    "node (the machine running the local LLM and image generation)."
-)
+description = "GPU load, VRAM and temperature of the Nitro5 AI node."
 parameters_schema = {"type": "object", "properties": {}}
 
 

@@ -8,10 +8,8 @@ from felt_core.plugin import SkillResult
 
 name = "check_email"
 description = (
-    "Checks Felt's own locally-stored log of recently-arrived emails "
-    "(sender + subject only, from the proactive IMAP watcher). Use this "
-    "for any question about new mail/email — NOT delegate_research or "
-    "web_search, this is local data about Mario's own inbox."
+    "Recently arrived emails in Mario's inbox (sender and subject). For any question "
+    "about new mail."
 )
 parameters_schema = {"type": "object", "properties": {}}
 
