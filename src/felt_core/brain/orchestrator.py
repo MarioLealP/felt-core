@@ -23,11 +23,10 @@ from collections.abc import Callable
 
 import httpx
 
-from felt_core import local_llm, metrics
+from felt_core import ha_assist, local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
-from felt_core.brain.home_fast_path import home_fast_path
 from felt_core.brain.lookup_claims import claims_a_tool_use
 from felt_core.brain.music_fast_path import music_fast_path
 from felt_core.brain.replies import (
@@ -272,9 +271,20 @@ async def _chat_local(
 
     # The presence fast path skips the model entirely (WP-09): "shut up"
     # must never wait on, or be second-guessed by, a model round trip.
-    # WP-47/48: so does a plain home or music command ("turn off the shelf
-    # light", "skip"). Music before home: "turn off the music" isn't a device.
-    fast_call = _presence_fast_path(message) or music_fast_path(message) or home_fast_path(message)
+    # WP-48: so does a plain music command ("skip").
+    fast_call = _presence_fast_path(message) or music_fast_path(message)
+    if fast_call is None:
+        # a plain home or list command: Home Assistant's own matcher does it
+        # (ha_assist.py; replaced the home_fast_path regex, 2026-10-19)
+        done = await ha_assist.handle(config, message)
+        if done is not None:
+            router.finish_shadow(config, shadow, message, "smart_home_control", fast=True)
+            async with metrics.timed("reply", route="local", model=config.local_llm_model):
+                reply = await phrase_skill_result(
+                    message, f"Home Assistant did it. It says: {done}", history, config, tone
+                )
+            save_message(config.db_path, session_id, "assistant", reply)
+            return ChatResult(reply=reply)
     call = fast_call
     first: local_llm.LocalReply | None = None
     tool_call: dict | None = None

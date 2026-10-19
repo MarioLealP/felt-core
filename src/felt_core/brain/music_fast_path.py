@@ -1,6 +1,7 @@
-"""WP-48: plain music commands go straight to the Spotify skills, like the
-home fast path - felt-llm's tool pick isn't reliable for one-word commands
-("skip"), and a wrong pick here would be a surprise in Mario's ears. Only
+"""WP-48: plain music commands go straight to the Spotify skills (home ones
+go to Home Assistant's matcher, ha_assist.py) - felt-llm's tool pick isn't
+reliable for one-word commands ("skip"), and a wrong pick here would be a
+surprise in Mario's ears. Only
 whole-message commands count; bare "stop" stays the presence hush.
 """
 

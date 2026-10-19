@@ -174,6 +174,10 @@ class FeltConfig(BaseSettings):
     ha_calendar_default: str = "calendar.lealmario47_gmail_com"
     ha_calendar_reminders: str = "calendar.felt_reminders"
 
+    # Home Assistant's own command matcher (ha_assist.py) gets Felt's HA device
+    # with each command, so "lights off" means the room she's in (its area).
+    ha_assist_device: str = ""
+
     # Home Assistant calling Felt (ha_auth.py, felt-ha-hub D3): Authentik's
     # `ha-felt` OAuth provider - its issuer URL (ends in /), client id, and the
     # service account its tokens must belong to. Empty issuer = route closed.

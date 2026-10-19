@@ -2,7 +2,6 @@
 
 import pytest
 
-from felt_core.brain.home_fast_path import home_fast_path
 from felt_core.brain.music_fast_path import music_fast_path
 
 
@@ -108,6 +107,5 @@ def test_not_commands(message):
 
 
 def test_turn_off_the_music_is_not_a_home_device():
-    # the orchestrator tries music first; home alone would take it as a device
-    assert home_fast_path("turn off the music") is not None
+    # the orchestrator tries music before Home Assistant's matcher
     assert music_fast_path("turn off the music") == ("media_control", {"action": "pause"})
