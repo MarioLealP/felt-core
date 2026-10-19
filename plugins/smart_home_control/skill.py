@@ -11,6 +11,12 @@ about" — the entities available (lights, a fan, two smart plugs) are all
 low-stakes, but the pattern itself (blind voice control over an entire
 home-automation instance) is the kind of thing that should be opted into
 per-entity, not a default a new deployment gets for free.
+
+Dimming (2026-10-19, Mario: "a dim the lights call without giving a %"):
+`dim` sets the lights that can dim to a percentage - the one he said, or
+FELT_HA_DIM_PERCENT. Plain commands usually reach Home Assistant's own
+matcher first (ha_assist.py); this is the model's path for what it misses
+("dim the chandelure", a typo'd "30 percente").
 """
 
 import httpx
@@ -20,8 +26,9 @@ from felt_core.plugin import SkillResult
 
 name = "smart_home_control"
 description = (
-    "Turns a light, plug or fan on or off, or checks if it's on, e.g. 'turn off the "
-    "lights' (plural = all of that kind)."
+    "Turns a light, plug or fan on or off, dims lights (to a % or the usual level), or "
+    "checks if it's on, e.g. 'turn off the lights' (plural = all of that kind), 'dim the "
+    "chandelure to 30%'."
 )
 parameters_schema = {
     "type": "object",
@@ -30,7 +37,11 @@ parameters_schema = {
         "action": {
             "type": "string",
             "description": "Default status",
-            "enum": ["on", "off", "status"],
+            "enum": ["on", "off", "dim", "status"],
+        },
+        "brightness": {
+            "type": "integer",
+            "description": "Percent 1-100, only with dim, only if Mario says a number",
         },
     },
     "required": ["device"],
@@ -47,9 +58,13 @@ async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, 
         response = await client.get(f"{config.ha_url}/api/states/{entity_id}")
         if response.status_code == 200:
             data = response.json()
+            attributes = data.get("attributes", {})
+            modes = attributes.get("supported_color_modes") or []
             states[entity_id] = {
-                "friendly_name": data.get("attributes", {}).get("friendly_name", entity_id),
+                "friendly_name": attributes.get("friendly_name", entity_id),
                 "state": data.get("state", "unknown"),
+                # a light that can be dimmed (not just switched)
+                "dimmable": any(mode != "onoff" for mode in modes),
             }
     return states
 
@@ -104,6 +119,35 @@ def _match(query: str, states: dict[str, dict]) -> tuple[list[str], bool]:
     return [], False
 
 
+def dim_percent(params, config) -> int:
+    """Pure: the brightness he said (1-100), else the usual dim level."""
+    try:
+        said = int(params.get("brightness"))
+    except (TypeError, ValueError):
+        return config.ha_dim_percent
+    return min(100, max(1, said))
+
+
+async def _dim(client, config, params, states, matches, label) -> SkillResult:
+    dimmable = [eid for eid in matches if states[eid].get("dimmable")]
+    if not dimmable:
+        return SkillResult(text=f"{label} can't be dimmed - only switched on or off.")
+    percent = dim_percent(params, config)
+    try:
+        response = await client.post(
+            f"{config.ha_url}/api/services/light/turn_on",
+            json={"entity_id": dimmable, "brightness_pct": percent},
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return SkillResult(text=f"Couldn't reach Home Assistant to dim {label}.")
+    if len(dimmable) == 1:
+        return SkillResult(text=f"{states[dimmable[0]]['friendly_name']} dimmed to {percent}%.")
+    skipped = [states[eid]["friendly_name"] for eid in matches if eid not in dimmable]
+    rest = f" ({', '.join(skipped)} can't dim)" if skipped else ""
+    return SkillResult(text=f"{len(dimmable)} lights dimmed to {percent}%{rest}.")
+
+
 async def handle(params, ctx):
     config = ctx.config
     if not config.ha_url or not config.ha_token or not config.ha_entities_list():
@@ -135,6 +179,8 @@ async def handle(params, ctx):
             or "status"
         ).lower()
 
+        if action == "dim" or params.get("brightness") is not None:
+            return await _dim(client, config, params, states, matches, label)
         if "on" in action and "off" not in action:
             service = "turn_on"
         elif "off" in action:

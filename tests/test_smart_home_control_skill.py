@@ -27,15 +27,23 @@ STATES = {
     "lock.front_door": ("Front Door", "locked"),  # in HA, NOT on the allowlist
 }
 ALLOWED = [e for e in STATES if not e.startswith("lock.")]
+# 2026-10-19: the Shelf plug shown as a light (HA's switch_as_x) - it switches, can't dim
+ONOFF = {"light.shelf"}
+DIM_STATES = {k: v for k, v in STATES.items() if k != "switch.shelf"} | {
+    "light.shelf": ("Shelf", "on")
+}
 
 
-def _mock(monkeypatch, calls):
+def _mock(monkeypatch, calls, states=STATES):
     def handler(request):
         path = request.url.path
         if path.startswith("/api/states/"):
             eid = path.removeprefix("/api/states/")
-            name, state = STATES[eid]
-            return httpx.Response(200, json={"state": state, "attributes": {"friendly_name": name}})
+            name, state = states[eid]
+            attributes = {"friendly_name": name}
+            if eid.startswith("light."):
+                attributes["supported_color_modes"] = ["onoff"] if eid in ONOFF else ["brightness"]
+            return httpx.Response(200, json={"state": state, "attributes": attributes})
         if path.startswith("/api/services/"):
             calls.append((path, json.loads(request.content)))
             return httpx.Response(200, json=[])
@@ -101,3 +109,46 @@ async def test_off_the_allowlist_is_refused(monkeypatch):
 
 async def test_unknown_device(monkeypatch):
     assert await _ask(monkeypatch, "bedroom tv") == "I don't see a device matching 'bedroom tv'."
+
+
+async def _dim(monkeypatch, device, calls, **params):
+    _mock(monkeypatch, calls, DIM_STATES)
+    allowed = ",".join(e for e in DIM_STATES if not e.startswith("lock."))
+    config = FeltConfig(ha_url="http://ha", ha_token="t", ha_entities=allowed)
+    return (await skill.handle({"device": device, **params}, ExecutionContext(config=config))).text
+
+
+async def test_dim_without_a_number_uses_the_usual_level(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "chandelure", calls, action="dim")
+    assert calls == [
+        ("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "brightness_pct": 30})
+    ]
+    assert text == "Chandelure dimmed to 30%."
+
+
+async def test_dim_to_the_number_he_said(monkeypatch):
+    # 2026-10-19 live: "chandelure to 30 percente please" - HA's matcher missed the typo
+    calls = []
+    await _dim(monkeypatch, "chandelure", calls, action="dim", brightness=45)
+    assert calls[0][1]["brightness_pct"] == 45
+
+
+async def test_a_brightness_alone_means_dim(monkeypatch):
+    calls = []
+    await _dim(monkeypatch, "chandelure", calls, brightness=200)
+    assert calls[0][1]["brightness_pct"] == 100
+
+
+async def test_dim_the_lights_skips_the_ones_that_cant(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "the lights", calls, action="dim")
+    [(path, body)] = calls
+    assert path == "/api/services/light/turn_on" and "light.shelf" not in body["entity_id"]
+    assert len(body["entity_id"]) == 3 and "Shelf can't dim" in text
+
+
+async def test_a_plug_cant_dim(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "shelf", calls, action="dim")
+    assert calls == [] and "can't be dimmed" in text

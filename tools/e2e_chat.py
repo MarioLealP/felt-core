@@ -164,6 +164,18 @@ CASES: list[Case] = [
         ("smart_home_control",),
     ),
     Case("are the lights still on", [], [], "home", ("smart_home_control",)),
+    # dimming (2026-10-19): HA's matcher misses these, her skill dims
+    Case(
+        "chandelure to 30 percente please",
+        ["POST /home/turn_on ['light.chandelure'] 30%"],
+        note="home",
+    ),
+    Case("dim the chandelure", ["POST /home/turn_on ['light.chandelure'] 30%"], note="home"),
+    Case(
+        "dim the lights",
+        ["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] 30%"],
+        note="home",
+    ),
     # not commands: nothing switched
     Case("can you turn around?", None, HOME_WRITES, "home"),
     Case("is the server on fire?", None, HOME_WRITES, "home"),
@@ -308,14 +320,17 @@ class Recorder:
             return httpx.Response(200, json={"response": {"response_type": kind, "speech": speech}})
         if path.startswith("/api/states/") and path.removeprefix("/api/states/") in HA_DEVICES:
             entity = path.removeprefix("/api/states/")
-            attrs = {"friendly_name": HA_DEVICES[entity]}
+            attrs: dict = {"friendly_name": HA_DEVICES[entity]}
+            if entity.startswith("light."):
+                attrs["supported_color_modes"] = ["brightness"]
             return httpx.Response(
                 200, json={"entity_id": entity, "state": "on", "attributes": attrs}
             )
         m = re.match(r"^/api/services/(light|switch|fan)/(turn_on|turn_off|toggle)$", path)
         if m:
-            entities = json.loads(request.content or b"{}").get("entity_id")
-            self.calls.append(f"POST /home/{m[2]} {entities}")
+            body = json.loads(request.content or b"{}")
+            dim = f" {body['brightness_pct']}%" if "brightness_pct" in body else ""
+            self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}")
             return httpx.Response(200, json=[])
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
