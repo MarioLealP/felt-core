@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from felt_core import db, ender, phone
+from felt_core import db, ender, local_llm, phone
 from felt_core.config import FeltConfig
 
 
@@ -52,7 +52,7 @@ def said(monkeypatch):
     """Desk lines; felt-llm down unless a test says otherwise (the plain lines)."""
 
     async def llm_down(*a, **kw):
-        raise ender.local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailable("down")
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     lines: list[str] = []
@@ -182,7 +182,7 @@ async def test_ha_unconfigured(tmp_path):
 def test_prompt_carries_the_facts():
     s = ender.snapshot_from({"file": "Cube.gcode", "elapsed": "687", "message": "Filament runout"})
     done = ender.build_prompt("complete", s)
-    assert 'finished printing "Cube"' in done and "11m" in done and "own voice" in done
+    assert 'finished printing "Cube"' in done and "11m" in done
     assert 'Klipper says: "Filament runout"' in ender.build_prompt("paused", s)
     assert "error" in ender.build_prompt("error", s)
     assert "cancelled" in ender.build_prompt("cancelled", ender.snapshot_from({}))

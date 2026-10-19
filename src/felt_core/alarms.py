@@ -21,7 +21,28 @@ from felt_core.db import (
     save_alarm,
     save_message,
 )
+from felt_core.her_line import her_line
 from felt_core.notify import notify
+
+_LATE_S = 120  # past this, felt-core was down at alarm time: she says it's late
+
+
+def plain_alarm(label: str) -> str:
+    """Pure: the line when felt-llm can't word it."""
+    return f"Alarm: {label}" if label else "Alarm"
+
+
+def alarm_facts(label: str, fire_at: datetime, now: datetime) -> str:
+    """Pure: what her model gets for an alarm going off."""
+    what = (
+        f"Mario's alarm is going off now, to remind him: \"{label}\" - say what it's for."
+        if label
+        else "Mario's alarm is going off now."
+    )
+    if (now - fire_at).total_seconds() > _LATE_S:
+        what += f" It was set for {fire_at:%H:%M} but you were offline then, so it's late."
+    return what
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +63,7 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
             alarm_id,
             fire_at,
         )
-    text = f"Alarm: {label}" if label else "Alarm"
+    text = await her_line(config, alarm_facts(label, fire_at, datetime.now()), plain_alarm(label))
     save_message(
         config.db_path, APP_SESSION, "assistant", text, kind=ALARM, source_ref=f"alarm:{alarm_id}"
     )

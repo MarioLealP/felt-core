@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import pytest
 from conftest import load_plugin_module
 
-from felt_core import appointment_hold, ha_calendar
+from felt_core import appointment_hold, ha_calendar, local_llm
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
 
@@ -70,6 +70,11 @@ async def cal(monkeypatch):
     fake = FakeCalendar()
     monkeypatch.setattr(ha_calendar, "create_event", fake.create)
     monkeypatch.setattr(appointment_hold, "enqueue_proactive", lambda c, k, t: fake.lines.append(t))
+
+    async def llm_down(*a, **kw):  # the plain lines; test_her_words_for_the_no_place_add has hers
+        raise local_llm.LocalLLMUnavailable("down")
+
+    monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     yield fake
     appointment_hold.claim()  # nothing left held between tests
 
@@ -267,3 +272,19 @@ def test_no_place_answers(answer, none):
 def test_read_back_format():
     start = datetime(2026, 10, 20, 11, 0, tzinfo=ha_calendar.TZ)
     assert appointment_hold.when(start) == "Tuesday 20 October, 11:00"
+
+
+async def test_her_words_for_the_no_place_add(monkeypatch, tmp_path, cal):
+    prompts: list[str] = []
+
+    async def her(messages, config, *, include_facts):
+        prompts.append(messages[-1]["content"])
+        return "Dentist's in, no place though - you went quiet on me."
+
+    monkeypatch.setattr("felt_core.brain.replies.local_reply", her)
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle(DENTIST, ctx)
+    await appointment_hold.add_unanswered(ctx.config)
+    assert cal.lines == ["Dentist's in, no place though - you went quiet on me."]
+    assert '"dentist"' in prompts[0] and "without a place" in prompts[0]

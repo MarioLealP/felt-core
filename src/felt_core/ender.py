@@ -22,8 +22,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from felt_core import db, local_llm, phone
+from felt_core import db, phone
 from felt_core.config import FeltConfig
+from felt_core.her_line import her_line
 from felt_core.proactive import enqueue_proactive
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ def event_for(prev: str | None, cur: str) -> str | None:
 
 
 def build_prompt(event: str, s: Snapshot) -> str:
-    """Pure: the facts for her model - she words it."""
+    """Pure: the facts for her model (her_line) - she words it."""
     name = f' "{job_name(s.file)}"' if s.file else ""
     if event == "complete":
         took = f" It took {duration(s.elapsed_s)}." if s.elapsed_s else ""
@@ -196,20 +197,12 @@ def build_prompt(event: str, s: Snapshot) -> str:
     else:
         why = f' Klipper says: "{s.message}".' if s.message else ""
         what = f"Mario's 3D printer (the Ender) paused while printing{name}.{why}"
-    return f"{what} Tell him, in your own voice - one short sentence. Don't invent details."
+    return what
 
 
 async def phrase(config: FeltConfig, event: str, s: Snapshot) -> str:
     """Her line for an event; the plain one if felt-llm can't answer."""
-    from felt_core.brain.replies import local_reply
-
-    try:
-        line = await local_reply(
-            [{"role": "user", "content": build_prompt(event, s)}], config, include_facts=False
-        )
-    except local_llm.LocalLLMUnavailable:
-        line = ""
-    return line.strip(" \n\"'") or line_for(event, s)
+    return await her_line(config, build_prompt(event, s), line_for(event, s))
 
 
 def line_for(event: str, s: Snapshot) -> str:
