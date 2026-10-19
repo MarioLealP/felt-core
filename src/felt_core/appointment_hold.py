@@ -17,6 +17,7 @@ from datetime import datetime
 
 from felt_core import ha_calendar
 from felt_core.config import FeltConfig
+from felt_core.her_line import her_line
 from felt_core.proactive import enqueue_proactive
 
 logger = logging.getLogger(__name__)
@@ -109,9 +110,18 @@ async def _add_and_say(config: FeltConfig, held: dict) -> None:
     proactive line either way."""
     title, at = held["summary"], when(held["start"])
     if await add(config, held, None):
-        line = f"Added {title}, {at}, no place."
+        facts = (
+            f'You asked Mario where "{title}" ({at}) is and he didn\'t answer, so you added it '
+            "to his calendar without a place - say it's in, and that it has no place."
+        )
+        line = await her_line(config, facts, f"Added {title}, {at}, no place.")
     else:
-        line = f"I couldn't add {title} ({at}) to your calendar - can you tell me again?"
+        facts = (
+            f'You tried to add "{title}" ({at}) to Mario\'s calendar and it failed - ask him '
+            "to tell you again."
+        )
+        fallback = f"I couldn't add {title} ({at}) to your calendar - can you tell me again?"
+        line = await her_line(config, facts, fallback)
     enqueue_proactive(config, "calendar", line)
 
 
