@@ -51,6 +51,30 @@ class Case:
 
 
 ANY_PLAYER_WRITE = ["POST /me/player/", "PUT /me/player/"]
+HOME_WRITES = ["POST /ha-assist", "POST /home/"]
+
+# Home Assistant's built-in matcher (ha_assist.py), as the real one answered
+# these commands (its debug API, Felt's device in Bedroom, 2026-10-19); any
+# other text is "no match"
+HA_MATCHES = {
+    "turn off the shelf light": "action_done",
+    "turn on my shelf light": "action_done",
+    "turn off the chandelure": "action_done",
+    "turn front left on": "action_done",
+    "lights off": "action_done",
+    "set the chandelure to 30%": "action_done",
+    "turn off the dehumidifier": "action_done",
+    "put eggs and bread on my shopping list": "action_done",
+    "is the fan on": "query_answer",
+}
+# what the model path's smart_home_control sees (FELT_HA_ENTITIES' states)
+HA_DEVICES = {
+    "switch.shelf": "Shelf",
+    "switch.extraplug": "Dehumidifier Plug",
+    "light.chandelure": "Chandelure",
+    "light.yeelight_colorb_0x1be53fa1": "Front Left",
+    "fan.core_300s_series": "Air Purifier",
+}
 PLAY_NOW = ["POST /me/player/queue", "POST /me/player/next"]
 
 CASES: list[Case] = [
@@ -106,10 +130,43 @@ CASES: list[Case] = [
     Case("what time is my alarm set for tomorrow", [], [], "phone", ("list_alarms",)),
     # the shopping list: Home Assistant's todo list (fake - the real one stays untouched)
     Case("add milk to the shopping list", ["POST /todo/add_item"], note="shop"),
-    Case("put eggs and bread on my shopping list", ["POST /todo/add_item"], note="shop"),
+    # HA's matcher adds it (as one item - HA's own sentence, like the old bug)
+    Case(
+        "put eggs and bread on my shopping list",
+        ["POST /ha-assist put eggs and bread on my shopping list"],
+        note="shop",
+    ),
     Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
     Case("what's on my shopping list?", [], [], "shop", ("shopping_list",)),
     Case("take oat milk off the shopping list", ["POST /todo/remove_item"], note="shop"),
+    # home: plain commands go to HA's matcher (ha_assist), the rest to the model
+    Case("turn off the shelf light", ["POST /ha-assist turn off the shelf light"], note="home"),
+    Case(
+        "Felt, turn off the chandelure please",
+        ["POST /ha-assist turn off the chandelure"],
+        note="home",
+    ),
+    Case("lights off", ["POST /ha-assist lights off"], note="home"),
+    Case(
+        "turn on my shelf light please :)", ["POST /ha-assist turn on my shelf light"], note="home"
+    ),
+    Case("set the chandelure to 30%", ["POST /ha-assist set the chandelure to 30%"], note="home"),
+    Case("turn off the dehumidifier", ["POST /ha-assist turn off the dehumidifier"], note="home"),
+    Case("turn front left on, thanks!", ["POST /ha-assist turn front left on"], note="home"),
+    Case("is the fan on?", [], note="home"),
+    # HA doesn't match these: her model and smart_home_control do
+    Case("could you please turn the lights back off", None, [], "home", ("smart_home_control",)),
+    Case(
+        "turn off the shelf light and tell me a joke about it",
+        None,
+        [],
+        "home",
+        ("smart_home_control",),
+    ),
+    Case("are the lights still on", [], [], "home", ("smart_home_control",)),
+    # not commands: nothing switched
+    Case("can you turn around?", None, HOME_WRITES, "home"),
+    Case("is the server on fire?", None, HOME_WRITES, "home"),
     # reminders -> calendar events the phone notifies for (WP-46)
     Case("remind me friday at 3pm to call the dentist", ["POST /calendar/reminder"], note="remind"),
     # short and relative: a labelled phone timer rings just the same
@@ -237,6 +294,29 @@ class Recorder:
         calendar = self._calendar(request, path)
         if calendar is not None:
             return calendar
+        if path == "/api/conversation/process":
+            # HA's matcher: a match is done there - recorded, never reaching HA
+            text = json.loads(request.content or b"{}").get("text", "")
+            kind = HA_MATCHES.get(text)
+            if kind is None:
+                code = {"code": "no_intent_match"}
+                return httpx.Response(
+                    200, json={"response": {"response_type": "error", "data": code}}
+                )
+            self.calls.append(f"{'POST' if kind == 'action_done' else 'GET'} /ha-assist {text}")
+            speech = {"plain": {"speech": "Done" if kind == "action_done" else "Yes"}}
+            return httpx.Response(200, json={"response": {"response_type": kind, "speech": speech}})
+        if path.startswith("/api/states/") and path.removeprefix("/api/states/") in HA_DEVICES:
+            entity = path.removeprefix("/api/states/")
+            attrs = {"friendly_name": HA_DEVICES[entity]}
+            return httpx.Response(
+                200, json={"entity_id": entity, "state": "on", "attributes": attrs}
+            )
+        m = re.match(r"^/api/services/(light|switch|fan)/(turn_on|turn_off|toggle)$", path)
+        if m:
+            entities = json.loads(request.content or b"{}").get("entity_id")
+            self.calls.append(f"POST /home/{m[2]} {entities}")
+            return httpx.Response(200, json=[])
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
             action = (body.get("data") or {}).get("intent_action", "")
