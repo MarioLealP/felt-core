@@ -10,18 +10,13 @@ from felt_core.plugin import SkillResult
 
 name = "poe2_wiki"
 description = (
-    "Looks up Path of Exile 2 game knowledge in the PoE2 wiki: what a skill, "
-    "support gem, unique item, keystone, passive, mechanic, boss or quest does, "
-    "how something works, or whether something fits a build. Returns wiki "
-    "passages for you to answer from. Use this for any PoE2 'what does X do' / "
-    "'how does Y work' / 'is Z good' question - NOT web_search, and NOT "
-    "poe_price_check (that one is only for what an item costs)."
+    "Path of Exile 2 wiki: what a skill, gem, item, passive, mechanic or boss does, how "
+    "something works, or if it fits a build. Not prices (poe_price_check), not "
+    "web_search."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "query": {"type": "string", "description": "The PoE2 question or term to look up"}
-    },
+    "properties": {"query": {"type": "string", "description": "The question or term"}},
     "required": ["query"],
 }
 

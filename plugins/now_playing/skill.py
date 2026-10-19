@@ -15,10 +15,7 @@ from felt_core.plugin import SkillResult
 from felt_core.spotify_client import format_track_name, get_currently_playing
 
 name = "now_playing"
-description = (
-    "Answers what song is currently playing on Spotify right now, e.g. 'what's this "
-    "song?' or 'what are you listening to'. Read-only - does not start or control playback."
-)
+description = "What song is playing right now ('what's this song?'). Read-only."
 parameters_schema = {"type": "object", "properties": {}}
 
 

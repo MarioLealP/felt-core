@@ -19,15 +19,11 @@ from felt_core.plugin import SkillResult
 
 name = "search_documents"
 description = (
-    "Searches Mario's personal documents (his Google Drive — PDFs, docs, spreadsheets, "
-    "and his Obsidian vault) to answer a question or find a specific file, e.g. "
-    "'find that PDF about X' or 'what's in my annual calendar spreadsheet'."
+    "Searches Mario's own documents (Google Drive, Obsidian vault): find a file or answer from it."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "question": {"type": "string", "description": "What to search for or ask about"},
-    },
+    "properties": {"question": {"type": "string", "description": "What to find or ask"}},
     "required": ["question"],
 }
 

@@ -28,18 +28,14 @@ from felt_core.plugin import SkillResult
 
 name = "set_alarm"
 description = (
-    "Sets an alarm for a specific time of day (e.g. '7:30am', 'tomorrow at 9am'), "
-    "not a duration — rings on the phone directly when possible, otherwise sends a "
-    "push notification when it fires."
+    "Sets an alarm for a time of day ('7:30am', 'tomorrow at 9') on Mario's phone. Not a "
+    "countdown (set_timer)."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "time": {
-            "type": "string",
-            "description": "The time of day the alarm should fire, e.g. '7:30am' or 'tomorrow at 9am'",
-        },
-        "label": {"type": "string", "description": "What the alarm is for"},
+        "time": {"type": "string", "description": "The time, as Mario said it"},
+        "label": {"type": "string", "description": "What it's for"},
     },
     "required": ["time"],
 }

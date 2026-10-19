@@ -6,10 +6,8 @@ from felt_core.plugin import SkillResult
 
 name = "get_recent_alerts"
 description = (
-    "Checks Felt's own locally-stored log of ntfy alerts/notifications from "
-    "the home server. Use this, NOT delegate_research, for any question "
-    "mentioning 'alerts', 'notifications', 'ntfy', or 'anything wrong' with "
-    "the server/system — this is local data, not a web search."
+    "Recent alerts from Mario's server and systems (ntfy): 'any alerts?', 'anything wrong"
+    " with the server?'."
 )
 parameters_schema = {"type": "object", "properties": {}}
 

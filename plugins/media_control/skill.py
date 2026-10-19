@@ -25,24 +25,29 @@ from felt_core.spotify_client import (
 
 name = "media_control"
 description = (
-    "Controls the music already playing on Spotify: pause, resume, skip to the next song, "
-    "go back, restart the song, set the volume or turn it up/down, or save the current song "
-    "to Mario's library. NOT for starting new music by name (that's play_music)."
+    "Controls the music already playing: pause, resume, skip, back, restart, volume, save"
+    " the song. Starting music by name: play_music."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
-            "description": (
-                "'pause', 'resume', 'play_pause', 'next', 'previous', 'restart', 'volume', "
-                "'louder', 'quieter' or 'save'"
-            ),
+            "description": "What to do",
+            "enum": [
+                "pause",
+                "resume",
+                "play_pause",
+                "next",
+                "previous",
+                "restart",
+                "volume",
+                "louder",
+                "quieter",
+                "save",
+            ],
         },
-        "level": {
-            "type": "number",
-            "description": "volume 0-100 (or 0.0-1.0), only with the volume action",
-        },
+        "level": {"type": "number", "description": "Volume 0-100, only with 'volume'"},
     },
 }
 

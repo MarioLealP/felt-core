@@ -23,20 +23,11 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "list_calendar_events"
-description = (
-    "Lists what's on Mario's calendar for a given day — defaults to today if no "
-    "day is mentioned. Covers all of his calendars, not just one."
-)
+description = "What's on Mario's calendars on a day (default today)."
 parameters_schema = {
     "type": "object",
     "properties": {
-        "day": {
-            "type": "string",
-            "description": (
-                "Which day to check, exactly as phrased ('today', 'tomorrow', 'friday', "
-                "a specific date). Never reformat or invent a value. Defaults to today."
-            ),
-        },
+        "day": {"type": "string", "description": "The day, as Mario said it (default today)"}
     },
 }
 

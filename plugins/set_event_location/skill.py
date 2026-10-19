@@ -31,19 +31,13 @@ from felt_core.plugin import SkillResult
 
 name = "set_event_location"
 description = (
-    "Sets where the appointment Mario just gave you is - his answer after you asked where "
-    "it is, e.g. 'Clínica Sorriso in Gaia', 'at Hospital da Luz'. If he says there's no "
-    "place ('none', 'online', 'doesn't matter'), call it with place 'none'. Only for that "
-    "appointment; for a new appointment use create_calendar_event."
+    "Where the appointment you just asked about is - Mario's answer, e.g. 'Clínica "
+    "Sorriso in Gaia'. No place ('none', 'online', 'doesn't matter'): place 'none'. A new"
+    " appointment: create_calendar_event."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "place": {
-            "type": "string",
-            "description": "Where it is - a place name and/or address, exactly as Mario said it.",
-        },
-    },
+    "properties": {"place": {"type": "string", "description": "As mario said it"}},
     "required": ["place"],
 }
 

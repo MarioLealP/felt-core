@@ -5,7 +5,7 @@ from felt_core.phone import PhoneUnavailable, battery
 from felt_core.plugin import SkillResult
 
 name = "get_phone_battery"
-description = "Gets the current battery level of Mario's phone."
+description = "Mario's phone battery level."
 parameters_schema = {"type": "object", "properties": {}}
 
 

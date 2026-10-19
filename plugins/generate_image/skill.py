@@ -37,24 +37,17 @@ from felt_core.plugin import SkillResult
 
 name = "generate_image"
 description = (
-    "Generates a new image from a text description using local Stable "
-    "Diffusion (ComfyUI on the Nitro5) — for when Mario wants something "
-    "MADE, not found. Never use this for 'what does X look like' or "
-    "finding an existing/real photo (that's web_search); only for "
-    "'draw/generate/make/create an image of...' requests."
+    "Draws a new image from a description ('draw / generate an image of...'). Not for "
+    "finding real photos (web_search)."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "prompt": {"type": "string", "description": "What to draw, as a plain description."},
+        "prompt": {"type": "string", "description": "What to draw"},
         "style": {
             "type": "string",
+            "description": "sd15 fast (default), sdxl better quality, animexld anime",
             "enum": ["sd15", "sdxl", "animexld"],
-            "description": (
-                "sd15 = fast (~20s, 512x512, general purpose). sdxl = higher "
-                "quality (~90s, 1024x1024, general purpose). animexld = "
-                "anime/illustration style (Animagine XL). Default sd15."
-            ),
         },
     },
     "required": ["prompt"],

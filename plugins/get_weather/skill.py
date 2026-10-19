@@ -45,21 +45,16 @@ _cache: dict[tuple, tuple[dict, float]] = {}
 
 name = "get_weather"
 description = (
-    "Gets the weather at the configured home location: current conditions, or "
-    "the forecast for any day or date within the next couple weeks (today, "
-    "tomorrow, a weekday name, 'in N days', the weekend, or a specific date). "
-    "Use this, NOT web_search, for any weather question."
+    "Weather at home: now, or the forecast for a day up to two weeks out. For any weather"
+    " question (not web_search)."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "day": {
             "type": "string",
-            "description": (
-                "'now' (default) for current conditions, or a day/date reference "
-                "such as 'today', 'tomorrow', 'weekend', 'next tuesday', 'in 3 days', "
-                "or an explicit date"
-            ),
+            "description": "'now' (default), 'today', 'tomorrow', 'weekend', "
+            "a weekday, 'in 3 days' or a date",
         }
     },
 }

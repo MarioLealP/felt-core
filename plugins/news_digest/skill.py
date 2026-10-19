@@ -15,17 +15,12 @@ from felt_core.plugin import SkillResult
 
 name = "news_digest"
 description = (
-    "Gets recent headlines from an RSS/Atom feed. ALWAYS use this, never "
-    "web_search, whenever the message itself contains a URL (a string with "
-    "'http' or a domain like 'example.com/path') — that URL IS the feed to "
-    "check. With no URL in the message, use web_search instead for a general "
-    "news question."
+    "Headlines from a feed - only when the message contains a URL. Other news questions: "
+    "web_search."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "feed_url": {"type": "string", "description": "A specific feed URL to check (optional)"}
-    },
+    "properties": {"feed_url": {"type": "string", "description": "The feed URL"}},
 }
 
 _ENTRIES_PER_FEED = 5

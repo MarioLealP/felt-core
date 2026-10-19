@@ -23,19 +23,17 @@ from felt_core.spotify_client import (
 
 name = "play_music"
 description = (
-    "Starts playing a specific song or artist by name on Spotify, e.g. 'play Bohemian "
-    "Rhapsody' or 'play some Daft Punk' - or, with when=queue, only adds it to the queue "
-    "('queue X', 'add X to the queue', 'play X next'). For transport control on whatever's "
-    "already playing (pause, skip, volume), use media_control instead."
+    "Plays a song or artist by name ('play some Daft Punk'); when=queue only queues it "
+    "('queue X', 'play X next'). Pause, skip, volume: media_control."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "query": {"type": "string", "description": "The song and/or artist to play"},
+        "query": {"type": "string", "description": "Song and/or artist"},
         "when": {
             "type": "string",
+            "description": "now (default) or queue",
             "enum": ["now", "queue"],
-            "description": "now = play it right away (default); queue = add it to the queue",
         },
     },
     "required": ["query"],

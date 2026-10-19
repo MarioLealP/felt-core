@@ -20,17 +20,17 @@ from felt_core.plugin import SkillResult
 
 name = "smart_home_control"
 description = (
-    "Turns a smart-home device (light, plug, fan) on or off, or checks whether it's "
-    "currently on — by name or kind, e.g. 'turn on the chandelure', 'is the fan on', "
-    "'turn off the lights' (plural or 'all' = every one of that kind)."
+    "Turns a light, plug or fan on or off, or checks if it's on, e.g. 'turn off the "
+    "lights' (plural = all of that kind)."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "device": {"type": "string", "description": "The device's name, as Mario would say it"},
+        "device": {"type": "string", "description": "Its name, as Mario says it"},
         "action": {
             "type": "string",
-            "description": "'on', 'off', or 'status' (default if omitted)",
+            "description": "Default status",
+            "enum": ["on", "off", "status"],
         },
     },
     "required": ["device"],

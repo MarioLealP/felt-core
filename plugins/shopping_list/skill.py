@@ -9,15 +9,16 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "shopping_list"
-description = (
-    "Adds an item to the shopping list, removes one, or reads back what's currently "
-    "on it. Use this for a running list of things to buy — not remember_fact."
-)
+description = "The shopping list: add, remove or read items (not remember_fact)."
 parameters_schema = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "description": "'add', 'remove', or 'list' (default)"},
-        "item": {"type": "string", "description": "The item to add or remove"},
+        "action": {
+            "type": "string",
+            "description": "Default list",
+            "enum": ["add", "remove", "list"],
+        },
+        "item": {"type": "string", "description": "The item"},
     },
 }
 

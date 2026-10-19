@@ -15,17 +15,17 @@ from felt_core.self_memory import LISBON
 
 name = "diary_recall"
 description = (
-    "Mario asking Felt to recall her own diary: 'what did I do yesterday', "
-    "'how was my week', 'what did we get up to', 'what's in your diary'. "
-    "NOT for anything else - not general memory/facts, not calendar events."
+    "Felt's diary of what Mario did: 'what did I do yesterday', 'how was my week'. Not "
+    "facts, not the calendar."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "range": {
             "type": "string",
-            "description": "one of: yesterday, week (default yesterday if unclear)",
-        },
+            "description": "Default yesterday",
+            "enum": ["yesterday", "week"],
+        }
     },
 }
 

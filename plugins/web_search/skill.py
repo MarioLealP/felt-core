@@ -12,16 +12,8 @@ from felt_core.plugin import SkillResult
 
 name = "web_search"
 description = (
-    "Searches the web for raw results/snippets on a general-knowledge topic "
-    "and returns them for you to read and answer from yourself. Stays fully "
-    "local (self-hosted search, no cloud LLM call) — use this first for "
-    "straightforward lookups. NOT the same as delegate_research (which asks "
-    "a cloud model to actually reason/synthesize) — only escalate to that if "
-    "these snippets genuinely aren't enough. NOT for weather (use "
-    "get_weather instead) or for Felt's own alerts (use get_recent_alerts). "
-    "For a general 'what's the news' or 'top headline' question with no "
-    "specific feed URL mentioned, use THIS, not news_digest — news_digest "
-    "is only for a specific, already-known feed URL."
+    "Searches the web and returns snippets to answer from. Not for weather (get_weather),"
+    " Felt's alerts (get_recent_alerts) or a feed URL (news_digest)."
 )
 parameters_schema = {
     "type": "object",

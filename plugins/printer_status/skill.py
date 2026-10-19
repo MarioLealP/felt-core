@@ -21,20 +21,10 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "printer_status"
-description = (
-    "Gets the current status of a printer — the 3D printer (Ender 3) or the HP document printer."
-)
+description = "Status of the 3D printer (Ender 3) or the HP printer."
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "printer": {
-            "type": "string",
-            "description": (
-                "Which printer, e.g. 'ender', '3d printer', 'hp', 'document printer' — "
-                "optional if only one is configured"
-            ),
-        }
-    },
+    "properties": {"printer": {"type": "string", "description": "'3d printer' or 'hp' (optional)"}},
 }
 
 

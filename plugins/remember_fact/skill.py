@@ -10,16 +10,12 @@ from felt_core.plugin import SkillResult
 
 name = "remember_fact"
 description = (
-    "Saves a durable fact that should be remembered across every future "
-    "conversation, not just this one — e.g. a stated preference, a "
-    "correction, a standing detail about the user. Only use this when the "
-    "user is clearly asking you to remember something long-term."
+    "Saves a fact for good (a preference, a correction, a standing detail) - only when "
+    "Mario clearly asks you to remember it."
 )
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "content": {"type": "string", "description": "The fact to remember, in plain words"}
-    },
+    "properties": {"content": {"type": "string", "description": "The fact, in plain words"}},
     "required": ["content"],
 }
 

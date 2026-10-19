@@ -10,14 +10,18 @@ from felt_core.plugin import SkillResult
 
 name = "dj_mode"
 description = (
-    "DJ mode: Felt picks and queues Mario's music on Spotify herself ('be my DJ', 'DJ mode', "
-    "'DJ mode off'), and takes his feedback on the current song ('more like this', 'not "
-    "this'). For a specific song by name use play_music."
+    "DJ mode: Felt picks and queues Mario's music ('be my DJ', 'DJ mode off') and takes "
+    "feedback on the current song ('more like this', 'not this'). A specific song: "
+    "play_music."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "description": "'start', 'stop', 'more' or 'less'"},
+        "action": {
+            "type": "string",
+            "description": "start, stop, or feedback: more / less",
+            "enum": ["start", "stop", "more", "less"],
+        }
     },
 }
 

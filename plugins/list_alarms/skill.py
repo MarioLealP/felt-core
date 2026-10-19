@@ -11,7 +11,7 @@ from felt_core.phone import PhoneUnavailable, next_alarm
 from felt_core.plugin import SkillResult
 
 name = "list_alarms"
-description = "Says when Mario's next alarm is (on his phone) and any other alarms that are set."
+description = "When Mario's next alarm is, and any other alarms set."
 parameters_schema = {"type": "object", "properties": {}}
 
 
