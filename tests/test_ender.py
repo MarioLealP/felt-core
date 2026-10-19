@@ -49,6 +49,12 @@ def ha(monkeypatch):
 
 @pytest.fixture
 def said(monkeypatch):
+    """Desk lines; felt-llm down unless a test says otherwise (the plain lines)."""
+
+    async def llm_down(*a, **kw):
+        raise ender.local_llm.LocalLLMUnavailable("down")
+
+    monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     lines: list[str] = []
     monkeypatch.setattr(
         ender, "enqueue_proactive", lambda config, kind, text, **kw: lines.append(text)
@@ -171,3 +177,39 @@ async def test_ha_unconfigured(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "f.db"), ha_url=None)
     with pytest.raises(ender.EnderUnavailable):
         await ender.snapshot(config)
+
+
+def test_prompt_carries_the_facts():
+    s = ender.snapshot_from({"file": "Cube.gcode", "elapsed": "687", "message": "Filament runout"})
+    done = ender.build_prompt("complete", s)
+    assert 'finished printing "Cube"' in done and "11m" in done and "own voice" in done
+    assert 'Klipper says: "Filament runout"' in ender.build_prompt("paused", s)
+    assert "error" in ender.build_prompt("error", s)
+    assert "cancelled" in ender.build_prompt("cancelled", ender.snapshot_from({}))
+
+
+async def test_she_words_it_herself(tmp_path, ha, said, monkeypatch):
+    prompts: list[str] = []
+
+    async def her(messages, config, *, include_facts):
+        prompts.append(messages[-1]["content"])
+        return '"Your cube is done, go get it!"\n'
+
+    monkeypatch.setattr("felt_core.brain.replies.local_reply", her)
+    config = _config(tmp_path)
+    db.set_setting(config.db_path, "ender_last_state", "printing")
+    ha.states = {"state": "complete", "file": "Cube.gcode"}
+    assert await ender.check(config) == "Your cube is done, go get it!"
+    assert said == ["Your cube is done, go get it!"]
+    assert 'finished printing "Cube"' in prompts[0]
+
+
+async def test_empty_reply_falls_back(tmp_path, ha, said, monkeypatch):
+    async def blank(*a, **kw):
+        return "  "
+
+    monkeypatch.setattr("felt_core.brain.replies.local_reply", blank)
+    config = _config(tmp_path)
+    db.set_setting(config.db_path, "ender_last_state", "printing")
+    ha.states = {"state": "cancelled"}
+    assert await ender.check(config) == "The Ender's print was cancelled."
