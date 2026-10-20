@@ -120,6 +120,42 @@ def _call():
     }
 
 
+# WP-65: the bare "it's done" openings (spike e2e, 2026-10-20)
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Set for 7:30.",
+        "All set for 7:30 tomorrow, sleep well.",
+        "Done. Milk's in there.",
+        "Done!",
+        "Milk's on there.",
+        "Okay, ringing it now.",
+        "Ringing your phone - listen for it.",
+        "Dimmed to the usual level.",
+    ],
+)
+def test_bare_done_claims(text):
+    assert claims_an_action(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What's on there?",
+        "It's on there already, you added it yesterday.",
+        "Done with that game yet?",
+        "Set for tomorrow? Sure, what time?",
+        "My ears are ringing after that concert.",
+        "There's a lot going on there.",
+        "The milk's gone off, I bet.",
+        "I'm all set for the weekend, honestly.",
+        "Fried rice! You've got everything for it.",
+    ],
+)
+def test_not_bare_done_claims(text):
+    assert not claims_an_action(text)
+
+
 def _registry(handled):
     async def handle(params, ctx):
         handled.append(params)

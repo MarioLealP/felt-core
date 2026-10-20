@@ -19,7 +19,7 @@ out of chat() and the API answers 503.
 import asyncio
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 
 import httpx
 
@@ -38,6 +38,7 @@ from felt_core.brain.replies import (
     skill_tools,
 )
 from felt_core.brain.result import ChatResult
+from felt_core.brain.streaming import ReplySpeaker, correction_note
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_current_screen_description,
@@ -240,6 +241,36 @@ def _skill_chat_result(
     )
 
 
+async def _reply_turn(
+    messages: list[dict],
+    config: FeltConfig,
+    speaker: ReplySpeaker | None,
+    *,
+    tools: list[dict] | None = None,
+    guard: bool = False,
+) -> local_llm.LocalReply:
+    """A felt-llm call that may be her answer: streamed through the
+    speaker when chat_streamed() is running the turn (WP-65), else the
+    plain call."""
+    async with metrics.timed("reply", route="local", model=config.local_llm_model):
+        if speaker is None:
+            return await local_llm.chat(
+                messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config
+            )
+        return await speaker.turn(
+            messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, guard=guard, config=config
+        )
+
+
+def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
+    """The reply as she said it (with anything already let out in front,
+    WP-65), written to the history - once per turn, at the end."""
+    if speaker is not None:
+        reply = speaker.full_reply(reply)
+    save_message(config.db_path, session_id, "assistant", reply)
+    return reply
+
+
 def _router_context(history: list[dict]) -> router.Context:
     previous = next((m.get("content") for m in reversed(history) if m.get("role") == "user"), None)
     return router.Context(
@@ -256,6 +287,7 @@ async def _chat_local(
     tone: str | None,
     registry: dict[str, LoadedSkill],
     history: list[dict],
+    speaker: ReplySpeaker | None = None,
 ) -> ChatResult:
     """One felt-llm call carries the persona, the history, the message and
     every skill as a native tool. A plain reply comes back as text; a tool
@@ -283,17 +315,15 @@ async def _chat_local(
                 reply = await phrase_skill_result(
                     message, f"Home Assistant did it. It says: {done}", history, config, tone
                 )
-            save_message(config.db_path, session_id, "assistant", reply)
-            return ChatResult(reply=reply)
+            return ChatResult(reply=_said(config, session_id, reply, speaker))
     call = fast_call
     first: local_llm.LocalReply | None = None
     tool_call: dict | None = None
+    claimed = False
     if fast_call is None:
-        async with metrics.timed("reply", route="local", model=config.local_llm_model):
-            first = await local_llm.chat(
-                prefix, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config
-            )
+        first = await _reply_turn(prefix, config, speaker, tools=tools, guard=True)
         if not first.tool_calls and claims_a_tool_use(first.text):
+            claimed = True
             # FELT-108: she said she'd look it up ("pulling up the wiki...")
             # or do it ("turning the shelf light off") but called nothing.
             # Ask again with a tool call required, so the claim is true or
@@ -330,8 +360,10 @@ async def _chat_local(
     precompute = _weather_fast_line(call)
     if precompute is not None:
         logger.info("weather fast path: serving the precomputed line, no skill/phrasing calls")
-        save_message(config.db_path, session_id, "assistant", precompute["line"])
-        return ChatResult(reply=precompute["line"], animation_tag=precompute["animation_tag"])
+        return ChatResult(
+            reply=_said(config, session_id, precompute["line"], speaker),
+            animation_tag=precompute["animation_tag"],
+        )
 
     if call is None:
         # No tool (or a guard dropped the model's pick): the text is the
@@ -339,36 +371,35 @@ async def _chat_local(
         # without tools.
         reply = first.text.strip() if first is not None else ""
         if not reply:
-            async with metrics.timed("reply", route="local", model=config.local_llm_model):
-                plain = await local_llm.chat(prefix, max_tokens=_REPLY_MAX_TOKENS, config=config)
+            plain = await _reply_turn(prefix, config, speaker)
             reply = plain.text.strip()
-        save_message(config.db_path, session_id, "assistant", reply)
-        return ChatResult(reply=reply)
+        return ChatResult(reply=_said(config, session_id, reply, speaker))
 
     skill_name = call[0]
     result, tool_output = await _run_skill_call(call, registry, config, message)
 
     reply = ""
     if tool_call is not None and first is not None:
+        tool_message = _tool_result_instruction(tool_output)
+        if claimed and speaker is not None and speaker.said:
+            # the guard caught the claim only after part of it was said
+            tool_message += "\n\n" + correction_note(speaker.said_text())
         followup = prefix + [
             {"role": "assistant", "content": first.text, "tool_calls": [tool_call]},
             {
                 "role": "tool",
                 "tool_call_id": str(tool_call.get("id") or ""),
-                "content": _tool_result_instruction(tool_output),
+                "content": tool_message,
             },
         ]
-        async with metrics.timed("reply", route="local", model=config.local_llm_model):
-            second = await local_llm.chat(
-                followup, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config
-            )
+        second = await _reply_turn(followup, config, speaker, tools=tools)
         reply = second.text.strip()
     if not reply:
         # The presence fast path (no model turn yet), or an empty phrasing
         # call: the shared plain phrasing step.
         async with metrics.timed("reply", route="local", model=config.local_llm_model):
             reply = await phrase_skill_result(message, tool_output, history, config, tone)
-    save_message(config.db_path, session_id, "assistant", reply)
+    reply = _said(config, session_id, reply, speaker)
     return _skill_chat_result(reply, result, skill_name, registry)
 
 
@@ -412,6 +443,7 @@ async def chat(
     session_id: str = "default",
     tone: str | None = None,
     answering: str | None = None,
+    speaker: ReplySpeaker | None = None,
 ) -> ChatResult:
     # Checked before anything else, including history/facts loading — a
     # bare "yes" answering the proactive "want me to summarize it?" ping
@@ -457,4 +489,32 @@ async def chat(
 
     he_is_here(config)
 
-    return await _chat_local(message, config, session_id, tone, registry, history)
+    return await _chat_local(message, config, session_id, tone, registry, history, speaker)
+
+
+async def chat_streamed(
+    message: str,
+    config: FeltConfig,
+    session_id: str = "default",
+    tone: str | None = None,
+    answering: str | None = None,
+) -> AsyncIterator[str | ChatResult]:
+    """chat(), streamed (WP-65): yields her reply in sentence chunks (as
+    written, not yet stripped for TTS) the moment each one is complete, and
+    finally the whole ChatResult - the same one chat() would return, its
+    `reply` being everything the chunks said. Same turn, same tools, guards
+    and history (written once, at the end); only the felt-llm calls that can
+    be her answer stream. Raises LocalLLMUnavailable like chat(), possibly
+    after some chunks."""
+    speaker = ReplySpeaker(config)
+    turn = asyncio.create_task(chat(message, config, session_id, tone, answering, speaker))
+    turn.add_done_callback(lambda _: speaker.chunks.put_nowait(None))
+    try:
+        while (chunk := await speaker.chunks.get()) is not None:
+            yield chunk
+        result = turn.result()
+        for chunk in speaker.rest(result.reply):
+            yield chunk
+        yield result
+    finally:
+        turn.cancel()

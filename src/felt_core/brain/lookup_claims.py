@@ -74,13 +74,29 @@ _MUSIC = re.compile(
 )
 
 
+# WP-65 (streamed replies, 2026-10-20): the bare "it's done" openings the
+# spike's IQ2_M model gave with no tool call (e2e: "Done. Milk's in there",
+# "Set for 7:30", "ringing it now", "Dimmed to the usual level"). Opening
+# only, and "what's on there?" / "it's on there" (an answer, not a claim)
+# don't count.
+_LEAD = r"^\W*(?:(?:ok(?:ay)?|sure|got it|alright|done|there)\W+)*"
+_DONE = re.compile(
+    r"^\W*done\s*[.!]"
+    rf"|{_LEAD}(?:all\s+)?set for\s+\d"
+    rf"|{_LEAD}(?!(?:what|who|where|how|that|it|there)'s)\w+'s (?:in|on) (?:there|the list)\b"
+    r"|\bringing (?:it|your phone|the phone|you)\b"
+    rf"|{_LEAD}(?:dimmed|brightened|lowered|raised)\b[^.!?]{{0,20}}?\bto\b",
+    re.IGNORECASE,
+)
+
+
 def claims_a_lookup(text: str) -> bool:
     return bool(_CLAIM.search((text or "")[:_OPENING_CHARS]))
 
 
 def claims_an_action(text: str) -> bool:
     opening = (text or "")[:_OPENING_CHARS]
-    return bool(_ACTION.search(opening) or _MUSIC.search(opening))
+    return bool(_ACTION.search(opening) or _MUSIC.search(opening) or _DONE.search(opening))
 
 
 def claims_a_tool_use(text: str) -> bool:

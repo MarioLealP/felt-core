@@ -61,7 +61,7 @@ def test_chat_context_is_the_conversation_plus_a_note_of_her_lines(tmp_path, mon
         _say(db, f"remark {i}", REMARK)
     seen = {}
 
-    async def fake_local(message, config, session_id, tone, registry, history):
+    async def fake_local(message, config, session_id, tone, registry, history, speaker=None):
         seen["history"] = history
         return orchestrator.ChatResult(reply="ok")
 

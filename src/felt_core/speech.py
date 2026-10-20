@@ -111,6 +111,77 @@ def speech_chunks(text: str, first_chunk_chars: int = 40, min_chunk_chars: int =
     return chunks
 
 
+class SpeechChunker:
+    """speech_chunks() for text that arrives in pieces (WP-65, streamed
+    replies): `feed()` each piece as felt-llm writes it and get back the
+    chunks that just became complete, then `close()` for the rest. Same
+    sentence ends, abbreviations and size rules as speech_chunks - with two
+    differences that come from not knowing the end yet:
+    - a sentence end only counts once the next character is in (the "." of
+      "3.5" might still be followed by "5");
+    - the first chunk goes out the moment it's complete (that's the point:
+      she starts talking), so a short leftover at the very end can't join
+      it and becomes its own last chunk. Later chunks are held back by one,
+      so a short leftover joins the last one exactly like speech_chunks.
+    Runs on the reply as written (newlines count as sentence ends); the API
+    strips each chunk for TTS."""
+
+    def __init__(self, first_chunk_chars: int = 40, min_chunk_chars: int = 25) -> None:
+        self.first_chunk_chars = first_chunk_chars
+        self.min_chunk_chars = min_chunk_chars
+        self.text = ""
+        self._start = 0  # where the sentence still being written starts
+        self._buffer = ""  # complete sentences, not yet a chunk
+        self._held: str | None = None  # the latest chunk after the first
+        self._first_out = False
+
+    def feed(self, piece: str) -> list[str]:
+        self.text += piece
+        out: list[str] = []
+        for m in _SENTENCE_END_RE.finditer(self.text, self._start):
+            if m.group() != "\n" and m.end() >= len(self.text):
+                break  # the run of ".!?" or the closing quotes may go on
+            if _is_abbreviation(self.text, m):
+                continue
+            out += self._add(self.text[self._start : m.end()].strip())
+            self._start = m.end()
+        return out
+
+    def close(self, final_text: str | None = None) -> list[str]:
+        """`final_text`: the reply as it finally stands, if it differs from
+        what was fed (felt-llm hit max_tokens and the reply was ended at its
+        last full sentence) - only the not-yet-chunked part is taken from it."""
+        if final_text is not None and final_text.startswith(self.text[: self._start]):
+            self.text = final_text
+        out = self._add(self.text[self._start :].strip())
+        self._start = len(self.text)
+        if self._buffer:  # a short leftover joins the last chunk
+            if self._held is not None:
+                self._held = f"{self._held} {self._buffer}"
+            else:
+                out.append(self._buffer)
+            self._buffer = ""
+        if self._held is not None:
+            out.append(self._held)
+            self._held = None
+        return out
+
+    def _add(self, sentence: str) -> list[str]:
+        if not sentence:
+            return []
+        self._buffer = f"{self._buffer} {sentence}" if self._buffer else sentence
+        threshold = self.min_chunk_chars if self._first_out else self.first_chunk_chars
+        if len(self._buffer) < threshold:
+            return []
+        chunk, self._buffer = self._buffer, ""
+        if not self._first_out:
+            self._first_out = True
+            return [chunk]
+        out = [self._held] if self._held is not None else []
+        self._held = chunk
+        return out
+
+
 def tts_request_body(text: str, emotion: str | None = None) -> dict[str, str]:
     """The JSON body for felt-voice's /v1/tts. `emotion` (WP-54) is only
     sent when felt-core has one - chat replies don't, and speak neutrally."""
