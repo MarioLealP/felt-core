@@ -3,13 +3,14 @@ reaching felt-voice. felt-voice is faked by replacing `api.httpx.AsyncClient`
 (after the test's own ASGI client exists)."""
 
 import asyncio
+from dataclasses import dataclass, field
 from urllib.parse import quote, unquote
 
 import httpx
 import pytest
 
 import felt_core.api as api
-from felt_core import reply_stream, tts_cache
+from felt_core import local_llm, reply_stream, tts_cache
 from felt_core.brain.result import ChatResult
 
 _LONG_REPLY = (
@@ -27,6 +28,15 @@ class _FakeResponse:
         pass
 
 
+class _FakeSTT(_FakeResponse):
+    def __init__(self, text: str):
+        super().__init__(b"")
+        self.text = text
+
+    def json(self):
+        return {"text": self.text}
+
+
 class _FakeVoice:
     """Records each /v1/tts body; `fail_on` makes a text raise."""
 
@@ -34,6 +44,7 @@ class _FakeVoice:
         self.bodies: list[dict] = []
         self.fail_on: set[str] = set()
         self.gate: asyncio.Event | None = None
+        self.heard = "what's for dinner"
 
     def client_class(self):
         voice = self
@@ -48,7 +59,10 @@ class _FakeVoice:
             async def __aexit__(self, *exc):
                 return False
 
-            async def post(self, url, *, json):
+            async def post(self, url, *, json: dict | None = None, files=None):
+                if url.endswith("/v1/stt"):
+                    return _FakeSTT(voice.heard)
+                assert json is not None
                 voice.bodies.append(json)
                 if voice.gate is not None and len(voice.bodies) > 1:
                     await voice.gate.wait()
@@ -201,3 +215,151 @@ async def test_voice_down_still_returns_her_text(env):
     assert r.headers["X-Voice"] == "unavailable"
     assert r.content == b""
     assert "X-Reply-Stream" not in r.headers
+
+
+# -- WP-65: protocol v2 (X-Accept-Stream: 2) -----------------------------------
+
+_V2 = {"X-Accept-Stream": "2"}
+_CHUNKS = [
+    "Fried rice! You've got everything for it.",
+    "Day-old rice is *actually* better, it fries without going mushy.",
+    "Soy sauce at the end.",
+]
+
+
+@dataclass
+class _Script:
+    """chat_streamed() faked: yields `chunks` (chunk 1 waits for `gate` if
+    set), then raises `error` or yields `result`."""
+
+    chunks: list[str] = field(default_factory=lambda: list(_CHUNKS))
+    result: ChatResult = field(
+        default_factory=lambda: ChatResult(reply=" ".join(_CHUNKS), animation_tag="emotion/happy")
+    )
+    gate: asyncio.Event | None = None
+    error: Exception | None = None
+    seen: list[str] = field(default_factory=list)
+
+
+@pytest.fixture
+def streamed(env, monkeypatch):
+    script = _Script()
+
+    async def fake(message, config, session_id="default", tone=None, answering=None):
+        script.seen.append(message)
+        for i, chunk in enumerate(script.chunks):
+            if i == 1 and script.gate is not None:
+                await script.gate.wait()
+            yield chunk
+        if script.error is not None:
+            raise script.error
+        yield script.result
+
+    monkeypatch.setattr(api, "chat_streamed", fake)
+    return script
+
+
+async def test_without_the_v2_header_nothing_changes(env, streamed):
+    client, _, _ = env
+    r = await client.post("/v1/text-chat", json={"message": "hi"})
+    assert r.headers["X-Reply-Chunks"].isdigit()
+    assert "X-Reply-Stream-Version" not in r.headers
+    assert streamed.seen == []
+
+
+async def test_v2_answers_with_chunk_zero_then_the_rest_as_it_comes(env, streamed):
+    client, voice, _ = env
+    streamed.gate = asyncio.Event()
+    r = await client.post("/v1/text-chat", json={"message": "dinner?"}, headers=_V2)
+
+    assert r.status_code == 200
+    assert r.headers["X-Reply-Stream-Version"] == "2"
+    assert r.headers["X-Reply-Chunks"] == "open"
+    assert unquote(r.headers["X-Reply-Text"]) == _CHUNKS[0]
+    assert r.content == b"WAV:" + _CHUNKS[0].encode()
+    assert "X-Animation-Tag" not in r.headers  # not known yet - see /v1/reply/{id}
+    sid = r.headers["X-Reply-Stream"]
+
+    # still writing: chunk 1 doesn't exist yet, the reply isn't done
+    assert (await client.get(f"/v1/reply/{sid}/chunk/1?timeout=1")).status_code == 408
+    assert (await client.get(f"/v1/reply/{sid}")).json() == {"done": False, "text": _CHUNKS[0]}
+
+    streamed.gate.set()
+    c1 = await client.get(f"/v1/reply/{sid}/chunk/1")
+    assert c1.status_code == 200
+    assert unquote(c1.headers["X-Chunk-Text"]) == _CHUNKS[1]
+    assert voice.bodies[1] == {"text": api.strip_for_tts(_CHUNKS[1])}  # stripped for TTS
+    assert (await client.get(f"/v1/reply/{sid}/chunk/2")).content == b"WAV:" + _CHUNKS[2].encode()
+    assert (await client.get(f"/v1/reply/{sid}/chunk/3")).status_code == 204
+    assert (await client.get(f"/v1/reply/{sid}")).json() == {
+        "done": True,
+        "text": " ".join(_CHUNKS),
+        "ui_action": None,
+        "animation_tag": "emotion/happy",
+        "emotion": None,
+    }
+    assert (await client.get("/v1/reply/nope")).status_code == 404
+
+
+async def test_v2_chunk_long_poll_waits_for_a_chunk_still_being_written(env, streamed):
+    client, _, _ = env
+    streamed.gate = asyncio.Event()
+    r = await client.post("/v1/text-chat", json={"message": "dinner?"}, headers=_V2)
+    sid = r.headers["X-Reply-Stream"]
+    poll = asyncio.create_task(client.get(f"/v1/reply/{sid}/chunk/1?timeout=10"))
+    await asyncio.sleep(0.05)
+    assert not poll.done()
+    streamed.gate.set()
+    assert (await poll).status_code == 200
+
+
+async def test_v2_reply_with_no_chunks_is_the_whole_response(env, streamed):
+    client, _, _ = env
+    streamed.chunks = []
+    streamed.result = ChatResult(reply="Okay.", animation_tag="emotion/happy")
+    r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
+    assert "X-Reply-Stream" not in r.headers
+    assert unquote(r.headers["X-Reply-Text"]) == "Okay."
+    assert unquote(r.headers["X-Animation-Tag"]) == "emotion/happy"
+
+
+async def test_v2_voice_down_still_returns_her_whole_text(env, streamed):
+    client, voice, _ = env
+    voice.fail_on = {_CHUNKS[0], " ".join(_CHUNKS).replace("*", "")}
+    r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
+    assert r.status_code == 200
+    assert r.headers["X-Voice"] == "unavailable"
+    assert unquote(r.headers["X-Reply-Text"]) == " ".join(_CHUNKS)
+    assert "X-Reply-Stream" not in r.headers
+
+
+async def test_v2_felt_llm_down_before_a_word_is_503(env, streamed):
+    client, _, _ = env
+    streamed.chunks = []
+    streamed.error = local_llm.LocalLLMUnavailable("down")
+    r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
+    assert r.status_code == 503
+
+
+async def test_v2_felt_llm_gone_mid_reply_ends_the_stream(env, streamed):
+    client, _, _ = env
+    streamed.chunks = _CHUNKS[:2]
+    streamed.error = local_llm.LocalLLMUnavailable("down")
+    r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
+    sid = r.headers["X-Reply-Stream"]
+    assert (await client.get(f"/v1/reply/{sid}/chunk/1")).status_code == 200
+    assert (await client.get(f"/v1/reply/{sid}/chunk/2")).status_code == 204
+    body = (await client.get(f"/v1/reply/{sid}")).json()
+    assert body["done"] and body["error"] == "felt-llm offline"
+    assert body["text"] == " ".join(_CHUNKS[:2])
+
+
+async def test_v2_voice_chat_streams_too(env, streamed):
+    client, _, _ = env
+    r = await client.post(
+        "/v1/voice-chat", files={"file": ("a.wav", b"RIFF", "audio/wav")}, headers=_V2
+    )
+    assert r.status_code == 200
+    assert r.headers["X-Reply-Chunks"] == "open"
+    assert unquote(r.headers["X-Transcribed-Text"]) == "what's for dinner"
+    assert streamed.seen == ["what's for dinner"]

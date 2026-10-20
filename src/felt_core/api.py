@@ -15,6 +15,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -53,7 +54,9 @@ from felt_core.app_api import SESSION as APP_SESSION
 from felt_core.app_api import router as app_router
 from felt_core.app_api import schedule_mark
 from felt_core.brain import (
+    ChatResult,
     chat,
+    chat_streamed,
     current_weather,
     llm_warmup_loop,
     music_taste_loop,
@@ -597,9 +600,121 @@ async def _synthesize_reply(
     return Response(content=audio_bytes, media_type="audio/wav", headers=headers)
 
 
+def _wants_stream_v2(request: Request, config: Any) -> bool:
+    """WP-65: a client that plays protocol v2 says so per request; every
+    other client gets WP-54's whole-reply-then-chunks behaviour."""
+    return config.reply_streaming and request.headers.get("x-accept-stream") == "2"
+
+
+def _result_body(result: ChatResult) -> dict:
+    return {
+        "done": True,
+        "text": result.reply,
+        "ui_action": asdict(result.ui_action) if result.ui_action else None,
+        "animation_tag": result.animation_tag,
+        "emotion": result.emotion,
+    }
+
+
+async def _fill_open_stream(
+    stream: reply_stream.ReplyStream,
+    items: AsyncIterator[str | ChatResult],
+    config: Any,
+    on_result: Callable[[ChatResult], None] | None,
+) -> None:
+    """Background half of a v2 reply: each further chunk as chat_streamed()
+    writes it, synthesised in order, then the finished result. felt-llm
+    keeps writing while a chunk is in TTS (chat_streamed queues them)."""
+    result: ChatResult | None = None
+    try:
+        async with voice_client(config, timeout=60) as client:
+            async for item in items:
+                if isinstance(item, ChatResult):
+                    result = item
+                    continue
+                tts_text = strip_for_tts(item)
+                if not tts_text:
+                    continue  # nothing to say out loud (an emoji line); the text has it
+                n = stream.append(item)
+                if stream.failed_from is not None:
+                    continue
+                try:
+                    stream.set_chunk(n, await _tts_audio(tts_text, None, config, client))
+                except Exception:
+                    logger.exception("reply stream %s: TTS failed for chunk %d", stream.id, n)
+                    stream.fail_from(n)
+    except local_llm.LocalLLMUnavailable as e:
+        logger.warning("reply stream %s: felt-llm went away mid-reply (%s)", stream.id, e)
+    finally:
+        if result is None:
+            stream.end({"done": True, "text": " ".join(stream.texts), "error": "felt-llm offline"})
+        else:
+            stream.end(_result_body(result))
+            if on_result is not None:
+                on_result(result)
+
+
+async def _reply_v2(
+    message: str,
+    session_id: str,
+    tone: str | None,
+    config: Any,
+    client: _TTSClient,
+    extra_headers: dict[str, str] | None = None,
+    on_result: Callable[[ChatResult], None] | None = None,
+) -> Response:
+    """WP-65 protocol v2: chat_streamed(), and chunk 0's audio goes back the
+    moment it exists - X-Reply-Text is chunk 0's text, X-Reply-Chunks
+    "open", and the rest of the reply (its text, ui_action, tag) is at
+    GET /v1/reply/{id} once done. A reply that never came out in chunks, or
+    felt-voice being down, falls back to the whole-reply response."""
+    items = chat_streamed(message, config, session_id, tone)
+    first: str | ChatResult | None = None
+    async for item in items:
+        if isinstance(item, ChatResult) or strip_for_tts(item):
+            first = item
+            break
+    wav: bytes | None = None
+    if isinstance(first, str):
+        try:
+            wav = await _tts_audio(strip_for_tts(first), None, config, client, first_chunk=True)
+        except httpx.HTTPError:
+            logger.warning("felt-voice unavailable - replying without audio", exc_info=True)
+    if not isinstance(first, str) or wav is None:
+        # the whole reply, the WP-54 way
+        result = first if isinstance(first, ChatResult) else None
+        async for item in items:
+            if isinstance(item, ChatResult):
+                result = item
+        assert result is not None
+        if on_result is not None:
+            on_result(result)
+        return await _synthesize_reply(
+            result.reply,
+            asdict(result.ui_action) if result.ui_action else None,
+            result.animation_tag,
+            config,
+            client,
+            extra_headers,
+        )
+    live = reply_stream.open_stream(first, wav)
+    live.task = asyncio.create_task(_fill_open_stream(live, items, config, on_result))
+    headers = {
+        "X-Reply-Text": quote(first),
+        "X-Reply-Stream": live.id,
+        "X-Reply-Chunks": "open",
+        "X-Reply-Stream-Version": "2",
+        **(extra_headers or {}),
+    }
+    return Response(content=wav, media_type="audio/wav", headers=headers)
+
+
 @app.post("/v1/voice-chat")
 async def voice_chat_endpoint(
-    file: UploadFile = File(...), session_id: str = "default", tone: str | None = Form(None)
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str = "default",
+    tone: str | None = Form(None),
 ) -> Response:
     """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
     the brain -> felt-voice (TTS), so a client doesn't have to."""
@@ -620,6 +735,15 @@ async def voice_chat_endpoint(
 
         ui_action: dict[str, Any] | None = None
         animation_tag: str | None = None
+        if transcribed.strip() and _wants_stream_v2(request, config):
+            return await _reply_v2(
+                transcribed,
+                session_id,
+                tone,
+                config,
+                client,
+                {"X-Transcribed-Text": quote(transcribed)},
+            )
         if transcribed.strip():
             result = await chat(transcribed, config, session_id, tone)
             reply = result.reply
@@ -648,7 +772,7 @@ async def voice_chat_endpoint(
 
 
 @app.post("/v1/text-chat")
-async def text_chat_endpoint(req: ChatRequest) -> Response:
+async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
     """Same shape as /v1/voice-chat's response (audio/wav + X-Reply-Text/
     X-Animation-Tag headers) but for already-typed text - so a typed
     message gets the same TTS + reaction-animation treatment a spoken one
@@ -659,6 +783,17 @@ async def text_chat_endpoint(req: ChatRequest) -> Response:
         raise HTTPException(
             status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
         )
+
+    if _wants_stream_v2(request, config):
+
+        def marks(_result: ChatResult) -> None:
+            if req.session_id == APP_SESSION:
+                schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
+
+        async with voice_client(config, timeout=60) as client:
+            return await _reply_v2(
+                req.message, req.session_id, req.tone, config, client, on_result=marks
+            )
 
     result = await chat(req.message, config, req.session_id, req.tone)
     if req.session_id == APP_SESSION:
@@ -684,10 +819,15 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
     stream = reply_stream.get(stream_id)
     if stream is None or n < 0:
         raise HTTPException(status_code=404, detail="unknown or expired stream")
-    if n >= len(stream):
-        return Response(status_code=204)
+    timeout = max(1.0, min(60.0, timeout))
+    start = time.monotonic()
+    # WP-65: an open stream may not have chunk n yet - 204 only once it ended
+    if not await stream.wait_for_chunk_slot(n, timeout):
+        if stream.done:
+            return Response(status_code=204)
+        raise HTTPException(status_code=408, detail="chunk not ready")
     try:
-        wav = await stream.wait_chunk(n, max(1.0, min(60.0, timeout)))
+        wav = await stream.wait_chunk(n, max(0.0, timeout - (time.monotonic() - start)))
     except reply_stream.ChunkFailed:
         raise HTTPException(status_code=502, detail="chunk TTS failed") from None
     if wav is None:
@@ -695,6 +835,20 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
     return Response(
         content=wav, media_type="audio/wav", headers={"X-Chunk-Text": quote(stream.texts[n])}
     )
+
+
+@app.get("/v1/reply/{stream_id}")
+async def reply_result_endpoint(stream_id: str) -> dict:
+    """WP-65 (protocol v2): the finished reply behind a stream - `{done,
+    text, ui_action, animation_tag, emotion}` (+ `error` if felt-llm went
+    away mid-reply). Before it's done: `{done: false, text}` with the chunks
+    so far. 404 for an unknown/expired id."""
+    stream = reply_stream.get(stream_id)
+    if stream is None:
+        raise HTTPException(status_code=404, detail="unknown or expired stream")
+    if not stream.done or stream.result is None:
+        return {"done": False, "text": " ".join(stream.texts)}
+    return stream.result
 
 
 class ScreenContextRequest(BaseModel):
