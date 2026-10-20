@@ -10,6 +10,7 @@ writing/changing a `@pytest.mark.vcr` test, run once with
 generated `tests/cassettes/...` file.
 """
 
+import asyncio
 import importlib.util
 import json
 import os
@@ -129,6 +130,7 @@ class FakeLLM:
         self.script: list = []
         self.default = "a reply"
         self.calls: list[dict] = []
+        self.streaming = False
 
     async def chat(
         self,
@@ -154,6 +156,11 @@ class FakeLLM:
                 "json_schema": json_schema,
             }
         )
+        return self._next()
+
+    def _next(self):
+        from felt_core import local_llm
+
         item = self.script.pop(0) if self.script else self.default
         if isinstance(item, Exception):
             raise item
@@ -163,6 +170,35 @@ class FakeLLM:
             return local_llm.LocalReply(**item)
         return local_llm.LocalReply(text=item)
 
+    async def chat_stream(
+        self, messages, *, on_text, max_tokens, temperature=0.8, tools=None, config
+    ):
+        """`local_llm.chat_stream`: same script, the reply text handed to
+        `on_text` a few characters at a time (none for a tool call), with a
+        yield to the event loop between pieces. `streaming` is True while
+        pieces are still coming."""
+        from felt_core import local_llm
+
+        self.calls.append(
+            {
+                "messages": local_llm._merge_system_messages(messages),
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "tools": tools,
+                "tool_choice": None,
+                "json_schema": None,
+                "stream": True,
+            }
+        )
+        reply = self._next()
+        if not reply.tool_calls:
+            self.streaming = True
+            for i in range(0, len(reply.text), 3):
+                on_text(reply.text[i : i + 3])
+                await asyncio.sleep(0)
+            self.streaming = False
+        return reply
+
 
 @pytest.fixture
 def fake_llm(monkeypatch):
@@ -171,4 +207,5 @@ def fake_llm(monkeypatch):
 
     fake = FakeLLM()
     monkeypatch.setattr(local_llm, "chat", fake.chat)
+    monkeypatch.setattr(local_llm, "chat_stream", fake.chat_stream)
     return fake

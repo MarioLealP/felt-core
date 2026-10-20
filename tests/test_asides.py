@@ -199,7 +199,7 @@ async def test_chat_puts_the_answered_remark_in_her_context(tmp_path, monkeypatc
     config = _config(tmp_path)
     seen = {}
 
-    async def fake_local(message, config, session_id, tone, registry, history):
+    async def fake_local(message, config, session_id, tone, registry, history, speaker=None):
         seen["history"] = history
 
     monkeypatch.setattr(orchestrator, "_chat_local", fake_local)

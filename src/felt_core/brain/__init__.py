@@ -27,7 +27,7 @@ from felt_core.brain.background import (
     music_taste_loop,
     weather_precompute_loop,
 )
-from felt_core.brain.orchestrator import chat
+from felt_core.brain.orchestrator import chat, chat_streamed
 from felt_core.brain.personality import PERSONALITY_PROMPT, personality_prompt
 from felt_core.brain.replies import local_reply, music_taste_context
 from felt_core.brain.result import ChatResult
@@ -37,6 +37,7 @@ __all__ = [
     "ChatResult",
     "PERSONALITY_PROMPT",
     "chat",
+    "chat_streamed",
     "current_weather",
     "llm_warmup_loop",
     "local_reply",

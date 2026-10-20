@@ -8,6 +8,10 @@ throwaway database, so his history and DJ state stay untouched:
     docker cp tools/e2e_chat.py felt-core:/tmp/ && \
     docker exec felt-core /app/.venv/bin/python /tmp/e2e_chat.py [--repeat N] [--only TEXT]
 
+`--stream` (WP-65) runs every message through chat_streamed() instead: the
+same checks, plus the chunks have to add up to the reply, and each line
+gets the time to her first chunk.
+
 Exit code 1 if any case does something it shouldn't.
 """
 
@@ -19,6 +23,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs
 
@@ -26,7 +31,8 @@ import httpx
 
 from felt_core import appointment_hold, ha_calendar
 from felt_core.brain import router
-from felt_core.brain.orchestrator import chat
+from felt_core.brain.orchestrator import chat, chat_streamed
+from felt_core.brain.result import ChatResult
 from felt_core.config import load_config
 
 LLM_HOSTS = {"felt-llm"}
@@ -521,11 +527,33 @@ def _verdict(case: Case, writes: list[str], route: list[str]) -> bool:
     return not any(w.startswith(n) for w in stripped for n in case.never)
 
 
+async def _streamed(message: str, config, session_id: str, timing: dict) -> ChatResult:
+    """chat() through chat_streamed(): the chunks must add up to the reply
+    (else it's a CRASH line); `timing` gets the seconds to the first chunk
+    and the chunk count."""
+    start = time.monotonic()
+    chunks: list[str] = []
+    result = None
+    async for item in chat_streamed(message, config, session_id=session_id):
+        if isinstance(item, ChatResult):
+            result = item
+            continue
+        if not chunks:
+            timing.setdefault("first_s", []).append(round(time.monotonic() - start, 2))
+        chunks.append(item)
+    assert result is not None
+    timing.setdefault("chunks", []).append(len(chunks))
+    if " ".join(chunks).split() != result.reply.split():
+        raise AssertionError(f"chunks {chunks!r} != reply {result.reply!r}")
+    return result
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only")
     ap.add_argument("--note", help="only cases with this note, e.g. look / dj / llm")
+    ap.add_argument("--stream", action="store_true", help="through chat_streamed() (WP-65)")
     args = ap.parse_args()
 
     tmp = tempfile.mkdtemp(prefix="felt-e2e-")
@@ -561,15 +589,22 @@ async def main() -> int:
             recorder.calls.clear()
             recorder.events.clear()
             log.lines.clear()
+            timing: dict = {}
+
+            async def say(message: str, session_id: str) -> ChatResult:
+                if args.stream:
+                    return await _streamed(message, config, session_id, timing)  # noqa: B023
+                return await chat(message, config, session_id=session_id)
+
             try:
                 # a conversation per case: earlier "couldn't reach" replies in
                 # the history taught the model not to try (DJ state isn't
                 # per-session, so the DJ cases still carry over)
-                result = await chat(case.say, config, session_id=f"e2e-{run}-{i}")
+                result = await say(case.say, f"e2e-{run}-{i}")
                 reply = result.reply
                 await router.drain()
                 if case.then:
-                    result = await chat(case.then, config, session_id=f"e2e-{run}-{i}")
+                    result = await say(case.then, f"e2e-{run}-{i}")
                     reply = f"{reply} || {result.reply}"
                     await router.drain()
                 # no (further) answer: what she held goes in now, not in 30 s
@@ -602,6 +637,7 @@ async def main() -> int:
                         "spotify": writes,
                         "other": [c for c in recorder.calls if " /" not in c],
                         "reply": reply[:160],
+                        **timing,
                     },
                     ensure_ascii=False,
                 ),
