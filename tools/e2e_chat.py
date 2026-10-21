@@ -35,7 +35,7 @@ from felt_core.brain.orchestrator import chat, chat_streamed
 from felt_core.brain.result import ChatResult
 from felt_core.config import load_config
 
-LLM_HOSTS = {"felt-llm"}
+LLM_HOSTS = {"felt-llm", "felt-vision"}  # the models are real; everything else is faked
 FAKE_URI = "spotify:track:{:022d}"
 
 
