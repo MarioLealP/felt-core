@@ -79,6 +79,18 @@ def test_a_valid_token_reaches_felt(client):
         jwt.encode({"iss": ISS, "aud": AUD, "exp": int(time.time()) + 900}, "", algorithm="none"),
         "not-a-jwt",
     ],
+    # fixed ids: the tokens are signed afresh at collection, and parallel
+    # workers (pytest-xdist) have to collect the same test names
+    ids=[
+        "expired",
+        "other-audience",
+        "other-issuer",
+        "other-account",
+        "no-username",
+        "not-authentik-key",
+        "alg-none",
+        "not-a-jwt",
+    ],
 )
 def test_bad_tokens_are_refused(client, token):
     assert _post(client, token).status_code == 401

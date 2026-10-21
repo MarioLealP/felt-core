@@ -24,6 +24,10 @@ def _in(db, title, message="", *, minutes=0):
     return incident_id
 
 
+async def _no_watch(config) -> None:
+    return None
+
+
 def test_each_incident_lands_in_its_area():
     assert systems.area_of("honeypot", "", "") == "security"
     assert systems.area_of("backup-failed", "", "") == "backups"
@@ -81,6 +85,9 @@ def test_handled_from_the_app_closes_it(tmp_path):
 
 
 def test_routes_need_the_sso_header(tmp_path, monkeypatch):
+    # the lifespan's incidents watcher would expire these T0 (2026-10-03)
+    # incidents mid-test if its first round lands between intake and the POST
+    monkeypatch.setattr(incidents, "watch", _no_watch)
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_API_TOKEN", "s3cret")
     with TestClient(app) as c:

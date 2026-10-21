@@ -32,6 +32,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-recording>=0.13.4",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.9",
     "ty>=0.0.84",
     "types-pyyaml>=6.0.12.20260906",
@@ -39,6 +40,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# every core (pytest-xdist); `-n 0` for one process, e.g. with pdb
+addopts = "-n auto"
 asyncio_mode = "auto"
 
 [tool.ruff]

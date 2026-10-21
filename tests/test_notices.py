@@ -16,6 +16,10 @@ def _in(db, title):
     return incident_id
 
 
+async def _no_watch(config) -> None:
+    return None
+
+
 def test_the_rules():
     assert notices.rules("urgent", "line", None, False) == {
         "pop": True,
@@ -57,6 +61,9 @@ def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
 
 
 def test_the_tray_routes_need_the_token(tmp_path, monkeypatch):
+    # the lifespan's incidents watcher would expire these T0 (2026-10-03)
+    # incidents mid-test if its first round lands between intake and the POST
+    monkeypatch.setattr(incidents, "watch", _no_watch)
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_API_TOKEN", "s3cret")
     token = {"Authorization": "Bearer s3cret"}

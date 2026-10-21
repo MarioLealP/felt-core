@@ -5,13 +5,19 @@ a real, immediately-audible action on Mario's actual device. Live-verified
 once by hand instead (and trivially reversible — pause — unlike a calendar
 event, so no cleanup step needed beyond that)."""
 
+import time
+
 import pytest
 
+from felt_core import spotify_client
 from felt_core.spotify_client import list_devices, search_track
 
 
 @pytest.mark.vcr
-async def test_search_track_finds_a_real_track(spotify_config):
+async def test_search_track_finds_a_real_track(spotify_config, monkeypatch):
+    # its cassette starts with the token refresh: start from an empty cache
+    monkeypatch.setitem(spotify_client._token_cache, "access_token", None)
+    monkeypatch.setitem(spotify_client._token_cache, "expires_at", 0.0)
     import httpx
 
     async with httpx.AsyncClient(timeout=20) as client:
@@ -23,7 +29,10 @@ async def test_search_track_finds_a_real_track(spotify_config):
 
 
 @pytest.mark.vcr
-async def test_list_devices_returns_a_list(spotify_config):
+async def test_list_devices_returns_a_list(spotify_config, monkeypatch):
+    # its cassette has no token refresh: a cached token, whatever ran before
+    monkeypatch.setitem(spotify_client._token_cache, "access_token", "cached-token")
+    monkeypatch.setitem(spotify_client._token_cache, "expires_at", time.time() + 3600)
     import httpx
 
     async with httpx.AsyncClient(timeout=20) as client:
