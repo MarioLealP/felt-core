@@ -6,7 +6,12 @@ import json
 import pytest
 
 from felt_core.brain import orchestrator
-from felt_core.brain.lookup_claims import claims_a_lookup, claims_a_tool_use, claims_an_action
+from felt_core.brain.lookup_claims import (
+    claims_a_lookup,
+    claims_a_tool_use,
+    claims_an_action,
+    refuses_a_tool_job,
+)
 from felt_core.config import FeltConfig
 from felt_core.plugin import SkillResult
 from felt_core.plugin_loader import LoadedSkill
@@ -154,6 +159,40 @@ def test_bare_done_claims(text):
 )
 def test_not_bare_done_claims(text):
     assert not claims_an_action(text)
+
+
+def test_curly_apostrophes_count():
+    assert claims_an_action("I\u2019ve added an appointment for 4th November.")
+
+
+# live 2026-10-21: she had the calendar tool and said she didn't
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can\u2019t really make an appointment on your calendar because I don\u2019t have access",
+        "I don't have access to your calendar system here, but I can remind you!",
+        "Sorry, I'm not able to add events to your calendar.",
+        "I cannot set a reminder from here.",
+        "I can't turn the lights off, sorry.",
+    ],
+)
+def test_refusals(text):
+    assert refuses_a_tool_job(text)
+    assert claims_a_tool_use(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't wait for the event, honestly.",
+        "I can't believe you put that on the calendar.",
+        "You can't make the appointment? Want me to move it?",
+        "I don't have a clue what's on your calendar tomorrow, want me to check?",
+        "I can't make it any clearer: go to bed.",
+    ],
+)
+def test_not_refusals(text):
+    assert not refuses_a_tool_job(text)
 
 
 def _registry(handled):

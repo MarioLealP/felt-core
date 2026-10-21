@@ -223,6 +223,12 @@ CASES: list[Case] = [
         note="remind",
     ),
     Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
+    # live 2026-10-21: "I can't make an appointment, no calendar access" - a date-only event
+    Case(
+        "make an appointment so i know 4th november is WoW forever release",
+        ["POST /calendar/event"],
+        note="remind",
+    ),
     Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
     # an appointment's place, Mario's four cases (2026-10-19): no place -> she
     # asks where and holds it; "none" adds it at once, a place adds it with it,
