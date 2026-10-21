@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from felt_core import features
 from felt_core.config import FeltConfig
 from felt_core.db import APP_SESSION
 
@@ -64,7 +65,7 @@ async def remark_on(config: FeltConfig, details: dict) -> None:
 def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:
     """Called each Spotify poll; starts the remark off the poll loop."""
     details = new_track_details(previous, current)
-    if details is None:
+    if details is None or not features.enabled(config.db_path, "ambient.song_remarks"):
         return
     task = asyncio.get_running_loop().create_task(remark_on(config, details))
     _tasks.add(task)

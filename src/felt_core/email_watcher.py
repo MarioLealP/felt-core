@@ -19,6 +19,7 @@ import email.utils
 import imaplib
 import logging
 
+from felt_core import features
 from felt_core.config import FeltConfig
 from felt_core.db import (
     APP_SESSION,
@@ -136,6 +137,8 @@ def fetch_email_body(config: FeltConfig, uid: str) -> str:
 
 
 async def _poll_once(config: FeltConfig) -> None:
+    if not features.enabled(config.db_path, "email.new_mail"):
+        return
     for found in await asyncio.to_thread(_fetch_unseen, config):
         if is_known_email_uid(config.db_path, found["uid"]):
             continue

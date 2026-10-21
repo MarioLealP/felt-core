@@ -8,10 +8,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from felt_core import controls, local_llm
+from felt_core import controls, features, local_llm
 from felt_core.app_api import sso_user
 from felt_core.config import FeltConfig, load_config
 from felt_core.felt_tls import voice_client
+from felt_core.plugin_loader import load_plugins
 
 router = APIRouter()
 
@@ -83,6 +84,33 @@ async def app_set_settings(req: Settings, _user: str = Depends(sso_user)) -> dic
     db = load_config().db_path
     await asyncio.to_thread(controls.set_claude_alerts, db, req.claude_alerts)
     return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
+
+
+class SetFeature(BaseModel):
+    key: str
+    on: bool
+
+
+def _features(config: FeltConfig) -> list[dict]:
+    return features.listing(config.db_path, list(load_plugins(config.plugins_dir)))
+
+
+@router.get("/v1/app/features")
+async def app_features(_user: str = Depends(sso_user)) -> list[dict]:
+    """Her feature switches (features.py), each with whether it's on."""
+    return await asyncio.to_thread(_features, load_config())
+
+
+@router.post("/v1/app/features")
+async def app_set_feature(req: SetFeature, _user: str = Depends(sso_user)) -> list[dict]:
+    config = load_config()
+    is_skill = req.key.startswith(features.SKILL_PREFIX) and (
+        req.key.removeprefix(features.SKILL_PREFIX) in load_plugins(config.plugins_dir)
+    )
+    if req.key not in features.FEATURES and not is_skill:
+        raise HTTPException(status_code=422, detail=f"unknown feature {req.key!r}")
+    await asyncio.to_thread(features.set_enabled, config.db_path, req.key, req.on)
+    return await asyncio.to_thread(_features, config)
 
 
 @router.get("/v1/controls")

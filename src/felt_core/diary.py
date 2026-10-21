@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from felt_core import db, local_llm
+from felt_core import db, features, local_llm
 from felt_core.brain.persona import compile_persona
 from felt_core.config import FeltConfig
 from felt_core.proactive import enqueue_proactive
@@ -295,7 +295,10 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     diary entry, its callbacks/mood, up to 3 new self-memories, and the
     morning greeting all at once. Returns whether an entry was actually
     written - False if there was no material (Mario was AFK/away the whole
-    day), felt-llm was unavailable, or the response didn't parse."""
+    day), felt-llm was unavailable, the response didn't parse, or the diary
+    is switched off."""
+    if not features.enabled(config.db_path, "memory.diary"):
+        return False
     if db.get_diary(config.db_path, date_str) is not None:
         return False
 
@@ -344,7 +347,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
             add_self_memory(config, kind, text, keywords, date_str)
 
     greeting = str(parsed.get("greeting") or "").strip()
-    if greeting:
+    if greeting and features.enabled(config.db_path, "ambient.morning_greeting"):
         enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
 
     await _maybe_compress_week(config, date_str)
