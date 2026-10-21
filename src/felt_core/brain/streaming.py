@@ -73,8 +73,10 @@ class ReplySpeaker:
             self.chunks.put_nowait(meta)
 
     def _chunker(self) -> SpeechChunker:
-        # the "first chunk" size only for her first words of the turn
-        return SpeechChunker(self.first_chunk_chars if not self.said else 25)
+        # the "first chunk" size (and its clause cut) only for her first words of the turn
+        if self.said:
+            return SpeechChunker(25)
+        return SpeechChunker(self.first_chunk_chars, first_at_clause=True)
 
     async def turn(
         self,

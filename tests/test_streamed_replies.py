@@ -414,3 +414,30 @@ async def test_a_plain_reply_has_no_meta(tmp_path, monkeypatch, fake_llm):
     metas = []
     await _run(orchestrator.chat_streamed("dinner?", _config(tmp_path), "s"), metas)
     assert metas == []
+
+
+def test_first_chunk_can_end_at_a_clause_break():
+    long_opening = (
+        "Rice, eggs, and leftover chicken is basically the starter pack, so honestly "
+        "you should just make fried rice tonight. Day-old rice works best."
+    )
+    chunker = SpeechChunker(first_at_clause=True)
+    out = []
+    for i in range(0, len(long_opening), 4):
+        out += chunker.feed(long_opening[i : i + 4])
+    out += chunker.close()
+    # the list commas come before 40 chars, so the cut is the first comma after it
+    assert out[0] == "Rice, eggs, and leftover chicken is basically the starter pack,"
+    assert " ".join(out) == long_opening
+    assert all(len(c) >= 25 for c in out)
+
+
+def test_clause_cut_only_for_the_first_chunk():
+    text = (
+        "Okay. Fine, fine. "
+        + "That one sentence goes on, and on, and on, and on for a good while longer."
+    )
+    chunker = SpeechChunker(first_at_clause=True)
+    out = chunker.feed(text + " End") + chunker.close()
+    assert out[0] == "Okay. Fine, fine. That one sentence goes on,"
+    assert out[1] == "and on, and on, and on for a good while longer. End"
