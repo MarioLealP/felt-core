@@ -3,6 +3,7 @@ reaching felt-voice. felt-voice is faked by replacing `api.httpx.AsyncClient`
 (after the test's own ASGI client exists)."""
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from urllib.parse import quote, unquote
 
@@ -12,6 +13,8 @@ import pytest
 import felt_core.api as api
 from felt_core import local_llm, reply_stream, tts_cache
 from felt_core.brain.result import ChatResult
+from felt_core.brain.streaming import ReplyMeta
+from felt_core.plugin import UIAction
 
 _LONG_REPLY = (
     "This is the first sentence of the reply, long enough. "
@@ -239,6 +242,7 @@ class _Script:
     gate: asyncio.Event | None = None
     error: Exception | None = None
     seen: list[str] = field(default_factory=list)
+    meta: ReplyMeta | None = None
 
 
 @pytest.fixture
@@ -247,6 +251,8 @@ def streamed(env, monkeypatch):
 
     async def fake(message, config, session_id="default", tone=None, answering=None):
         script.seen.append(message)
+        if script.meta is not None:
+            yield script.meta
         for i, chunk in enumerate(script.chunks):
             if i == 1 and script.gate is not None:
                 await script.gate.wait()
@@ -363,3 +369,17 @@ async def test_v2_voice_chat_streams_too(env, streamed):
     assert r.headers["X-Reply-Chunks"] == "open"
     assert unquote(r.headers["X-Transcribed-Text"]) == "what's for dinner"
     assert streamed.seen == ["what's for dinner"]
+
+
+async def test_v2_chunk_zero_carries_the_skills_tag_and_action(env, streamed):
+    client, _, _ = env
+    streamed.meta = ReplyMeta(
+        ui_action=UIAction(kind="presence", payload={"action": "hush"}), animation_tag="emotion/sad"
+    )
+    r = await client.post("/v1/text-chat", json={"message": "shut up"}, headers=_V2)
+    assert r.headers["X-Reply-Chunks"] == "open"
+    assert unquote(r.headers["X-Animation-Tag"]) == "emotion/sad"
+    action = json.loads(unquote(r.headers["X-UI-Action"]))
+    assert action == {"kind": "presence", "payload": {"action": "hush"}}
+    sid = r.headers["X-Reply-Stream"]
+    assert (await client.get(f"/v1/reply/{sid}/chunk/3")).status_code == 204

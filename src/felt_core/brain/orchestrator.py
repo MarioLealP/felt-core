@@ -38,7 +38,7 @@ from felt_core.brain.replies import (
     skill_tools,
 )
 from felt_core.brain.result import ChatResult
-from felt_core.brain.streaming import ReplySpeaker, correction_note
+from felt_core.brain.streaming import ReplyMeta, ReplySpeaker, correction_note
 from felt_core.config import FeltConfig
 from felt_core.db import (
     get_current_screen_description,
@@ -377,6 +377,9 @@ async def _chat_local(
 
     skill_name = call[0]
     result, tool_output = await _run_skill_call(call, registry, config, message)
+    if speaker is not None:  # WP-65: the hush / reaction goes out with her first words
+        early = _skill_chat_result("", result, skill_name, registry)
+        speaker.tell(ReplyMeta(early.ui_action, early.animation_tag))
 
     reply = ""
     if tool_call is not None and first is not None:
@@ -498,11 +501,13 @@ async def chat_streamed(
     session_id: str = "default",
     tone: str | None = None,
     answering: str | None = None,
-) -> AsyncIterator[str | ChatResult]:
+) -> AsyncIterator[str | ReplyMeta | ChatResult]:
     """chat(), streamed (WP-65): yields her reply in sentence chunks (as
-    written, not yet stripped for TTS) the moment each one is complete, and
-    finally the whole ChatResult - the same one chat() would return, its
-    `reply` being everything the chunks said. Same turn, same tools, guards
+    written, not yet stripped for TTS) the moment each one is complete -
+    preceded by a ReplyMeta when the reply has a ui_action / animation tag
+    known before her first words - and finally the whole ChatResult, the
+    same one chat() would return, its `reply` being everything the chunks
+    said. Same turn, same tools, guards
     and history (written once, at the end); only the felt-llm calls that can
     be her answer stream. Raises LocalLLMUnavailable like chat(), possibly
     after some chunks."""
@@ -513,6 +518,11 @@ async def chat_streamed(
         while (chunk := await speaker.chunks.get()) is not None:
             yield chunk
         result = turn.result()
+        if not speaker.said and not speaker.told:  # e.g. the weather fast line's tag
+            speaker.tell(ReplyMeta(result.ui_action, result.animation_tag))
+            while not speaker.chunks.empty():
+                if (meta := speaker.chunks.get_nowait()) is not None:
+                    yield meta
         for chunk in speaker.rest(result.reply):
             yield chunk
         yield result

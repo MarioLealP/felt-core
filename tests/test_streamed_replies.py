@@ -12,9 +12,10 @@ from felt_core import local_llm
 from felt_core.brain import orchestrator
 from felt_core.brain.lookup_claims import claims_a_tool_use
 from felt_core.brain.result import ChatResult
+from felt_core.brain.streaming import ReplyMeta
 from felt_core.config import FeltConfig
 from felt_core.db import get_history
-from felt_core.plugin import SkillResult
+from felt_core.plugin import SkillResult, UIAction
 from felt_core.plugin_loader import LoadedSkill
 from felt_core.speech import SpeechChunker, speech_chunks
 
@@ -206,11 +207,15 @@ async def test_chat_stream_errors_are_unavailable(tmp_path, monkeypatch):
 # -- chat_streamed --------------------------------------------------------------
 
 
-async def _run(gen):
+async def _run(gen, metas=None):
     chunks, result = [], None
     async for item in gen:
         if isinstance(item, ChatResult):
             result = item
+        elif isinstance(item, ReplyMeta):
+            assert not chunks, "a ReplyMeta only ever comes before her first words"
+            if metas is not None:
+                metas.append(item)
         else:
             chunks.append(item)
     return chunks, result
@@ -374,3 +379,38 @@ async def test_chat_streamed_raises_when_felt_llm_is_down(tmp_path, monkeypatch,
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
     with pytest.raises(local_llm.LocalLLMUnavailable):
         await _run(orchestrator.chat_streamed("hi", _config(tmp_path), "s"))
+
+
+async def test_a_skills_tag_and_action_come_before_her_first_words(tmp_path, monkeypatch, fake_llm):
+    async def handle(params, ctx):
+        return SkillResult(
+            text="Alarm set for 07:30.",
+            ui_action=UIAction(kind="toast", payload={"title": "Alarm"}),
+            animation_tag="reaction/alarm",
+        )
+
+    registry = _alarm_registry([])
+    registry["set_alarm"].handle = handle
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: registry)
+    fake_llm.script = [
+        {"text": "", "tool_calls": [_alarm_call()]},
+        "Alright, your alarm's on for seven thirty. Sleep well, okay?",
+    ]
+    metas = []
+
+    chunks, result = await _run(
+        orchestrator.chat_streamed("alarm at 7:30", _config(tmp_path), "s"), metas
+    )
+
+    assert len(metas) == 1
+    assert metas[0].ui_action == result.ui_action
+    assert metas[0].animation_tag == result.animation_tag
+    assert " ".join(chunks) == "Alright, your alarm's on for seven thirty. Sleep well, okay?"
+
+
+async def test_a_plain_reply_has_no_meta(tmp_path, monkeypatch, fake_llm):
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {})
+    fake_llm.script = [PROSE[0]]
+    metas = []
+    await _run(orchestrator.chat_streamed("dinner?", _config(tmp_path), "s"), metas)
+    assert metas == []
