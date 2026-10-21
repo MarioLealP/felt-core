@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import felt_core.app_api as app_api
 import felt_core.asides as asides
-from felt_core import local_llm
+from felt_core import features, local_llm
 from felt_core.api import app
 from felt_core.app_history import history_page
 from felt_core.brain import orchestrator
@@ -131,6 +131,7 @@ async def test_two_or_fewer_need_no_call(tmp_path, monkeypatch):
 
 async def test_a_remark_mid_pick_reruns_it_once(tmp_path, monkeypatch):
     config = _config(tmp_path)
+    features.set_enabled(config.db_path, "ambient.asides", True)  # off by default
     started, release = asyncio.Event(), asyncio.Event()
     runs = []
 

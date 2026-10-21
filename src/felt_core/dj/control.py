@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from felt_core import features
 from felt_core import spotify_client as sp
 from felt_core.config import FeltConfig
 from felt_core.db import APP_SESSION
@@ -193,6 +194,8 @@ async def _say(config: FeltConfig, pick: dict) -> None:
     from felt_core.events import react_to_event
     from felt_core.proactive import enqueue_proactive
 
+    if not features.enabled(config.db_path, "ambient.dj_lines"):
+        return
     details = {
         "title": pick["title"],
         "artist": pick["artist"],

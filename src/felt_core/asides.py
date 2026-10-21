@@ -29,7 +29,7 @@ import json
 import logging
 import sqlite3
 
-from felt_core import local_llm
+from felt_core import features, local_llm
 from felt_core.config import FeltConfig
 from felt_core.db import ALERT, APP_SESSION, ASIDE_KINDS, _connect
 
@@ -200,7 +200,7 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
 def schedule_pick(config: FeltConfig, session_id: str) -> None:
     """After a remark is saved: re-pick in the background. Only the app's
     session has asides; a remark landing mid-pick reruns it once afterwards."""
-    if session_id != APP_SESSION:
+    if session_id != APP_SESSION or not features.enabled(config.db_path, "ambient.asides"):
         return
     if session_id in _running:
         _again.add(session_id)

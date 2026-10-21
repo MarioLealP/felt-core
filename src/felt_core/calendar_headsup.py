@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from felt_core import db, ha_calendar, leave_by, local_llm, phone
+from felt_core import db, features, ha_calendar, leave_by, local_llm, phone
 from felt_core.config import FeltConfig
 from felt_core.events import _game_name
 from felt_core.proactive import enqueue_proactive
@@ -401,6 +401,8 @@ async def _deliver_later(
     config: FeltConfig, delay_s: float, calendar_id: str, event: dict, stage: Stage
 ) -> None:
     await asyncio.sleep(delay_s)
+    if not features.enabled(config.db_path, "calendar.headsup"):
+        return
     try:
         if stage in LEAVE_STAGES:
             await deliver_leave(config, calendar_id, event, stage)

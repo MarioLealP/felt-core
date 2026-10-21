@@ -23,7 +23,7 @@ import json
 import logging
 import re
 
-from felt_core import local_llm, metrics
+from felt_core import features, local_llm, metrics
 from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
 from felt_core.brain.personality import personality_prompt
@@ -280,6 +280,9 @@ async def react_to_screen(
     cooldown - every other trigger respects it, checked BEFORE any model
     call, same as process_screen_context."""
     if trigger != "manual" and _on_cooldown(config, session_id):
+        return ChatResult(reply="", animation_tag=None)
+    switch = "ambient.poe_reactions" if poe_reactions.is_poe(app) else "ambient.screen_reactions"
+    if trigger != "manual" and not features.enabled(config.db_path, switch):
         return ChatResult(reply="", animation_tag=None)
 
     observations_block = _observations_block(

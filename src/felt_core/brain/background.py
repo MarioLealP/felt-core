@@ -13,7 +13,7 @@ import time
 
 import httpx
 
-from felt_core import local_llm, song_remarks, tts_cache
+from felt_core import features, local_llm, song_remarks, tts_cache
 from felt_core.brain.personality import PERSONALITY_PROMPT
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
@@ -148,7 +148,8 @@ def current_weather() -> dict:
 async def weather_precompute_loop(config: FeltConfig) -> None:
     while True:
         try:
-            await refresh_weather_precompute(config)
+            if features.enabled(config.db_path, "ambient.weather_line"):
+                await refresh_weather_precompute(config)
         except Exception:
             logger.exception("weather precompute loop iteration failed")
         await asyncio.sleep(_WEATHER_PRECOMPUTE_INTERVAL_S)
@@ -163,7 +164,7 @@ async def warm_up_llm(config: FeltConfig) -> None:
     cache holds the ~5K-token prefix before Mario's first turn - the first
     turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailable;
     deliberately not wrapped in metrics.timed (it isn't a user turn)."""
-    registry = load_plugins(config.plugins_dir)
+    registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     prefix = local_turn_messages("hello", [], config, None)
     await local_llm.chat(prefix, max_tokens=1, tools=skill_tools(registry), config=config)
 

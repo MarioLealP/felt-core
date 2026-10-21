@@ -23,7 +23,7 @@ from collections.abc import AsyncIterator, Callable
 
 import httpx
 
-from felt_core import ha_assist, local_llm, metrics
+from felt_core import features, ha_assist, local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
@@ -456,7 +456,7 @@ async def chat(
         summary = await _summarize_pending_email(config, session_id, message)
         return ChatResult(reply=summary)
 
-    registry = load_plugins(config.plugins_dir)
+    registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     # Only the conversation itself (Mario 10-03): with a remark every couple
     # of minutes at the desk, her own screen chatter used to push the real
     # back-and-forth out of the 20 lines. Her recent unprompted lines come
