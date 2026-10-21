@@ -34,6 +34,9 @@ _SPOKEN_RULES = (
 )
 
 EXAMPLES_PER_PROMPT = 4
+# pt-PT lines always ride along (Mario 2026-10-21): rules alone left Brazilian
+# forms in her Portuguese; examples shape her more than rules do.
+PT_EXAMPLES_PER_PROMPT = 3
 
 
 @cache
@@ -68,6 +71,8 @@ def compile_persona(
     r = rng if rng is not None else random.Random()
     examples = p.get("examples", [])
     sample = r.sample(examples, min(n_examples, len(examples)))
+    examples_pt = p.get("examples_pt", [])
+    sample += r.sample(examples_pt, min(PT_EXAMPLES_PER_PROMPT, len(examples_pt)))
 
     sections = [
         " ".join(p["identity"].split()),
