@@ -144,15 +144,18 @@ async def pick(config: FeltConfig, session_id: str = APP_SESSION) -> list[int]:
         return []  # nothing to choose: Talk shows them all
     # here, not at the top: felt_core.brain loads screen_reactions, which
     # imports this module to schedule picks
-    from felt_core.brain.personality import personality_prompt
+    from felt_core.brain.personality import daily_persona, per_call_context, with_context
 
     lines = "\n".join(
         f"{i}. ({r[2][11:16]}) {r[1][:_LINE_CHARS]}" for i, r in enumerate(remarks, 1)
     )
     reply = await local_llm.chat(
         [
-            {"role": "system", "content": personality_prompt(config=config)},
-            {"role": "user", "content": _ASK.format(lines=lines)},
+            {"role": "system", "content": daily_persona()},
+            {
+                "role": "user",
+                "content": with_context(per_call_context(config=config), _ASK.format(lines=lines)),
+            },
         ],
         max_tokens=40,
         temperature=0.2,

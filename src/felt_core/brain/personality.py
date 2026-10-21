@@ -14,6 +14,7 @@ Mario) - this is just who she is.
 """
 
 import random
+from datetime import date
 from typing import TYPE_CHECKING
 
 from felt_core.brain.persona import compile_persona
@@ -23,34 +24,37 @@ if TYPE_CHECKING:
     from felt_core.config import FeltConfig
 
 # A stable compile (fixed example sample) for the call sites that import the
-# constant (the email summary, background precompute). Live replies go
-# through personality_prompt(), which rotates the examples on every call.
+# constant (the email summary, background precompute). Live replies use
+# daily_persona(), whose examples rotate once a day.
 PERSONALITY_PROMPT = compile_persona(rng=random.Random(0))
 
 
-def personality_prompt(
+def daily_persona() -> str:
+    """The system prompt for every felt-llm call: the compiled persona with
+    its example rotation seeded by the date (WP-36) - the same text all day,
+    so felt-llm caches it once for chat and every background line alike, and
+    a fresh sample tomorrow. Until 2026-10-21 the background lines drew a
+    fresh sample per call and carried the memory block and tone in here too,
+    so felt-llm re-read the whole persona for each one (~12 s a screen
+    reaction); what changes per call goes in the user turn now
+    (per_call_context)."""
+    return compile_persona(rng=random.Random(date.today().toordinal()))
+
+
+def per_call_context(
     tone: str | None = None,
     context_text: str | None = None,
     config: "FeltConfig | None" = None,
 ) -> str:
-    """WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day
-    + streak awareness - felt-tray/felt-dashboard fetch it and attach it to
-    /v1/react/screen, /v1/voice-chat, /v1/text-chat). None on an older
-    client, felt-animation unreachable, or a call site that doesn't carry
-    one (the pending-email summary, the weather precompute) - the compiled
-    sheet alone is always a safe, complete system prompt on its own, this
-    is purely additive. Each call draws a fresh example sample.
-
-    WP-26 combined with personality plan P4: `config` (when a call site has
-    one cheaply in scope - see replies.py/screen_reactions.py/events.py)
-    additionally threads in `self_memory.memory_block`'s budgeted "Recently
-    (from your diary)" + "Who you've become" block, ranked against
-    `context_text` (whatever's on screen/in the message right now) when
-    given, else by pinned+recency alone. `config=None` (a call site with no
-    config cheaply in scope, or a test exercising the bare persona) skips
-    the block entirely - no DB touched, no behaviour change from before."""
-    base = compile_persona()
-    parts = [base]
+    """What changes per call, for the user turn - never the system prompt.
+    WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day +
+    streak awareness), None when a call site doesn't carry one. WP-26/P4:
+    with `config`, `self_memory.memory_block`'s budgeted "Recently (from your
+    diary)" + "Who you've become" block, ranked against `context_text`
+    (whatever's on screen/in the message right now) when given, else by
+    pinned+recency alone; `config=None` skips it (no DB touched). "" when
+    there's nothing."""
+    parts = []
     if config is not None:
         block = memory_block(config, context_text)
         if block:
@@ -58,3 +62,8 @@ def personality_prompt(
     if tone:
         parts.append(f"Right now: {tone}")
     return "\n\n".join(parts)
+
+
+def with_context(context: str, text: str) -> str:
+    """A user turn's text with the per-call context ahead of it."""
+    return f"{context}\n\n{text}" if context else text

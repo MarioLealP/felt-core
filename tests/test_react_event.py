@@ -36,6 +36,10 @@ def _system(call):
     return call["messages"][0]["content"]
 
 
+def _user(call):
+    return call["messages"][-1]["content"]
+
+
 # -- decide(): pure ------------------------------------------------------
 
 
@@ -223,7 +227,7 @@ def test_endpoint_no_reaction_shape(tmp_path, monkeypatch, fake_llm):
     assert response.headers["X-Reaction-Skipped"] == "unknown_event"
 
 
-def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monkeypatch, fake_llm):
+def test_endpoint_tone_is_optional_and_reaches_the_user_turn(tmp_path, monkeypatch, fake_llm):
     calls = _fake_llm(fake_llm)
     client = _client(tmp_path, monkeypatch)
 
@@ -233,7 +237,8 @@ def test_endpoint_tone_is_optional_and_reaches_the_system_prompt(tmp_path, monke
     )
 
     assert response.status_code == 200
-    assert "Right now: sleepy and a bit grumpy" in _system(calls[0])
+    assert "Right now: sleepy and a bit grumpy" in _user(calls[0])
+    assert "Right now" not in _system(calls[0])
 
 
 def test_endpoint_503_when_felt_llm_is_offline(tmp_path, monkeypatch, fake_llm):
@@ -310,7 +315,7 @@ async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_scr
     result = await events.react_to_event("unhushed", _EARLY, config, session_id="s", tone="smug")
 
     assert result.line == "Couldn't last without me, huh?" and result.emotion == "amused"
-    assert "Right now: smug" in _system(calls[0])
+    assert "Right now: smug" in _user(calls[0])
     assert (
         len(get_recent_observations(config.db_path, "s", limit=10)) == 1
     )  # only the one saved above

@@ -195,7 +195,7 @@ def memory_block(
     config: FeltConfig, context_text: str | None = None, now: datetime | None = None
 ) -> str:
     """The compiled "Recently (from your diary)" + "Who you've become"
-    block every reply carries (via brain.personality.personality_prompt),
+    block every reply carries (via brain.personality.per_call_context),
     hard-capped at MAX_BLOCK_CHARS (~200 tokens). Each self-memory placed
     in the prompt has its use count/last_used bumped (db.touch_self_memories)
     - what the next call's cooldown/recency ranking is computed from."""

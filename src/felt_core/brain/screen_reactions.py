@@ -26,7 +26,7 @@ import re
 from felt_core import features, local_llm, metrics, vision
 from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
-from felt_core.brain.personality import personality_prompt
+from felt_core.brain.personality import daily_persona, per_call_context, with_context
 from felt_core.brain.replies import local_reply
 from felt_core.brain.result import ChatResult
 from felt_core.config import FeltConfig
@@ -298,7 +298,8 @@ async def react_to_screen(
     observations_block = _observations_block(
         get_recent_observations(config.db_path, session_id, limit=3)
     )
-    system = f"{personality_prompt(tone, f'{app} {title}', config)}\n\n{observations_block}"
+    system = daily_persona()
+    context = per_call_context(tone, f"{app} {title}", config)
     context_line = f'App: {app} — "{title}"'
     recent = recent_lines_block(_recent_lines(config, session_id))
 
@@ -309,7 +310,9 @@ async def react_to_screen(
         parsed = await _react_to_screen_local(
             jpeg_bytes,
             system,
-            f"{context_line}\n\n{instruction}{recent}",
+            with_context(
+                context, f"{observations_block}\n\n{context_line}\n\n{instruction}{recent}"
+            ),
             config,
             schema=poe_reactions.POE_SCHEMA if poe else None,
             app=app,
