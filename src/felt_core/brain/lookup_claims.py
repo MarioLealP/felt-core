@@ -18,6 +18,14 @@ Music too (2026-10-18 e2e run): "Playing some Bring Me The Horizon." and
 "Paused the music." with nothing sent to Spotify. Tight on purpose - a false
 alarm forces a tool call, which could pause his music: "Playing" only as the
 reply's first word, the verbs only with the music (or it/that/this) after.
+
+Refusals too (2026-10-21 live): "I can't really make an appointment on your
+calendar because I don't have access to your calendar system here" - she
+has the tool, she just didn't call it. Only "can't" with a doing-verb and
+one of her tool's objects, said about herself, counts, so "I can't wait for the event" isn't one.
+
+Bonsai writes curly apostrophes ("I’ve", "can’t"); they're straightened
+before matching.
 """
 
 import re
@@ -90,15 +98,34 @@ _DONE = re.compile(
 )
 
 
+_THINGS = r"(?:calendar|appointment|event|reminder|alarm|timer|lights?|shopping list)"
+_REFUSAL = re.compile(
+    r"\bi(?:\s+(?:can't|cannot|can not)|(?:\s+am|'m) (?:not able|unable) to)\s+"
+    r"(?:really\s+|actually\s+)?"
+    rf"(?:make|add|set|create|book|schedule|put|access|turn|switch)\b[^.!?]{{0,40}}?\b{_THINGS}"
+    rf"|\bi\s+don't have (?:any\s+)?access to\b[^.!?]{{0,25}}?\b{_THINGS}",
+    re.IGNORECASE,
+)
+
+
+def _opening(text: str) -> str:
+    return (text or "")[:_OPENING_CHARS].replace("\u2019", "'")
+
+
 def claims_a_lookup(text: str) -> bool:
-    return bool(_CLAIM.search((text or "")[:_OPENING_CHARS]))
+    return bool(_CLAIM.search(_opening(text)))
 
 
 def claims_an_action(text: str) -> bool:
-    opening = (text or "")[:_OPENING_CHARS]
+    opening = _opening(text)
     return bool(_ACTION.search(opening) or _MUSIC.search(opening) or _DONE.search(opening))
 
 
+def refuses_a_tool_job(text: str) -> bool:
+    return bool(_REFUSAL.search(_opening(text)))
+
+
 def claims_a_tool_use(text: str) -> bool:
-    """A lookup or an action she says she's doing - either needs a tool call."""
-    return claims_a_lookup(text) or claims_an_action(text)
+    """A lookup or an action she says she's doing, or one she says she can't
+    do though a tool does it - each needs a tool call."""
+    return claims_a_lookup(text) or claims_an_action(text) or refuses_a_tool_job(text)
