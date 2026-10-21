@@ -34,6 +34,11 @@ class FeltConfig(BaseSettings):
     local_llm_url: str | None = "http://felt-llm:8080"
     local_llm_model: str = "felt"
     local_llm_timeout_s: float = 60
+    # felt-vision (Qwen3-VL-2B): set, it describes screenshots and felt-llm
+    # reacts to the text instead of reading the image (vision.py); unset, the
+    # image goes to felt-llm as before.
+    vision_url: str | None = None
+    vision_timeout_s: float = 60
 
     # Deterministic frequency limit for spoken screen-observation reactions
     # (WP-02, Mario: screen reactions are always spoken - the model never

@@ -23,7 +23,7 @@ import json
 import logging
 import re
 
-from felt_core import features, local_llm, metrics
+from felt_core import features, local_llm, metrics, vision
 from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
 from felt_core.brain.personality import personality_prompt
@@ -212,27 +212,37 @@ _SCREEN_REACT_SCHEMA = {
 }
 
 
+_FROM_DESCRIPTION = (
+    "Your eyes describe his screen below instead of an image. Keep names and terms exactly as they "
+    "are written there - don't paraphrase them."
+)
+
+
 async def _react_to_screen_local(
     jpeg_bytes: bytes,
     system: str,
     user_text: str,
     config: FeltConfig,
     schema: dict | None = None,
+    *,
+    app: str = "",
+    title: str = "",
 ) -> dict | None:
     """felt-llm with the JPEG as an image part and the schema-constrained
     JSON reply. One retry on a parse failure; None after two unparseable
     replies. LocalLLMUnavailable propagates (the API answers 503)."""
+    if config.vision_url:
+        # felt-vision reads the image; Bonsai gets its words (vision spike 2026-10-21)
+        seen = await vision.describe(jpeg_bytes, app, title, config, poe=schema is not None)
+        user_text = user_text.replace("Look at the screenshot", "Read what your eyes saw (below)")
+        content: str | list = f"{user_text}\n\n{_FROM_DESCRIPTION}\nOn his screen: {seen}"
+    else:
+        content = [{"type": "text", "text": user_text}, local_llm.image_part(jpeg_bytes)]
     for attempt in (1, 2):
         reply = await local_llm.chat(
             [
                 {"role": "system", "content": system},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_text},
-                        local_llm.image_part(jpeg_bytes),
-                    ],
-                },
+                {"role": "user", "content": content},
             ],
             max_tokens=260 if schema else 200,
             json_schema=schema or _SCREEN_REACT_SCHEMA,
@@ -302,6 +312,8 @@ async def react_to_screen(
             f"{context_line}\n\n{instruction}{recent}",
             config,
             schema=poe_reactions.POE_SCHEMA if poe else None,
+            app=app,
+            title=title,
         )
 
     if parsed is None:
