@@ -11,6 +11,7 @@ import asyncio
 import logging
 from datetime import datetime
 
+from felt_core import llm_gate
 from felt_core.config import FeltConfig
 from felt_core.db import (
     ALARM,
@@ -63,7 +64,10 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
             alarm_id,
             fire_at,
         )
-    text = await her_line(config, alarm_facts(label, fire_at, datetime.now()), plain_alarm(label))
+    with llm_gate.timely("alarm"):
+        text = await her_line(
+            config, alarm_facts(label, fire_at, datetime.now()), plain_alarm(label)
+        )
     save_message(
         config.db_path, APP_SESSION, "assistant", text, kind=ALARM, source_ref=f"alarm:{alarm_id}"
     )

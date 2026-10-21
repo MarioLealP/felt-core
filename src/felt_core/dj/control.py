@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from felt_core import features
+from felt_core import features, llm_gate
 from felt_core import spotify_client as sp
 from felt_core.config import FeltConfig
 from felt_core.db import APP_SESSION
@@ -203,7 +203,8 @@ async def _say(config: FeltConfig, pick: dict) -> None:
         "because": pick.get("because", ""),
     }
     try:
-        result = await react_to_event("dj_track", details, config, session_id=APP_SESSION)
+        with llm_gate.ambient("dj line", lifetime_s=_LINE_TTL_S):
+            result = await react_to_event("dj_track", details, config, session_id=APP_SESSION)
     except Exception:
         logger.warning("dj: no line for %s", pick["title"], exc_info=True)
         return

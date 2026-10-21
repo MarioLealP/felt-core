@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from felt_core import db, features, phone
+from felt_core import db, features, llm_gate, phone
 from felt_core.config import FeltConfig
 from felt_core.her_line import her_line
 from felt_core.proactive import enqueue_proactive
@@ -232,7 +232,8 @@ async def check(config: FeltConfig) -> str | None:
     event = event_for(prev, cur)
     if event is None or not features.enabled(config.db_path, "ender.print_done"):
         return None
-    line = await phrase(config, event, await snapshot(config))
+    with llm_gate.timely("print"):
+        line = await phrase(config, event, await snapshot(config))
     enqueue_proactive(config, "printer", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Ender", line, tag="felt-ender")
