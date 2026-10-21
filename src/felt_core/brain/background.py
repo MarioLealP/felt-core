@@ -13,7 +13,7 @@ import time
 
 import httpx
 
-from felt_core import features, local_llm, song_remarks, tts_cache
+from felt_core import features, llm_gate, local_llm, song_remarks, tts_cache
 from felt_core.brain.personality import PERSONALITY_PROMPT
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
@@ -149,7 +149,8 @@ async def weather_precompute_loop(config: FeltConfig) -> None:
     while True:
         try:
             if features.enabled(config.db_path, "ambient.weather_line"):
-                await refresh_weather_precompute(config)
+                with llm_gate.ambient("weather line"):
+                    await refresh_weather_precompute(config)
         except Exception:
             logger.exception("weather precompute loop iteration failed")
         await asyncio.sleep(_WEATHER_PRECOMPUTE_INTERVAL_S)
@@ -178,7 +179,8 @@ async def llm_warmup_loop(config: FeltConfig) -> None:
         try:
             if await local_llm.is_healthy(config):
                 if not warm:
-                    await warm_up_llm(config)
+                    with llm_gate.maintenance("warm-up"):
+                        await warm_up_llm(config)
                     warm = True
                     logger.info("felt-llm warm-up done")
             else:

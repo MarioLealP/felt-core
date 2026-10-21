@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
-from felt_core import features, margins, shopping
+from felt_core import features, llm_gate, margins, shopping
 from felt_core.app_history import history_page
 from felt_core.app_stream import notices
 from felt_core.asides import current_asides, link_answer, remark_text
@@ -45,11 +45,16 @@ HA_PANEL_USER = "home-assistant"
 _pending: set[asyncio.Task] = set()
 
 
+async def _ambient_mark(config, session_id: str) -> None:
+    with llm_gate.ambient("marks"):
+        await maybe_mark(config, session_id)
+
+
 def schedule_mark(config, session_id: str = SESSION) -> None:
     """After a reply: maybe she marks his line (marks.py), off the hot path."""
     if not features.enabled(config.db_path, "ambient.marks"):
         return
-    task = asyncio.create_task(maybe_mark(config, session_id))
+    task = asyncio.create_task(_ambient_mark(config, session_id))
     _pending.add(task)
     task.add_done_callback(_pending.discard)
 

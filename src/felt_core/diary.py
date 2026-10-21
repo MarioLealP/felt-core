@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from felt_core import db, features, local_llm
+from felt_core import db, features, llm_gate, local_llm
 from felt_core.brain.persona import compile_persona
 from felt_core.config import FeltConfig
 from felt_core.proactive import enqueue_proactive
@@ -446,7 +446,8 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
         return
     _writing.add(target_date)
     try:
-        await write_diary_for_date(config, target_date)
+        with llm_gate.maintenance("diary"):
+            await write_diary_for_date(config, target_date)
     except Exception:
         logger.exception("diary: writer failed for %s", target_date)
     finally:

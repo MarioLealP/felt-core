@@ -43,6 +43,7 @@ from felt_core import (
     features,
     ha_auth,
     incidents,
+    llm_gate,
     local_llm,
     machine_auth,
     metrics,
@@ -62,6 +63,7 @@ from felt_core.brain import (
     current_weather,
     llm_warmup_loop,
     music_taste_loop,
+    poe_reactions,
     process_screen_context,
     react_to_screen,
     router,
@@ -386,6 +388,14 @@ async def latency_metrics_endpoint(since_hours: int = 24, endpoint: str | None =
     config = load_config()
     rows = get_latency_rows(config.db_path, since_hours=since_hours, endpoint=endpoint)
     return metrics.compute_stats(rows)
+
+
+@app.exception_handler(local_llm.AmbientSkipped)
+async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkipped):
+    """An ambient line that gave way (llm_gate) isn't an outage: the react
+    endpoints' "no reaction" answer - empty body, the reason in a header."""
+    logger.info("%s: %s", request.url.path, exc)
+    return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "llm-gate"})
 
 
 @app.exception_handler(local_llm.LocalLLMUnavailable)
@@ -910,9 +920,16 @@ async def react_screen_endpoint(
     when it's unreachable, which felt-tray treats as "no reaction"."""
     config = load_config()
     jpeg_bytes = await image.read()
-    result = await react_to_screen(
-        jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger, tone=tone
+    # "look at this" (manual) is him asking: chat; the rest is ambient
+    gate = (
+        contextlib.nullcontext()
+        if trigger == "manual"
+        else llm_gate.ambient("poe" if poe_reactions.is_poe(app_name) else "screen")
     )
+    with gate:
+        result = await react_to_screen(
+            jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger, tone=tone
+        )
 
     emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}
 
@@ -964,9 +981,10 @@ async def react_event_endpoint(
         return Response(
             content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "switched-off"}
         )
-    result = await react_to_event(
-        req.event, req.details, config, session_id=session_id, tone=req.tone
-    )
+    with llm_gate.ambient(f"event {req.event}"):
+        result = await react_to_event(
+            req.event, req.details, config, session_id=session_id, tone=req.tone
+        )
     if not result.line:
         return Response(
             content=b"",

@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from felt_core import features
+from felt_core import features, llm_gate
 from felt_core.config import FeltConfig
 from felt_core.db import APP_SESSION
 
@@ -52,7 +52,10 @@ async def remark_on(config: FeltConfig, details: dict) -> None:
     from felt_core.proactive import enqueue_proactive
 
     try:
-        result = await react_to_event("music_new_track", details, config, session_id=APP_SESSION)
+        with llm_gate.ambient("song", lifetime_s=SAY_WITHIN_S):
+            result = await react_to_event(
+                "music_new_track", details, config, session_id=APP_SESSION
+            )
     except Exception:
         logger.warning("song remark: no line (%s)", details.get("title"), exc_info=True)
         return

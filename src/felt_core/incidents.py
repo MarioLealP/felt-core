@@ -27,6 +27,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
+from felt_core import llm_gate
 from felt_core.alert_types import AlertType, Parsed, by_name, parse
 from felt_core.db import _connect
 
@@ -327,7 +328,8 @@ async def watch(config) -> None:
             expired = await asyncio.to_thread(expire_unseen, config.db_path)
             if expired:
                 logger.info("incidents: %s expired (unseen %sh)", expired, EXPIRE_UNSEEN_H)
-            await alert_lines.write_due(config)
+            with llm_gate.timely("alert line"):
+                await alert_lines.write_due(config)
         except Exception:
             logger.exception("incidents: round failed")
         await asyncio.sleep(PROMOTE_EVERY_S)

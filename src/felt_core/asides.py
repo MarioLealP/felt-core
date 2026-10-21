@@ -29,7 +29,7 @@ import json
 import logging
 import sqlite3
 
-from felt_core import features, local_llm
+from felt_core import features, llm_gate, local_llm
 from felt_core.config import FeltConfig
 from felt_core.db import ALERT, APP_SESSION, ASIDE_KINDS, _connect
 
@@ -186,7 +186,8 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
         while True:
             _again.discard(session_id)
             try:
-                await pick(config, session_id)
+                with llm_gate.ambient("asides"):
+                    await pick(config, session_id)
             except local_llm.LocalLLMUnavailable as exc:
                 logger.info("asides: felt-llm unavailable (%s)", exc)
             except Exception:

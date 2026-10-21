@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from felt_core import db, features, ha_calendar, leave_by, local_llm, phone
+from felt_core import db, features, ha_calendar, leave_by, llm_gate, local_llm, phone
 from felt_core.config import FeltConfig
 from felt_core.events import _game_name
 from felt_core.proactive import enqueue_proactive
@@ -404,10 +404,11 @@ async def _deliver_later(
     if not features.enabled(config.db_path, "calendar.headsup"):
         return
     try:
-        if stage in LEAVE_STAGES:
-            await deliver_leave(config, calendar_id, event, stage)
-            return
-        await deliver(config, calendar_id, event, stage)
+        with llm_gate.timely("calendar"):
+            if stage in LEAVE_STAGES:
+                await deliver_leave(config, calendar_id, event, stage)
+                return
+            await deliver(config, calendar_id, event, stage)
     except Exception:
         logger.exception("calendar heads-up: delivery failed for %s", event.get("id"))
 

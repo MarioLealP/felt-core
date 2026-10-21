@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from felt_core import llm_gate
 from felt_core.config import FeltConfig
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,11 @@ logger = logging.getLogger(__name__)
 class LocalLLMUnavailable(Exception):
     """felt-llm couldn't produce a reply (down, timed out, 5xx, or a
     malformed response). The API maps it to a 503, background loops skip."""
+
+
+class AmbientSkipped(LocalLLMUnavailable):
+    """An ambient call that gave way (llm_gate): Mario is talking, the
+    ambient budget is spent, or it couldn't start in time."""
 
 
 @dataclass
@@ -132,6 +138,14 @@ def _reply(
     )
 
 
+async def _gated(call):
+    """One felt-llm call through llm_gate (one at a time, chat first)."""
+    try:
+        return await llm_gate.run(call)
+    except llm_gate.Skipped as e:
+        raise AmbientSkipped(str(e)) from e
+
+
 async def chat(
     messages: list[dict],
     *,
@@ -156,13 +170,16 @@ async def chat(
         config=config,
     )
 
-    try:
+    url = f"{config.local_llm_url.rstrip('/')}/v1/chat/completions"
+
+    async def call() -> dict:
         async with httpx.AsyncClient(timeout=config.local_llm_timeout_s) as client:
-            response = await client.post(
-                f"{config.local_llm_url.rstrip('/')}/v1/chat/completions", json=payload
-            )
+            response = await client.post(url, json=payload)
             response.raise_for_status()
-            body = response.json()
+            return response.json()
+
+    try:
+        body = await _gated(call)
         choice = body["choices"][0]
         message = choice["message"]
         text = message.get("content") or ""
@@ -225,12 +242,14 @@ async def chat_stream(
     tool_calls: list[dict] = []
     finish_reason = None
     timings: dict = {}
-    try:
+
+    url = f"{config.local_llm_url.rstrip('/')}/v1/chat/completions"
+
+    async def call() -> None:
+        nonlocal finish_reason, timings
         async with (
             httpx.AsyncClient(timeout=config.local_llm_timeout_s) as client,
-            client.stream(
-                "POST", f"{config.local_llm_url.rstrip('/')}/v1/chat/completions", json=payload
-            ) as response,
+            client.stream("POST", url, json=payload) as response,
         ):
             response.raise_for_status()
             async for line in response.aiter_lines():
@@ -253,6 +272,9 @@ async def chat_stream(
                     parts.append(text)
                     if not tool_calls:
                         on_text(text)
+
+    try:
+        await _gated(call)
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
         raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
 
