@@ -6,17 +6,13 @@ below are public on purpose). Every function here raises
 `local_llm.LocalLLMUnavailable` when felt-llm is down - there is no
 fallback, callers let it propagate (the API maps it to a 503)."""
 
-import random
-from datetime import date
-
 from felt_core import local_llm
-from felt_core.brain.persona import compile_persona
 
 # Re-exported (not just used internally) so callers that already hold
 # `felt_core.brain.replies` - tests, mainly - can read the constant from
 # here too, without a second import of .personality.
 from felt_core.brain.personality import PERSONALITY_PROMPT as PERSONALITY_PROMPT
-from felt_core.brain.personality import personality_prompt
+from felt_core.brain.personality import daily_persona, per_call_context, with_context
 from felt_core.config import FeltConfig
 from felt_core.db import get_all_facts, get_music_taste_stats
 from felt_core.music_taste import summarize_taste
@@ -67,10 +63,9 @@ def music_taste_context(config: FeltConfig) -> list[dict]:
 
 
 def _daily_persona() -> str:
-    """The compiled persona with its example rotation seeded by the date
-    (WP-36): the same prompt all day, so felt-llm's prompt cache keeps it,
-    and a fresh sample tomorrow, so the examples still rotate."""
-    return compile_persona(rng=random.Random(date.today().toordinal()))
+    """The day's fixed persona (personality.daily_persona) - kept as a name
+    here for the chat call sites and tests that use it."""
+    return daily_persona()
 
 
 def local_turn_messages(
@@ -119,13 +114,14 @@ async def local_reply(
     directly (WP-40). Raises LocalLLMUnavailable when felt-llm is down."""
     facts = _facts_context(config) if include_facts else []
     taste = music_taste_context(config) if include_facts else []
-    context_text = messages_tail[-1]["content"] if messages_tail else None
-    messages = (
-        [{"role": "system", "content": personality_prompt(tone, context_text, config)}]
-        + facts
-        + taste
-        + messages_tail
-    )
+    last: dict = messages_tail[-1] if messages_tail else {}
+    context_text = last.get("content") if isinstance(last.get("content"), str) else None
+    context = per_call_context(tone, context_text, config)
+    if context and context_text is not None:
+        # per call -> the user turn, so the persona above stays cached
+        last = {**last, "content": with_context(context, context_text)}
+        messages_tail = [*messages_tail[:-1], last]
+    messages = [{"role": "system", "content": daily_persona()}] + facts + taste + messages_tail
     reply = await local_llm.chat(messages, max_tokens=_REPLY_MAX_TOKENS, config=config)
     return reply.text
 

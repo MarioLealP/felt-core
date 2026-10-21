@@ -21,7 +21,7 @@ import time
 import uuid
 
 from felt_core import local_llm
-from felt_core.brain.personality import personality_prompt
+from felt_core.brain.personality import daily_persona, per_call_context, with_context
 from felt_core.config import FeltConfig
 from felt_core.db import _connect
 
@@ -227,9 +227,16 @@ async def decide(config: FeltConfig, lines: dict[str, str], since: int | None) -
     shown = f"His line: {lines['his']}"
     if "mine" in lines:
         shown += f"\nYour answer: {lines['mine']}"
-    system = {"role": "system", "content": personality_prompt(config=config)}
+    system = {"role": "system", "content": daily_persona()}
+    context = per_call_context(config=config)
     want = await local_llm.chat(
-        [system, {"role": "user", "content": f"{_WANT}\n{pacing_line(since)}\n\n{shown}"}],
+        [
+            system,
+            {
+                "role": "user",
+                "content": with_context(context, f"{_WANT}\n{pacing_line(since)}\n\n{shown}"),
+            },
+        ],
         max_tokens=20,
         temperature=0.7,
         json_schema=WANT_SCHEMA,

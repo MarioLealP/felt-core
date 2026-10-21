@@ -28,7 +28,12 @@ from felt_core.brain.background import (
     weather_precompute_loop,
 )
 from felt_core.brain.orchestrator import chat, chat_streamed
-from felt_core.brain.personality import PERSONALITY_PROMPT, personality_prompt
+from felt_core.brain.personality import (
+    PERSONALITY_PROMPT,
+    daily_persona,
+    per_call_context,
+    with_context,
+)
 from felt_core.brain.replies import local_reply, music_taste_context
 from felt_core.brain.result import ChatResult
 from felt_core.brain.screen_reactions import process_screen_context, react_to_screen
@@ -45,7 +50,9 @@ __all__ = [
     "local_reply",
     "music_taste_context",
     "music_taste_loop",
-    "personality_prompt",
+    "daily_persona",
+    "per_call_context",
+    "with_context",
     "process_screen_context",
     "react_to_screen",
     "weather_precompute_loop",
