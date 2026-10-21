@@ -538,6 +538,8 @@ async def _streamed(message: str, config, session_id: str, timing: dict) -> Chat
         if isinstance(item, ChatResult):
             result = item
             continue
+        if not isinstance(item, str):
+            continue  # ReplyMeta: the tag / ui_action ahead of chunk 0
         if not chunks:
             timing.setdefault("first_s", []).append(round(time.monotonic() - start, 2))
         chunks.append(item)

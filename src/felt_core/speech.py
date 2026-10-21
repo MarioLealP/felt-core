@@ -111,6 +111,10 @@ def speech_chunks(text: str, first_chunk_chars: int = 40, min_chunk_chars: int =
     return chunks
 
 
+# A clause break inside a sentence: ", " "; " ": " or a spaced dash.
+_CLAUSE_END_RE = re.compile(r"[,;:](?=\s)|\s[-\u2013\u2014](?=\s)")
+
+
 class SpeechChunker:
     """speech_chunks() for text that arrives in pieces (WP-65, streamed
     replies): `feed()` each piece as felt-llm writes it and get back the
@@ -124,11 +128,19 @@ class SpeechChunker:
       it and becomes its own last chunk. Later chunks are held back by one,
       so a short leftover joins the last one exactly like speech_chunks.
     Runs on the reply as written (newlines count as sentence ends); the API
-    strips each chunk for TTS."""
+    strips each chunk for TTS.
 
-    def __init__(self, first_chunk_chars: int = 40, min_chunk_chars: int = 25) -> None:
+    `first_at_clause`: the first chunk may also end at a clause break (a
+    comma, semicolon, colon or spaced dash) once it has `first_chunk_chars` -
+    her first words wait on their TTS, and a long opening sentence made that
+    11-12 s (2026-10-21 timer); the rest still split at sentence ends."""
+
+    def __init__(
+        self, first_chunk_chars: int = 40, min_chunk_chars: int = 25, first_at_clause: bool = False
+    ) -> None:
         self.first_chunk_chars = first_chunk_chars
         self.min_chunk_chars = min_chunk_chars
+        self.first_at_clause = first_at_clause
         self.text = ""
         self._start = 0  # where the sentence still being written starts
         self._buffer = ""  # complete sentences, not yet a chunk
@@ -138,14 +150,33 @@ class SpeechChunker:
     def feed(self, piece: str) -> list[str]:
         self.text += piece
         out: list[str] = []
-        for m in _SENTENCE_END_RE.finditer(self.text, self._start):
-            if m.group() != "\n" and m.end() >= len(self.text):
-                break  # the run of ".!?" or the closing quotes may go on
+        pos = self._start
+        while True:
+            m = _SENTENCE_END_RE.search(self.text, pos)
+            if m is not None and m.group() != "\n" and m.end() >= len(self.text):
+                m = None  # the run of ".!?" or the closing quotes may go on
+            if self.first_at_clause and not self._first_out:
+                c = _CLAUSE_END_RE.search(self.text, pos)
+                if (
+                    c is not None
+                    and c.end() < len(self.text)
+                    and (m is None or c.end() < m.start())
+                ):
+                    pos = c.end()
+                    piece = self.text[self._start : c.end()].strip()
+                    joined = f"{self._buffer} {piece}" if self._buffer else piece
+                    if len(joined) >= self.first_chunk_chars:
+                        self._buffer, self._first_out = "", True
+                        self._start = c.end()
+                        out.append(joined)
+                    continue
+            if m is None:
+                return out
+            pos = m.end()
             if _is_abbreviation(self.text, m):
                 continue
             out += self._add(self.text[self._start : m.end()].strip())
             self._start = m.end()
-        return out
 
     def close(self, final_text: str | None = None) -> list[str]:
         """`final_text`: the reply as it finally stands, if it differs from

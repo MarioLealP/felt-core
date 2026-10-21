@@ -55,6 +55,7 @@ from felt_core.app_api import router as app_router
 from felt_core.app_api import schedule_mark
 from felt_core.brain import (
     ChatResult,
+    ReplyMeta,
     chat,
     chat_streamed,
     current_weather,
@@ -618,7 +619,7 @@ def _result_body(result: ChatResult) -> dict:
 
 async def _fill_open_stream(
     stream: reply_stream.ReplyStream,
-    items: AsyncIterator[str | ChatResult],
+    items: AsyncIterator[str | ReplyMeta | ChatResult],
     config: Any,
     on_result: Callable[[ChatResult], None] | None,
 ) -> None:
@@ -632,6 +633,8 @@ async def _fill_open_stream(
                 if isinstance(item, ChatResult):
                     result = item
                     continue
+                if isinstance(item, ReplyMeta):
+                    continue  # went out with chunk 0 (or the result has it)
                 tts_text = strip_for_tts(item)
                 if not tts_text:
                     continue  # nothing to say out loud (an emoji line); the text has it
@@ -670,7 +673,11 @@ async def _reply_v2(
     felt-voice being down, falls back to the whole-reply response."""
     items = chat_streamed(message, config, session_id, tone)
     first: str | ChatResult | None = None
+    meta = ReplyMeta()
     async for item in items:
+        if isinstance(item, ReplyMeta):
+            meta = item  # the skill's hush / reaction: with chunk 0, not at the end
+            continue
         if isinstance(item, ChatResult) or strip_for_tts(item):
             first = item
             break
@@ -706,6 +713,10 @@ async def _reply_v2(
         "X-Reply-Stream-Version": "2",
         **(extra_headers or {}),
     }
+    if meta.ui_action is not None:
+        headers["X-UI-Action"] = quote(json.dumps(asdict(meta.ui_action)))
+    if meta.animation_tag is not None:
+        headers["X-Animation-Tag"] = quote(meta.animation_tag)
     return Response(content=wav, media_type="audio/wav", headers=headers)
 
 

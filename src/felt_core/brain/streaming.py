@@ -17,13 +17,26 @@ reply any more, so (Mario, 2026-10-20, "go with 1"):
 
 import asyncio
 import logging
+from dataclasses import dataclass
 
 from felt_core import local_llm
 from felt_core.brain.lookup_claims import claims_a_tool_use
 from felt_core.config import FeltConfig
+from felt_core.plugin import UIAction
 from felt_core.speech import SpeechChunker
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ReplyMeta:
+    """What a reply does besides speak - known once the skill has run, before
+    her answer streams: chat_streamed() yields it ahead of the first chunk, so
+    the API can send it with chunk 0 (a hush or a reaction can't wait for the
+    reply to finish)."""
+
+    ui_action: UIAction | None = None
+    animation_tag: str | None = None
 
 
 def _norm(text: str) -> str:
@@ -37,8 +50,9 @@ class ReplySpeaker:
 
     def __init__(self, config: FeltConfig) -> None:
         self.first_chunk_chars = config.reply_stream_first_chunk_chars
-        self.chunks: asyncio.Queue[str | None] = asyncio.Queue()
+        self.chunks: asyncio.Queue[str | ReplyMeta | None] = asyncio.Queue()
         self.said: list[str] = []
+        self.told = False  # a ReplyMeta went out
         # the latest streamed call: where its chunks start in `said`, its text
         self._turn_start = 0
         self._turn_text = ""
@@ -50,9 +64,19 @@ class ReplySpeaker:
         self.said.append(chunk)
         self.chunks.put_nowait(chunk)
 
+    def tell(self, meta: ReplyMeta) -> None:
+        """The reply's ui_action / animation tag, as soon as they're known -
+        only while nothing has been said yet (after that, the final result
+        carries them)."""
+        if not self.said and (meta.ui_action is not None or meta.animation_tag is not None):
+            self.told = True
+            self.chunks.put_nowait(meta)
+
     def _chunker(self) -> SpeechChunker:
-        # the "first chunk" size only for her first words of the turn
-        return SpeechChunker(self.first_chunk_chars if not self.said else 25)
+        # the "first chunk" size (and its clause cut) only for her first words of the turn
+        if self.said:
+            return SpeechChunker(25)
+        return SpeechChunker(self.first_chunk_chars, first_at_clause=True)
 
     async def turn(
         self,

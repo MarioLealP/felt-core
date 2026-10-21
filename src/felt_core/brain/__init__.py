@@ -32,9 +32,11 @@ from felt_core.brain.personality import PERSONALITY_PROMPT, personality_prompt
 from felt_core.brain.replies import local_reply, music_taste_context
 from felt_core.brain.result import ChatResult
 from felt_core.brain.screen_reactions import process_screen_context, react_to_screen
+from felt_core.brain.streaming import ReplyMeta
 
 __all__ = [
     "ChatResult",
+    "ReplyMeta",
     "PERSONALITY_PROMPT",
     "chat",
     "chat_streamed",
