@@ -98,6 +98,17 @@ _DONE = re.compile(
 )
 
 
+# cm-p6a (2026-10-22 e2e): after a web search for a launch time, "I've got it
+# set for you" and "I'll ping you at 10" - no set_reminder call. "It's set in
+# 1999" (a story's setting) and "let me remind you that..." aren't claims.
+_SET = re.compile(
+    r"\b(?:i'?ve|i have)\s+got\s+(?:it|that|this|one)\s+(?:all\s+)?(?:set|scheduled|booked)\b"
+    r"|\bi'?ll\s+(?:ping|remind|nudge|buzz|wake)\s+you\b(?!\s+(?:that|of)\b)"
+    r"|\b(?:it'?s|that'?s|reminder'?s|alarm'?s)\s+(?:all\s+)?set\b(?!\s+in\b)",
+    re.IGNORECASE,
+)
+
+
 _THINGS = r"(?:calendar|appointment|event|reminder|alarm|timer|lights?|shopping list)"
 _REFUSAL = re.compile(
     r"\bi(?:\s+(?:can't|cannot|can not)|(?:\s+am|'m) (?:not able|unable) to)\s+"
@@ -118,7 +129,12 @@ def claims_a_lookup(text: str) -> bool:
 
 def claims_an_action(text: str) -> bool:
     opening = _opening(text)
-    return bool(_ACTION.search(opening) or _MUSIC.search(opening) or _DONE.search(opening))
+    return bool(
+        _ACTION.search(opening)
+        or _MUSIC.search(opening)
+        or _DONE.search(opening)
+        or _SET.search(opening)
+    )
 
 
 def refuses_a_tool_job(text: str) -> bool:

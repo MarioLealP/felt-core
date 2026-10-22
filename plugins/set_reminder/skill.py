@@ -26,7 +26,16 @@ parameters_schema = {
     "type": "object",
     "properties": {
         "what": {"type": "string", "description": "What to remind him of"},
-        "when": {"type": "string", "description": "The (first) date and time, as Mario said it"},
+        "when": {
+            "type": "string",
+            "description": "The (first) date and time, as Mario said it; a time from "
+            "elsewhere exactly as found, date and zone ('4 November 2026 3pm PST')",
+        },
+        "minutes_before": {
+            "type": "integer",
+            "description": "Remind this long before `when` ('an hour before it' = 60); "
+            "never do that sum in `when`",
+        },
         "repeat": {
             "type": "string",
             "description": "Default none; weekly = same weekday",
@@ -85,13 +94,29 @@ def split_every(when: str, repeat: str) -> tuple[str, str]:
     return rest.strip(), repeat if repeat in _RRULE else found
 
 
-def describe(start: datetime, repeat: str) -> str:
-    """Pure: 'Friday 3:00 PM' / 'every Monday at 9:00 AM'."""
+def describe(start: datetime, repeat: str, now: datetime | None = None) -> str:
+    """Pure: 'today 3:00 PM' / 'tomorrow 9:00 AM' / 'Wednesday 4 November
+    10:00 PM' / 'every Monday at 9:00 AM'. The date, not the weekday alone:
+    "2pm PST" with the date left out became tonight, and "Thursday" (today)
+    hid it (cm-p6a e2e)."""
     clock = start.strftime("%I:%M %p").lstrip("0")
     if repeat in _EVERY:
         every = _EVERY[repeat].format(day=start.strftime("%A"), date=_ordinal(start.day))
         return f"{every} at {clock}"
-    return f"{start.strftime('%A')} {clock}"
+    if now is not None:
+        days = (start.date() - now.astimezone(start.tzinfo).date()).days
+        if days in (0, 1):
+            return f"{('today', 'tomorrow')[days]} {clock}"
+    return f"{start.strftime('%A')} {start.day} {start.strftime('%B')} {clock}"
+
+
+def _ahead(minutes: int) -> str:
+    """Pure: 60 -> 'an hour', 90 -> '90 minutes', 120 -> '2 hours'."""
+    if minutes == 60:
+        return "an hour"
+    if minutes % 60 == 0:
+        return f"{minutes // 60} hours"
+    return f"{minutes} minutes"
 
 
 def _ordinal(n: int) -> str:
@@ -104,13 +129,20 @@ async def handle(params, ctx):
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")
 
-    what = get_single_param(params, "what", "title", "text", ignore_keys=("when", "repeat"))
-    when_text = get_single_param(params, "when", "time", ignore_keys=("what", "repeat"))
+    others = ("what", "when", "repeat", "minutes_before")
+    what = get_single_param(params, "what", "title", "text", ignore_keys=others)
+    when_text = get_single_param(params, "when", "time", ignore_keys=others)
     if not what or not when_text:
         return SkillResult(text="I need what to remind you about and when.")
     repeat = str(params.get("repeat") or "none").lower()
     if repeat not in _RRULE:
         repeat = "none"
+    # cm-p6a: "an hour before the launch" - she did that sum in `when` and got
+    # it wrong 2 times in 5 (zone dropped, or converted and still called PST)
+    try:
+        before = max(0, int(params.get("minutes_before") or 0))
+    except (TypeError, ValueError):
+        before = 0
 
     when_text, repeat = split_every(str(when_text), repeat)
     if not _HAS_CLOCK.search(when_text):
@@ -122,6 +154,13 @@ async def handle(params, ctx):
         return SkillResult(text=f"I couldn't figure out what time '{when_text}' means.")
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
+    # cm-p6a: "2pm PST" (a launch time from the web) is said back in his
+    # time, so a wrong pick shows (e2e: she set 11am PST - 19:00 here - and
+    # told him "2pm")
+    start -= timedelta(minutes=before)
+    there = start.strftime("%I:%M %p %Z").lstrip("0").strip()
+    elsewhere = start.utcoffset() != start.astimezone(TZ).utcoffset()
+    start = start.astimezone(TZ)
     if repeat != "none" and start <= now:
         start += timedelta(days=1)  # "every day at 9am" said at 10am: from tomorrow
     if start <= now and repeat == "none":
@@ -139,4 +178,14 @@ async def handle(params, ctx):
         )
     except CalendarUnavailable:
         return SkillResult(text="I couldn't reach the calendar to set that reminder.")
-    return SkillResult(text=f"I'll remind you {describe(start, repeat)}: {what}.")
+    # the reminder's own time named as such, both zones, and the thing's
+    # time too - else she says "launch is 10pm, ping at 9" (e2e, 3 of 5)
+    said = f"Reminder set: it goes off {describe(start, repeat, now)}"
+    if elsewhere:
+        said += f" your time ({there} there)"
+    if before:
+        at = (start + timedelta(minutes=before)).strftime("%I:%M %p").lstrip("0")
+        said += f", {_ahead(before)} before the thing itself at {at}" + (
+            " your time" if elsewhere else ""
+        )
+    return SkillResult(text=f"{said}. Reminder text: {what}.")

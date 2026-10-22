@@ -17,10 +17,10 @@ reply any more, so (Mario, 2026-10-20, "go with 1"):
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from felt_core import local_llm
-from felt_core.brain.lookup_claims import claims_a_tool_use
 from felt_core.config import FeltConfig
 from felt_core.plugin import UIAction
 from felt_core.speech import SpeechChunker
@@ -84,12 +84,12 @@ class ReplySpeaker:
         *,
         max_tokens: int,
         tools: list[dict] | None = None,
-        guard: bool = False,
+        guard: Callable[[str], bool] | None = None,
         config: FeltConfig,
     ) -> local_llm.LocalReply:
         """One streamed felt-llm call; returns the whole reply like
         local_llm.chat(). Its chunks are let out as they complete, unless
-        `guard` (the first, tool-carrying call) catches a claimed lookup or
+        `guard` (a tool-carrying call's claim check) catches a claimed lookup or
         action in the opening - then nothing more of this call is said and
         the caller's full-text check takes over. A reply that turns into a
         tool call says nothing more either."""
@@ -100,7 +100,7 @@ class ReplySpeaker:
         def let_out(chunks: list[str]) -> None:
             nonlocal holding
             for chunk in chunks:
-                if not holding and guard and claims_a_tool_use(chunker.text):
+                if not holding and guard is not None and guard(chunker.text):
                     holding = True
                     logger.info(
                         "stream guard: the opening claims a lookup or action - holding the reply"

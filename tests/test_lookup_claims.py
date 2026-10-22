@@ -77,6 +77,13 @@ def test_not_claims(text):
         "Setting the chandelier to thirty percent. There, that's a much more civilized level.",
         "I've dimmed the lights to 30%.",
         "Brought the chandelure down to 20 percent for you.",
+        # cm-p6a, 2026-10-22: after a web search, nothing set
+        "It’s on the fourth of November, three in the afternoon Pacific Time, which is eleven at "
+        "night here. I’ve got it set for you, so you’ll be up an hour before the servers open.",
+        "It goes live November 4th at 11 PM UTC, so I'll ping you at 10.",
+        "I'll remind you an hour before.",
+        "Okay, it's set for 10 PM.",
+        "Your reminder's set.",
     ],
 )
 def test_action_claims(text):
@@ -107,6 +114,10 @@ def test_action_claims(text):
         "I set my mind on finishing this game.",
         "Want me to set the lights to 30 percent?",
         "Should I dim them to 20 percent?",
+        "Want me to ping you an hour before?",
+        "I'll remind you that you said that.",
+        "It's set in 1920s Shanghai, which is half the charm.",
+        "The sun's set already, huh.",
     ],
 )
 def test_not_action_claims(text):
@@ -276,3 +287,89 @@ async def test_a_skill_whose_service_is_down_says_so(tmp_path, monkeypatch):
     )
     assert result is None
     assert "couldn't reach" in output and "poe2_wiki" in output
+
+
+# cm-p6a: tools chained in one message (search, then set the reminder)
+def _two_skills(handled):
+    def skill(name, text):
+        async def handle(params, ctx):
+            handled.append((name, params))
+            return SkillResult(text=text)
+
+        return LoadedSkill(
+            name=name,
+            description=name,
+            parameters_schema={"type": "object", "properties": {"q": {"type": "string"}}},
+            handle=handle,
+        )
+
+    return {
+        "web_search": skill("web_search", "WoW Forever launches Nov 4, 23:00 Lisbon."),
+        "set_reminder": skill("set_reminder", "Reminder set for Nov 4, 22:00."),
+    }
+
+
+def _tool(name, q="x", call_id="c1"):
+    call = {"id": call_id, "type": "function"}
+    call["function"] = {"name": name, "arguments": json.dumps({"q": q})}
+    return {"text": "", "tool_calls": [call]}
+
+
+async def test_a_second_tool_call_runs(tmp_path, monkeypatch, fake_llm):
+    handled = []
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _two_skills(handled))
+    fake_llm.script = [
+        _tool("web_search", "wow forever launch time"),
+        _tool("set_reminder", "nov 4 22:00", "c2"),
+        "It launches at 11 tonight - you'll get a nudge at 10.",
+    ]
+
+    result = await orchestrator.chat("google it and remind me", _config(tmp_path), session_id="s")
+
+    assert [name for name, _ in handled] == ["web_search", "set_reminder"]
+    assert result.reply == "It launches at 11 tonight - you'll get a nudge at 10."
+    tool_results = [m for m in fake_llm.calls[2]["messages"] if m["role"] == "tool"]
+    assert len(tool_results) == 2 and "Reminder set" in tool_results[1]["content"]
+
+
+async def test_a_claimed_reminder_after_a_search_is_retried(tmp_path, monkeypatch, fake_llm):
+    handled = []
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _two_skills(handled))
+    fake_llm.script = [
+        _tool("web_search"),
+        "It's at eleven at night here. I've got it set for you.",
+        _tool("set_reminder", "nov 4 22:00", "c2"),
+        "Eleven tonight; I'll nudge you at ten.",
+    ]
+
+    result = await orchestrator.chat("google it and remind me", _config(tmp_path), session_id="s")
+
+    assert [name for name, _ in handled] == ["web_search", "set_reminder"]
+    assert [c["tool_choice"] for c in fake_llm.calls] == [None, None, "required", None]
+    assert result.reply == "Eleven tonight; I'll nudge you at ten."
+
+
+async def test_a_repeated_call_ends_the_chain(tmp_path, monkeypatch, fake_llm, caplog):
+    handled = []
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _two_skills(handled))
+    fake_llm.script = [_tool("web_search", "same"), _tool("web_search", "same", "c2"), "phrased"]
+
+    result = await orchestrator.chat("google it", _config(tmp_path), session_id="s")
+
+    assert [name for name, _ in handled] == ["web_search"]
+    assert "repeated web_search" in caplog.text
+    assert result.reply == "phrased"
+
+
+async def test_the_chain_stops_at_the_cap(tmp_path, monkeypatch, fake_llm):
+    handled = []
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _two_skills(handled))
+    cap = orchestrator._MAX_TOOL_STEPS
+    fake_llm.script = [_tool("web_search", f"q{i}", f"c{i}") for i in range(cap + 1)] + ["phrased"]
+
+    result = await orchestrator.chat("google it", _config(tmp_path), session_id="s")
+
+    assert len(handled) == cap
+    assert result.reply == "phrased"
+    # the cut-short chain's phrasing is told what was really done
+    assert "Only these steps were done" in fake_llm.calls[-1]["messages"][-1]["content"]
