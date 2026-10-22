@@ -37,7 +37,7 @@ async def test_a_one_off_reminder(monkeypatch, tmp_path):
     [event] = created
     assert event["summary"] == "call the dentist"
     assert event["calendar"] == "calendar.felt_reminders" and event["rrule"] is None
-    assert text.startswith("I'll remind you") and "call the dentist" in text
+    assert text.startswith("Reminder set") and "call the dentist" in text
 
 
 async def test_a_weekly_reminder(monkeypatch, tmp_path):
@@ -48,6 +48,36 @@ async def test_a_weekly_reminder(monkeypatch, tmp_path):
     )
     assert created[0]["rrule"] == "FREQ=WEEKLY"
     assert "every Monday at 9:00 AM" in text
+
+
+async def test_a_time_from_elsewhere_is_said_in_his_time(monkeypatch, tmp_path):
+    # cm-p6a: WoW Forever launches 3pm PST - an hour before is 22:00 in Portugal
+    created, text = await _run(
+        monkeypatch, tmp_path, {"what": "WoW Forever", "when": "November 4, 2027 at 2pm PST"}
+    )
+    assert created[0]["start"].astimezone(UTC).hour == 22
+    assert "Thursday 4 November 10:00 PM your time (2:00 PM" in text
+
+
+async def test_minutes_before_does_the_sum(monkeypatch, tmp_path):
+    # she copies the launch time as found; the skill takes the hour off
+    created, text = await _run(
+        monkeypatch,
+        tmp_path,
+        {"what": "WoW Forever", "when": "4 November 2027 3pm PST", "minutes_before": 60},
+    )
+    assert created[0]["start"].astimezone(UTC).hour == 22
+    assert "goes off Thursday 4 November 10:00 PM your time (2:00 PM PST there)" in text
+    assert "an hour before the thing itself at 11:00 PM your time" in text
+
+
+def test_a_one_off_says_today_or_the_date():
+    skill = load_plugin_module("set_reminder/skill.py")
+    now = datetime(2026, 10, 22, 13, 0, tzinfo=UTC)
+    at = datetime(2026, 10, 22, 23, 0, tzinfo=UTC)
+    assert skill.describe(at, "none", now) == "today 11:00 PM"
+    assert skill.describe(at + timedelta(days=1), "none", now) == "tomorrow 11:00 PM"
+    assert skill.describe(at + timedelta(days=2), "none", now) == "Saturday 24 October 11:00 PM"
 
 
 async def test_a_past_one_off_is_refused(monkeypatch, tmp_path):
