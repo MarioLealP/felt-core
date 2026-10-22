@@ -30,6 +30,7 @@ FEATURES: dict[str, tuple[bool, str]] = {
     "email.new_mail": (True, "'Mail from X, want a summary?' when mail arrives"),
     "calendar.headsup": (True, "Heads-up 30 and 10 min before events, leave-now lines"),
     "ender.print_done": (True, "Ender print finished/failed lines"),
+    "brief.morning": (True, "Morning brief: today, weather, news, overnight alerts"),
     "memory.diary": (True, "Nightly diary + self-memories"),
 }
 

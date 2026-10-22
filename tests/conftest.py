@@ -104,6 +104,22 @@ def spotify_config():
 
 
 @pytest.fixture(autouse=True)
+def _no_morning_brief(request, monkeypatch):
+    """Any chat() after 05:00 starts the morning brief (WP-45, brief.py) -
+    model calls and skills of its own that would eat other tests' scripted
+    replies. Off everywhere but test_brief.py."""
+    if request.module.__name__.endswith("test_brief"):
+        return
+    from felt_core import brief
+
+    async def no_brief(*a, **k):
+        return None
+
+    monkeypatch.setattr(brief, "will_open_with", lambda *a, **k: False)
+    monkeypatch.setattr(brief, "maybe_brief", no_brief)
+
+
+@pytest.fixture(autouse=True)
 def _stable_persona_examples(monkeypatch):
     """Live replies rotate the persona's example sample on every call
     (brain/persona.py); tests compare prompts for equality, so pin the
