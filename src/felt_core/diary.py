@@ -348,7 +348,12 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
 
     greeting = str(parsed.get("greeting") or "").strip()
     if greeting and features.enabled(config.db_path, "ambient.morning_greeting"):
-        enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
+        from felt_core import brief
+
+        if brief.will_open_with(config):  # the brief opens with it (brief.py)
+            db.set_setting(config.db_path, brief.GREETING_KEY, greeting)
+        else:
+            enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
 
     await _maybe_compress_week(config, date_str)
     return True
@@ -452,6 +457,18 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
         logger.exception("diary: writer failed for %s", target_date)
     finally:
         _writing.discard(target_date)
+    await _brief(config)
+
+
+async def _brief(config: FeltConfig) -> None:
+    """The morning brief after the diary (WP-45, brief.py) - its greeting
+    is the brief's opening. Once a day; errors logged, never raised."""
+    from felt_core import brief
+
+    try:
+        await brief.maybe_brief(config)
+    except Exception:
+        logger.exception("brief: failed")
 
 
 _writing: set[str] = set()
@@ -470,9 +487,12 @@ _tasks: set = set()
 
 
 def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
-    """Fire-and-forget day-start trigger; a no-op before 05:00 local, once
-    yesterday's entry exists, or when that date was tried recently."""
+    """Fire-and-forget day-start trigger: yesterday's diary entry if it's
+    missing (not retried within RETRY_S), then the morning brief if it's
+    still due today. A no-op before 05:00 local."""
     import asyncio
+
+    from felt_core import brief
 
     at = (now or datetime.now(UTC)).astimezone(UTC)
     at_str = at.strftime("%Y-%m-%d %H:%M:%S")
@@ -481,10 +501,19 @@ def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
         return
     last = _tried.get(target)
     if last is not None and at.timestamp() - last < RETRY_S:
-        return
-    _tried[target] = at.timestamp()
-    if db.get_diary(config.db_path, target) is not None:
-        return
-    task = asyncio.get_running_loop().create_task(on_event(config, "day_start", at_str))
+        # the diary was just tried; the brief (WP-45) may still be due
+        if brief.will_open_with(config, at):
+            work = _brief(config)
+        else:
+            return
+    else:
+        _tried[target] = at.timestamp()
+        if db.get_diary(config.db_path, target) is None:
+            work = on_event(config, "day_start", at_str)  # the diary, then the brief
+        elif brief.will_open_with(config, at):
+            work = _brief(config)
+        else:
+            return
+    task = asyncio.get_running_loop().create_task(work)
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
