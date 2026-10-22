@@ -6,7 +6,8 @@ Klipper's moonraker publishes the printer over MQTT into HA (device "Ender",
 `sensor.ender_*`; workspace runbooks/ender3-max-neo-klipper.md), so she reads
 it with her own non-admin HA token like the phone and leave-by. `watch`
 polls the state and says it - desk + phone - when a print finishes, fails,
-is cancelled or pauses, in her own words (her model; Mario: "everything that
+is cancelled or pauses (a runout pause named as such, 2026-10-22), in her
+own words (her model; Mario: "everything that
 comes through felt should be routed through her llm so it gets her
 personality"), a plain line only when felt-llm is down. The last state is
 kept in the db, so a felt-core restart neither misses nor repeats one.
@@ -124,6 +125,19 @@ async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]
     return out
 
 
+async def _filament(config: FeltConfig) -> str | None:
+    """Klipper's runout sensor (binary_sensor.ender_filament, on = filament
+    in), or None when HA doesn't have it - never in the way of the line."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, headers={"Authorization": f"Bearer {config.ha_token}"}
+        ) as client:
+            r = await client.get(f"{config.ha_url}/api/states/binary_sensor.ender_filament")
+    except httpx.HTTPError:
+        return None
+    return r.json()["state"] if r.status_code == 200 else None
+
+
 async def snapshot(config: FeltConfig) -> Snapshot:
     return snapshot_from(await _states(config, _FIELDS))
 
@@ -194,6 +208,11 @@ def build_prompt(event: str, s: Snapshot) -> str:
     elif event == "error":
         why = f' Klipper says: "{s.message}".' if s.message else ""
         what = f"Mario's 3D printer (the Ender) stopped with an error while printing{name}.{why}"
+    elif event == "runout":
+        what = (
+            f"Mario's 3D printer (the Ender) ran out of filament while printing{name} and "
+            "paused itself. He needs to load new filament and press Resume."
+        )
     else:
         why = f' Klipper says: "{s.message}".' if s.message else ""
         what = f"Mario's 3D printer (the Ender) paused while printing{name}.{why}"
@@ -216,6 +235,8 @@ def line_for(event: str, s: Snapshot) -> str:
     if event == "error":
         why = f": {s.message}" if s.message else ""
         return f"The Ender stopped with an error{name}{why}."
+    if event == "runout":
+        return f"The Ender ran out of filament{name} - it's paused; load more and hit Resume."
     why = f" - {s.message}" if s.message else ""
     return f"The Ender paused{name}{why}."
 
@@ -230,6 +251,8 @@ async def check(config: FeltConfig) -> str | None:
         return None
     db.set_setting(config.db_path, _LAST_KEY, cur)
     event = event_for(prev, cur)
+    if event == "paused" and await _filament(config) == "off":
+        event = "runout"  # Klipper's runout sensor paused it (pause_on_runout)
     if event is None or not features.enabled(config.db_path, "ender.print_done"):
         return None
     with llm_gate.timely("print"):

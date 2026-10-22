@@ -19,7 +19,7 @@ def _config(tmp_path):
 
 @pytest.fixture
 def ha(monkeypatch):
-    """Fake HA: `ha.states` (field -> state) answers GET /api/states/sensor.ender_<field>;
+    """Fake HA: `ha.states` (field -> state) answers GET /api/states/[binary_]sensor.ender_<field>;
     POSTs (the phone notification) are recorded."""
 
     class HA:
@@ -30,7 +30,8 @@ def ha(monkeypatch):
         if request.method == "POST":
             HA.posts.append({"path": request.url.path})
             return httpx.Response(200, json=[])
-        field = request.url.path.rsplit("/", 1)[1].removeprefix("sensor.ender_")
+        name = request.url.path.rsplit("/", 1)[1]
+        field = name.removeprefix("binary_sensor.ender_").removeprefix("sensor.ender_")
         if field not in HA.states:
             return httpx.Response(404)
         return httpx.Response(200, json={"state": HA.states[field]})
@@ -213,3 +214,25 @@ async def test_empty_reply_falls_back(tmp_path, ha, said, monkeypatch):
     db.set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "cancelled"}
     assert await ender.check(config) == "The Ender's print was cancelled."
+
+
+async def test_a_runout_pause_says_why(tmp_path, ha, said):
+    # 2026-10-22: Klipper's runout sensor paused it - she says so, desk + phone
+    config = _config(tmp_path)
+    db.set_setting(config.db_path, "ender_last_state", "printing")
+    ha.states = {"state": "paused", "file": "Cube.gcode", "filament": "off"}
+    line = "The Ender ran out of filament (Cube) - it's paused; load more and hit Resume."
+    assert await ender.check(config) == line
+    assert said == [line] and len(ha.posts) == 1
+
+
+async def test_a_plain_pause_with_filament_in(tmp_path, ha, said):
+    config = _config(tmp_path)
+    db.set_setting(config.db_path, "ender_last_state", "printing")
+    ha.states = {"state": "paused", "filament": "on"}
+    assert await ender.check(config) == "The Ender paused."
+
+
+def test_the_runout_prompt():
+    prompt = ender.build_prompt("runout", ender.snapshot_from({"file": "Cube.gcode"}))
+    assert "ran out of filament" in prompt and "Resume" in prompt
