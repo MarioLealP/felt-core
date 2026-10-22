@@ -13,7 +13,7 @@ from felt_core.plugin import SkillResult
 name = "web_search"
 description = (
     "Searches the web and returns snippets to answer from. Not for weather (get_weather),"
-    " Felt's alerts (get_recent_alerts) or a feed URL (news_digest)."
+    " Felt's alerts (get_recent_alerts) or the news he follows (news_digest)."
 )
 parameters_schema = {
     "type": "object",

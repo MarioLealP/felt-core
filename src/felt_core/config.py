@@ -119,13 +119,6 @@ class FeltConfig(BaseSettings):
     board_path: str = ".beads/issues.jsonl"
     board_token: str | None = None
 
-    # News/RSS digest — comma-separated feed URLs. Empty by default;
-    # Mario hasn't specified which feeds he actually wants yet.
-    news_feeds: str = ""
-
-    def news_feeds_list(self) -> list[str]:
-        return [f.strip() for f in self.news_feeds.split(",") if f.strip()]
-
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None
@@ -157,7 +150,7 @@ class FeltConfig(BaseSettings):
     # already talks to (CM_HA_URL/CM_HA_TOKEN there), not a new HA
     # integration. Deliberately its own explicit allowlist rather than
     # exposing every HA entity to voice control sight-unseen — empty by
-    # default, same "unset/empty = disabled" convention as news_feeds.
+    # default, same "unset/empty = disabled" convention.
     ha_url: str | None = None
     ha_token: str | None = None
     ha_entities: str = ""
