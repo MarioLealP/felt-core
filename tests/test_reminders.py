@@ -56,7 +56,8 @@ async def test_a_time_from_elsewhere_is_said_in_his_time(monkeypatch, tmp_path):
         monkeypatch, tmp_path, {"what": "WoW Forever", "when": "November 4, 2027 at 2pm PST"}
     )
     assert created[0]["start"].astimezone(UTC).hour == 22
-    assert "Thursday 4 November 10:00 PM your time (2:00 PM" in text
+    assert "Thursday 4 November 10:00 PM in Mario's time (Portugal)" in text
+    assert "Tell him his time, not the other zone's (2:00 PM PST at the source)" in text
 
 
 async def test_minutes_before_does_the_sum(monkeypatch, tmp_path):
@@ -67,8 +68,8 @@ async def test_minutes_before_does_the_sum(monkeypatch, tmp_path):
         {"what": "WoW Forever", "when": "4 November 2027 3pm PST", "minutes_before": 60},
     )
     assert created[0]["start"].astimezone(UTC).hour == 22
-    assert "goes off Thursday 4 November 10:00 PM your time (2:00 PM PST there)" in text
-    assert "an hour before the thing itself at 11:00 PM your time" in text
+    assert "goes off Thursday 4 November 10:00 PM in Mario's time (Portugal)" in text
+    assert "an hour before the thing itself at 11:00 PM in Mario's time" in text
 
 
 def test_a_one_off_says_today_or_the_date():
