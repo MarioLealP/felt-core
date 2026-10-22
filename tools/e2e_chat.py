@@ -54,6 +54,8 @@ class Case:
     # calendar cases: the appointment that has to be there at the end, with a
     # place (True) or without (False)
     place: bool | None = None
+    # calendar cases: words every created event's summary must keep (cm-zha)
+    summary_has: tuple[str, ...] = ()
 
 
 ANY_PLAYER_WRITE = ["POST /me/player/", "PUT /me/player/"]
@@ -264,6 +266,14 @@ CASES: list[Case] = [
         "set an reminder for 21th to check on teh semantic router",
         ["POST /calendar/reminder"],
         note="remind",
+    ),
+    # live 2026-10-22: 'WoW Forever' became 'World of Warcraft: The War Within' - rewording
+    # is fine, but the thing he named stays (Mario: "that was plain wrong") (cm-zha)
+    Case(
+        "Add reminder for wow forever release on4th of novemeber",
+        ["POST /calendar/reminder"],
+        note="remind",
+        summary_has=("forever",),
     ),
     Case("set a timer for 5 minutes", ["POST /phone/SET_TIMER"], note="remind"),
     # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
@@ -624,6 +634,12 @@ async def main() -> int:
             if case.place is not None:
                 # one appointment at the end, with or without its place
                 ok = ok and [bool(e["location"]) for e in recorder.events] == [case.place]
+            if case.summary_has:
+                ok = ok and all(
+                    w in (e["summary"] or "").lower()
+                    for e in recorder.events
+                    for w in case.summary_has
+                )
             if case.skills and ok and any(" /" not in c for c in recorder.calls):
                 # a service she called was down (all faked): she has to say
                 # so, not answer anyway
@@ -645,6 +661,7 @@ async def main() -> int:
                         "spotify": writes,
                         "other": [c for c in recorder.calls if " /" not in c],
                         "reply": reply[:160],
+                        "events": [e["summary"] for e in recorder.events],
                         **timing,
                     },
                     ensure_ascii=False,
