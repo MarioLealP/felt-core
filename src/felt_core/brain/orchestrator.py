@@ -27,7 +27,7 @@ from felt_core import features, ha_assist, local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
-from felt_core.brain.lookup_claims import claims_a_tool_use
+from felt_core.brain.lookup_claims import claims_a_tool_use, claims_an_action
 from felt_core.brain.music_fast_path import music_fast_path
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
@@ -186,6 +186,45 @@ def _apply_call_guards(
     return call
 
 
+# cm-p6a (2026-10-22): "google the launch time and set me a reminder an hour
+# before" needs two tools - with one tool per message she searched, then
+# said "I've got it set for you" with nothing set. After each tool result
+# she may call another; capped (a stuck model repeating a search would hold
+# felt-llm for minutes) and a repeated call ends the chain.
+_MAX_TOOL_STEPS = 5
+_CHAIN_NOTE = (
+    "If what he asked still needs another tool to be done (he asked for more than one "
+    "thing, e.g. to find something and then set a reminder), call that tool now instead "
+    "of answering. Never say something is done unless its tool result is above."
+)
+# Skills that only read. While every call so far was one of these, an "I've
+# got it set" in her follow-up is a fake claim and gets a tool forced; once
+# something acted, "I'll nudge you at ten" is true, and forcing a tool could
+# set the reminder twice. A skill not listed counts as acting (never forced).
+_LOOKUP_SKILLS = frozenset(
+    {
+        "board_status",
+        "check_email",
+        "diary_recall",
+        "get_container_status",
+        "get_gpu_status",
+        "get_phone_battery",
+        "get_recent_alerts",
+        "get_time",
+        "get_weather",
+        "list_alarms",
+        "list_calendar_events",
+        "news_digest",
+        "now_playing",
+        "poe2_wiki",
+        "poe_price_check",
+        "printer_status",
+        "search_documents",
+        "web_search",
+    }
+)
+
+
 def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
     """WP-06 fast path: the precomputed "weather right now" line, if the
     picked call is that question and a fresh one exists."""
@@ -247,11 +286,11 @@ async def _reply_turn(
     speaker: ReplySpeaker | None,
     *,
     tools: list[dict] | None = None,
-    guard: bool = False,
+    guard: Callable[[str], bool] | None = None,
 ) -> local_llm.LocalReply:
     """A felt-llm call that may be her answer: streamed through the
     speaker when chat_streamed() is running the turn (WP-65), else the
-    plain call."""
+    plain call. `guard` spots a fake claim in the streamed opening."""
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
         if speaker is None:
             return await local_llm.chat(
@@ -260,6 +299,31 @@ async def _reply_turn(
         return await speaker.turn(
             messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, guard=guard, config=config
         )
+
+
+async def _forced_tool_turn(
+    messages: list[dict], tools: list[dict], config: FeltConfig
+) -> local_llm.LocalReply | None:
+    """FELT-108: the same call again with a tool call required, after a
+    reply claimed a lookup or action it never did. None when that fails or
+    still calls nothing - the caller keeps the plain reply (never worse than
+    before)."""
+    try:
+        async with metrics.timed("reply", route="local", model=config.local_llm_model):
+            forced = await local_llm.chat(
+                messages,
+                max_tokens=_REPLY_MAX_TOKENS,
+                tools=tools,
+                tool_choice="required",
+                config=config,
+            )
+    except local_llm.LocalLLMUnavailable as e:
+        logger.warning("forced retry failed (%s) - keeping the plain reply", e)
+        return None
+    if not forced.tool_calls:
+        logger.warning("forced retry still called no tool - keeping the plain reply")
+        return None
+    return forced
 
 
 def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
@@ -321,7 +385,7 @@ async def _chat_local(
     tool_call: dict | None = None
     claimed = False
     if fast_call is None:
-        first = await _reply_turn(prefix, config, speaker, tools=tools, guard=True)
+        first = await _reply_turn(prefix, config, speaker, tools=tools, guard=claims_a_tool_use)
         if not first.tool_calls and claims_a_tool_use(first.text):
             claimed = True
             # FELT-108: she said she'd look it up ("pulling up the wiki...")
@@ -331,22 +395,9 @@ async def _chat_local(
             logger.warning(
                 "reply claimed a lookup or action without a tool call - retrying with a tool required"
             )
-            try:
-                async with metrics.timed("reply", route="local", model=config.local_llm_model):
-                    forced = await local_llm.chat(
-                        prefix,
-                        max_tokens=_REPLY_MAX_TOKENS,
-                        tools=tools,
-                        tool_choice="required",
-                        config=config,
-                    )
-            except local_llm.LocalLLMUnavailable as e:  # never worse than before
-                logger.warning("forced retry failed (%s) - keeping the plain reply", e)
-                forced = None
-            if forced is not None and forced.tool_calls:
+            forced = await _forced_tool_turn(prefix, tools, config)
+            if forced is not None:
                 first = forced
-            elif forced is not None:
-                logger.warning("forced retry still called no tool - keeping the plain reply")
         if first.tool_calls:
             tool_call = first.tool_calls[0]
             name, params = local_llm.parse_tool_arguments(tool_call)
@@ -382,24 +433,67 @@ async def _chat_local(
         speaker.tell(ReplyMeta(early.ui_action, early.animation_tag))
 
     reply = ""
+    steps = [(call, tool_output)]
     if tool_call is not None and first is not None:
-        tool_message = _tool_result_instruction(tool_output)
-        if claimed and speaker is not None and speaker.said:
-            # the guard caught the claim only after part of it was said
-            tool_message += "\n\n" + correction_note(speaker.said_text())
-        followup = prefix + [
-            {"role": "assistant", "content": first.text, "tool_calls": [tool_call]},
-            {
-                "role": "tool",
-                "tool_call_id": str(tool_call.get("id") or ""),
-                "content": tool_message,
-            },
-        ]
-        second = await _reply_turn(followup, config, speaker, tools=tools)
-        reply = second.text.strip()
+        # the guard caught the claim only after part of it was said
+        late = claimed and speaker is not None and bool(speaker.said)
+        followup = prefix
+        assistant_text = first.text
+        while True:
+            more = len(steps) < _MAX_TOOL_STEPS
+            only_looked = all(done[0] in _LOOKUP_SKILLS for done, _ in steps)
+            check = claims_an_action if more and only_looked else None
+            tool_message = _tool_result_instruction(tool_output)
+            if more:
+                tool_message += "\n\n" + _CHAIN_NOTE
+            if late and speaker is not None:
+                tool_message += "\n\n" + correction_note(speaker.said_text())
+            followup = followup + [
+                {"role": "assistant", "content": assistant_text, "tool_calls": [tool_call]},
+                {
+                    "role": "tool",
+                    "tool_call_id": str(tool_call.get("id") or ""),
+                    "content": tool_message,
+                },
+            ]
+            said_before = len(speaker.said) if speaker is not None else 0
+            nxt = await _reply_turn(followup, config, speaker, tools=tools, guard=check)
+            late = False
+            if check is not None and not nxt.tool_calls and check(nxt.text):
+                # cm-p6a: "I've got it set for you" with no set_reminder call
+                logger.warning(
+                    "follow-up claimed an action without a tool call - retrying with a tool required"
+                )
+                forced = await _forced_tool_turn(followup, tools, config)
+                if forced is not None:
+                    nxt = forced
+                    late = speaker is not None and len(speaker.said) > said_before
+            next_call = None
+            if more and nxt.tool_calls:
+                name, params = local_llm.parse_tool_arguments(nxt.tool_calls[0])
+                next_call = _apply_call_guards((name, params) if name else None, None, message)
+            if next_call is None:
+                reply = "" if nxt.tool_calls else nxt.text.strip()
+                break
+            if any(next_call == done for done, _ in steps):
+                logger.warning(
+                    "she repeated %s with the same arguments - answering with what she has",
+                    next_call[0],
+                )
+                break
+            tool_call, assistant_text = nxt.tool_calls[0], nxt.text
+            skill_name = next_call[0]
+            result, tool_output = await _run_skill_call(next_call, registry, config, message)
+            steps.append((next_call, tool_output))
     if not reply:
-        # The presence fast path (no model turn yet), or an empty phrasing
-        # call: the shared plain phrasing step.
+        # The presence fast path (no model turn yet), an empty phrasing
+        # call, or a tool chain cut short: the shared plain phrasing step,
+        # told everything that was really done.
+        if len(steps) > 1:
+            tool_output = (
+                "\n".join(f"{done[0]}: {output}" for done, output in steps)
+                + "\nOnly these steps were done - don't say anything else was."
+            )
         async with metrics.timed("reply", route="local", model=config.local_llm_model):
             reply = await phrase_skill_result(message, tool_output, history, config, tone)
     reply = _said(config, session_id, reply, speaker)
