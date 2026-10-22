@@ -180,12 +180,13 @@ async def handle(params, ctx):
         return SkillResult(text="I couldn't reach the calendar to set that reminder.")
     # the reminder's own time named as such, both zones, and the thing's
     # time too - else she says "launch is 10pm, ping at 9" (e2e, 3 of 5)
-    said = f"Reminder set: it goes off {describe(start, repeat, now)}"
-    if elsewhere:
-        said += f" your time ({there} there)"
+    # live 2026-10-22: given "10 PM your time (2 PM PST there)" she said
+    # "2 p.m. PST" - his time is the one to say, the other only a side note
+    mine = " in Mario's time (Portugal)" if elsewhere else ""
+    said = f"Reminder set: it goes off {describe(start, repeat, now)}{mine}"
     if before:
         at = (start + timedelta(minutes=before)).strftime("%I:%M %p").lstrip("0")
-        said += f", {_ahead(before)} before the thing itself at {at}" + (
-            " your time" if elsewhere else ""
-        )
+        said += f", {_ahead(before)} before the thing itself at {at}{mine}"
+    if elsewhere:
+        said += f". Tell him his time, not the other zone's ({there} at the source)"
     return SkillResult(text=f"{said}. Reminder text: {what}.")
