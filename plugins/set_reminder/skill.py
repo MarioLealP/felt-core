@@ -28,13 +28,14 @@ parameters_schema = {
         "what": {"type": "string", "description": "What to remind him of"},
         "when": {
             "type": "string",
-            "description": "The (first) date and time, as Mario said it; a time from "
-            "elsewhere exactly as found, date and zone ('4 November 2026 3pm PST')",
+            "description": "When the thing itself happens (the launch, the appointment), as "
+            "Mario said it or exactly as found, date and zone ('4 November 2026 3pm PST'). "
+            "Never moved earlier for 'an hour before' - that is minutes_before",
         },
         "minutes_before": {
             "type": "integer",
             "description": "Remind this long before `when` ('an hour before it' = 60); "
-            "never do that sum in `when`",
+            "`when` stays the thing's own time",
         },
         "repeat": {
             "type": "string",

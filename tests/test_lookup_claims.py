@@ -25,6 +25,10 @@ from felt_core.plugin_loader import LoadedSkill
         "One sec, I'll search your documents for it.",
         "Pulling up the wiki now.",
         "Looking it up...",
+        "I looked it up and couldn't find the exact launch time for WoW Forever.",
+        "I’ve googled it - nothing official yet.",
+        "I checked online and it's not out yet.",
+        "I did a quick search, nothing public.",
     ],
 )
 def test_claims(text):
@@ -38,6 +42,9 @@ def test_claims(text):
         "Morning! Coffee first?",
         "",
         "That's the reroll orb. " * 10 + "Let me know if you want more.",
+        "I checked out that anime you mentioned, it's great.",
+        "You looked it up already, didn't you?",
+        "I searched my feelings and I still hate Mondays.",
     ],
 )
 def test_not_claims(text):

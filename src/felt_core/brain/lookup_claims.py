@@ -24,6 +24,10 @@ calendar because I don't have access to your calendar system here" - she
 has the tool, she just didn't call it. Only "can't" with a doing-verb and
 one of her tool's objects, said about herself, counts, so "I can't wait for the event" isn't one.
 
+Past tense too (2026-10-22 live): "I looked it up and couldn't find the
+exact launch time" - no search that turn, the line copied from an earlier
+answer in the history.
+
 Bonsai writes curly apostrophes ("I’ve", "can’t"); they're straightened
 before matching.
 """
@@ -41,6 +45,11 @@ _CLAIM = re.compile(
     r"|looking (that|this|it) up"
     r"|pulling (up|that up|it up)"
     r"|searching (for|my|your|the|through)"
+    # 2026-10-22 live: "I looked it up and couldn't find..." with no tool call
+    # - her earlier answer to the same question, copied from the history
+    r"|i(?:'?ve| have)?\s+(?:just\s+)?(?:looked (?:it|that|this) up|googled"
+    r"|did a (?:quick\s+)?search|searched (?:for|online|the web|around)"
+    r"|checked (?:online|the web|and|for))"
     r")",
     re.IGNORECASE,
 )
