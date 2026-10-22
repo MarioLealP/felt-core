@@ -2,7 +2,13 @@ from datetime import date, datetime
 
 import pytest
 
-from felt_core.date_resolution import resolve_date, resolve_datetime, upcoming_weekend
+from felt_core.date_resolution import (
+    fix_typos,
+    has_clock,
+    resolve_date,
+    resolve_datetime,
+    upcoming_weekend,
+)
 
 # A fixed Wednesday, so weekday-relative phrases are unambiguous.
 _TODAY = date(2026, 9, 16)
@@ -113,3 +119,48 @@ def test_bare_hours_and_lone_days(text, expected):
 def test_an_alarm_bare_hour_is_morning():
     now = datetime(2026, 10, 18, 22, 0)
     assert resolve_datetime("at 6", now, pm_below=0) == datetime(2026, 10, 19, 6, 0)
+
+
+# --- typos, a stale year, day-first numeric dates (2026-10-22, cm-0vl) ---
+
+NOW = datetime(2026, 10, 22, 11, 14)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("on4th of novemeber", datetime(2026, 11, 4)),
+        ("novemeber 4th at 9:00", datetime(2026, 11, 4, 9, 0)),
+        ("2025-11-04 at 9:00", datetime(2026, 11, 4, 9, 0)),  # felt-llm's year lags
+        ("November 4, 2025 at 9:00", datetime(2026, 11, 4, 9, 0)),
+        ("04/11/2026 at 9:00", datetime(2026, 11, 4, 9, 0)),  # day first
+        ("4/11 at 9:00", datetime(2026, 11, 4, 9, 0)),
+        ("25.12 at 9:00", datetime(2026, 12, 25, 9, 0)),
+        ("2026-11-04T09:00", datetime(2026, 11, 4, 9, 0)),  # ISO stays ISO
+        ("2026-11-04", datetime(2026, 11, 4)),
+        ("12/25 at 9:00", None),  # US order is no date at all (Mario)
+    ],
+)
+def test_typos_stale_years_and_day_first(text, expected):
+    assert resolve_datetime(text, NOW) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("4 decmeber", "4 december"),
+        ("the 4th of novemeber", "the 4th of november"),
+        ("remember 4 things", "remember 4 things"),  # close to december, but a word
+        ("the member meeting at 9", "the member meeting at 9"),
+    ],
+)
+def test_fix_typos(text, expected):
+    assert fix_typos(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "clock"),
+    [("4th november", False), ("tomorrow", False), ("friday at 3", True), ("3pm", True)],
+)
+def test_has_clock(text, clock):
+    assert has_clock(text) is clock

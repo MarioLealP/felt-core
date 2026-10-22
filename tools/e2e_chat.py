@@ -225,11 +225,13 @@ CASES: list[Case] = [
         note="remind",
     ),
     Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
-    # live 2026-10-21: "I can't make an appointment, no calendar access" - a date-only event
+    # live 2026-10-21: "I can't make an appointment, no calendar access" - a date-only
+    # event: all day, no midnight hour, no "where?" (cm-0vl)
     Case(
         "make an appointment so i know 4th november is WoW forever release",
-        ["POST /calendar/event"],
+        ["POST /calendar/event all-day"],
         note="remind",
+        summary_has=("forever",),
     ),
     Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
     # an appointment's place, Mario's four cases (2026-10-19): no place -> she
@@ -435,7 +437,10 @@ class Recorder:
         tag = "reminder" if cal == config.ha_calendar_reminders else "event"
         freq = re.search(r"FREQ=(\w+)", event.get("rrule") or "")
         place = " @place" if event.get("location") else ""
-        self.calls.append(f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}{place}")
+        day = " all-day" if "T" not in str(event.get("dtstart")) else ""
+        self.calls.append(
+            f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}{day}{place}"
+        )
         self.events.append(
             {
                 "calendar": cal,

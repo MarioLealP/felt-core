@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from felt_core import appointment_hold
-from felt_core.date_resolution import resolve_datetime
+from felt_core.date_resolution import has_clock, resolve_datetime
 from felt_core.ha_calendar import (
     TZ,
     CalendarUnavailable,
@@ -77,7 +77,14 @@ async def handle(params, ctx):
         return SkillResult(text=f"I couldn't figure out what time '{when_text}' means.")
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
-    end = start + timedelta(minutes=duration_minutes)
+    # a day with no time ("4th November is the WoW release"): an all-day event,
+    # not an hour at midnight, and no place to ask for (cm-0vl)
+    all_day = not has_clock(str(when_text))
+    if all_day:
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+    else:
+        end = start + timedelta(minutes=duration_minutes)
 
     # called again for the appointment that's waiting for its place: his answer
     # (e2e 2026-10-19: after "none" felt-llm re-called it without any place)
@@ -102,6 +109,17 @@ async def handle(params, ctx):
 
     at = appointment_hold.when(start)
     where = calendar.get("summary", "your calendar")
+    if all_day:
+        try:
+            await create_event(
+                config, calendar["id"], str(title), start, end, location=place, all_day=True
+            )
+        except CalendarUnavailable:
+            return SkillResult(text="I couldn't reach the calendar to add it.")
+        day = f"{start.strftime('%A')} {start.day} {start.strftime('%B')}"
+        return SkillResult(
+            text=f"Added '{title}', {day}, all day, to {where}. Read it back to Mario as written."
+        )
     if not said:
         appointment_hold.hold(config, calendar["id"], str(title), start, end)
         return SkillResult(

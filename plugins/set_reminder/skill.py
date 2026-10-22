@@ -11,7 +11,7 @@ instead of the 30/10-minute heads-ups.
 import re
 from datetime import datetime, timedelta
 
-from felt_core.date_resolution import resolve_datetime
+from felt_core.date_resolution import has_clock, resolve_datetime
 from felt_core.ha_calendar import TZ, CalendarUnavailable, connected, create_event
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
@@ -61,12 +61,6 @@ _EVERY = {
 
 
 _EVERY_WHEN = re.compile(r"^\s*(?:every|each)\s+(?P<rest>.+)$", re.IGNORECASE)
-# a time of day in the text ("at 9", "3pm", "15:30", "noon", "in 20 minutes")
-_HAS_CLOCK = re.compile(
-    r"\d\s*(?:am|pm|a\.m|p\.m)\b|\d:\d|\bat\s+\d|\b(?:noon|midnight|morning|evening|tonight)\b"
-    r"|\bin\s+\d+\s*(?:mins?|minutes?|hours?|h)\b|\bin\s+an?\s+(?:hour|minute)",
-    re.IGNORECASE,
-)
 _DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
 
 
@@ -146,7 +140,7 @@ async def handle(params, ctx):
         before = 0
 
     when_text, repeat = split_every(str(when_text), repeat)
-    if not _HAS_CLOCK.search(when_text):
+    if not has_clock(when_text):
         # "for the 21st" - a day, no time: morning, not midnight (2026-10-18)
         when_text = f"{when_text} at 9:00"
     now = datetime.now(tz=TZ)

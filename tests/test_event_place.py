@@ -27,6 +27,7 @@ class FakeCalendar:
     def __init__(self):
         self.events: list[dict] = []
         self.calls: list[str] = []
+        self.spans: list[tuple] = []
         self.confirm = True
         self.down = False
         # her proactive lines
@@ -38,6 +39,7 @@ class FakeCalendar:
             raise ha_calendar.CalendarUnavailable("down")
         self._n += 1
         self.calls.append(f"create {kw.get('location')}")
+        self.spans.append((start, end, kw.get("all_day", False)))
         if self.confirm:
             self.events.append(
                 {
@@ -99,6 +101,19 @@ def _skills(monkeypatch, fake):
 
 
 DENTIST = {"title": "dentist", "when": "tomorrow at 11am"}
+
+
+async def test_a_day_without_a_time_is_all_day_and_not_asked_where(monkeypatch, tmp_path, cal):
+    """cm-0vl: 'make an appointment so i know 4th november is WoW forever release'
+    was an hour at midnight and a 'where is it?'."""
+    create, _ = _skills(monkeypatch, cal)
+    said = await create.handle(
+        {"title": "WoW Forever release", "when": "4th november"}, _ctx(tmp_path)
+    )
+    assert cal.calls == ["create None"]
+    start, end, all_day = cal.spans[0]
+    assert all_day and (start.hour, start.minute) == (0, 0) and end - start == timedelta(days=1)
+    assert "all day" in (said.text or "") and "where" not in (said.text or "").lower()
 
 
 async def test_1_none_adds_it_at_once_without_a_place(monkeypatch, tmp_path, cal):

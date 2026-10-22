@@ -8,6 +8,7 @@ date, etc.
 
 import re
 from datetime import date, datetime, timedelta
+from difflib import get_close_matches
 
 import dateparser
 
@@ -98,6 +99,65 @@ def name_the_month(text: str, now: datetime) -> str:
     return f"{text[: m.start()]}{_MONTHS[month - 1]} {day}{text[m.end() :]}"
 
 
+# a time of day in the text ("at 9", "3pm", "15:30", "noon", "in 20 minutes")
+_HAS_CLOCK = re.compile(
+    r"\d\s*(?:am|pm|a\.m|p\.m)\b|\d:\d|\bat\s+\d|\b(?:noon|midnight|morning|evening|tonight)\b"
+    r"|\bin\s+\d+\s*(?:mins?|minutes?|hours?|h)\b|\bin\s+an?\s+(?:hour|minute)",
+    re.IGNORECASE,
+)
+
+
+def has_clock(text: str) -> bool:
+    """Pure: does the phrase name a time of day, or only a day?"""
+    return _HAS_CLOCK.search(text) is not None
+
+
+# Mario types fast (2026-10-22 "on4th of novemeber"): dateparser gives up on a
+# word run into its number and on a misspelt month
+_GLUED = re.compile(r"(?<=[a-z]{2})(?=\d)", re.IGNORECASE)
+_WORD = re.compile(r"[a-z]+|\d+(?:st|nd|rd|th)?", re.IGNORECASE)
+# a numeric day and month ("4/11", "25.12", "4-11"), not inside an ISO date
+_SLASHED = re.compile(r"(?<!\d[/.-])\b\d{1,2}[/.-]\d{1,2}\b")
+
+
+def fix_typos(text: str) -> str:
+    """Pure: 'on4th of novemeber' -> 'on 4th of november'. Only a word next to
+    a number (past an "of") is taken for a month, so "the member meeting"
+    stays as it is."""
+    text = _GLUED.sub(" ", text)
+    words = list(_WORD.finditer(text))
+    for i, m in reversed(list(enumerate(words))):
+        word = m[0].lower()
+        if not word.isalpha() or len(word) < 4 or word in _MONTHS:
+            continue
+        near = [words[j][0] for j in (i - 1, i + 1) if 0 <= j < len(words)]
+        if i >= 2 and words[i - 1][0].lower() == "of":
+            near.append(words[i - 2][0])
+        if not any(n[0].isdigit() for n in near):
+            continue
+        month = get_close_matches(word, _MONTHS, n=1, cutoff=0.8)
+        if month:
+            text = f"{text[: m.start()]}{month[0]}{text[m.end() :]}"
+    return text
+
+
+def _stale_year(text: str, parsed: datetime, now: datetime) -> datetime:
+    """felt-llm's sense of the year lags (its training data): '4 November 2025'
+    asked in October 2026 means this November, not a date already gone."""
+    base = now.replace(tzinfo=None) if parsed.tzinfo is None else now
+    years = [int(y) for y in re.findall(r"\b(20\d\d)\b", text)]
+    if parsed >= base or not years or max(years) >= now.year:
+        return parsed
+    for year in (now.year, now.year + 1):
+        try:
+            moved = parsed.replace(year=year)
+        except ValueError:
+            continue  # 29 February
+        if moved >= base:
+            return moved
+    return parsed
+
+
 def resolve_datetime(text: str, now: datetime, pm_below: int = 8) -> datetime | None:
     """Parse an arbitrary time/date phrase ("7:30am", "9pm", "tomorrow at
     9am") into a concrete future datetime relative to `now`. Used by
@@ -106,12 +166,19 @@ def resolve_datetime(text: str, now: datetime, pm_below: int = 8) -> datetime | 
     dateparser's PREFER_DATES_FROM="future" already rolls a bare
     already-passed time (e.g. "7:30am" asked at 10pm) to tomorrow on its
     own, so this needs no extra fallback logic of its own. A bare "at 9"
-    goes through clock_bare_hours first.
+    goes through clock_bare_hours first. A numeric date is day first, always
+    ("4/11" = 4 November; Mario: US order "is worthy of dead") - "12/25" is no
+    date at all, not Christmas; ISO dates stay as they are.
     """
-    return dateparser.parse(
-        name_the_month(clock_bare_hours(text, pm_below), now),
-        settings={"RELATIVE_BASE": now, "PREFER_DATES_FROM": "future"},
-    )
+    text = name_the_month(clock_bare_hours(fix_typos(text), pm_below), now)
+    settings = {"RELATIVE_BASE": now, "PREFER_DATES_FROM": "future"}
+    if _SLASHED.search(text):
+        parsed = dateparser.parse(text, settings={**settings, "DATE_ORDER": "DMY"})
+        if parsed is not None and parsed.year > now.year + 1:
+            return None  # "12/25" read as day 12 of a 25th month -> a year far off
+    else:
+        parsed = dateparser.parse(text, settings=settings)
+    return _stale_year(text, parsed, now) if parsed else None
 
 
 def upcoming_weekend(today: date) -> tuple[date, date]:
