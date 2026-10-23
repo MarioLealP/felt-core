@@ -116,6 +116,18 @@ async def test_a_day_without_a_time_is_all_day_and_not_asked_where(monkeypatch, 
     assert "all day" in (said.text or "") and "where" not in (said.text or "").lower()
 
 
+async def test_an_hour_mario_never_said_is_still_all_day(monkeypatch, tmp_path, cal):
+    """Live 2026-10-23: 'put the 4th of November in my calendar as WoW Forever
+    release' -> felt-llm sent when='4 November 15:00' -> Wednesday 3pm + 'where?'."""
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    ctx.original_message = "put the 4th of November in my calendar as WoW Forever release"
+    said = await create.handle({"title": "WoW Forever release", "when": "4 November 15:00"}, ctx)
+    start, end, all_day = cal.spans[0]
+    assert all_day and (start.hour, start.minute) == (0, 0) and end - start == timedelta(days=1)
+    assert "where" not in (said.text or "").lower()
+
+
 async def test_1_none_adds_it_at_once_without_a_place(monkeypatch, tmp_path, cal):
     create, place = _skills(monkeypatch, cal)
     ctx = _ctx(tmp_path)

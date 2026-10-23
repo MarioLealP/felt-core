@@ -233,6 +233,13 @@ CASES: list[Case] = [
         note="remind",
         summary_has=("forever",),
     ),
+    # live 2026-10-23: she sent "4 November 15:00" -> Wednesday 3pm and "where is it?"
+    Case(
+        "put the 4th of November in my calendar as WoW Forever release",
+        ["POST /calendar/event all-day"],
+        note="remind",
+        summary_has=("forever",),
+    ),
     Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
     # an appointment's place, Mario's four cases (2026-10-19): no place -> she
     # asks where and holds it; "none" adds it at once, a place adds it with it,

@@ -112,6 +112,25 @@ def has_clock(text: str) -> bool:
     return _HAS_CLOCK.search(text) is not None
 
 
+# a day named without a time: a month, a weekday, today/tomorrow or "the 4th"
+_NAMES_DAY = re.compile(
+    rf"\b(?:{'|'.join(_MONTHS)}|{'|'.join(m[:3] for m in _MONTHS)}|sept)\b"
+    rf"|\b(?:{'|'.join(sorted(_WEEKDAY_NAMES))}|today|tomorrow)\b|\b\d{{1,2}}(?:st|nd|rd|th)\b",
+    re.IGNORECASE,
+)
+
+
+def day_only(when: str, message: str) -> bool:
+    """Pure: an all-day thing? felt-llm writes `when` and sometimes adds an
+    hour Mario never said (live 2026-10-23: "put the 4th of November in my
+    calendar" -> Wednesday 3pm), so his own message names a day and no time
+    counts too. A follow-up ("none", a place) names no day: `when` decides."""
+    if not has_clock(when):
+        return True
+    said = fix_typos(message)
+    return not has_clock(said) and _NAMES_DAY.search(said) is not None
+
+
 # Mario types fast (2026-10-22 "on4th of novemeber"): dateparser gives up on a
 # word run into its number and on a misspelt month
 _GLUED = re.compile(r"(?<=[a-z]{2})(?=\d)", re.IGNORECASE)
