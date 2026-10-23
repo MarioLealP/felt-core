@@ -3,6 +3,7 @@ from datetime import date, datetime
 import pytest
 
 from felt_core.date_resolution import (
+    day_only,
     fix_typos,
     has_clock,
     resolve_date,
@@ -164,3 +165,21 @@ def test_fix_typos(text, expected):
 )
 def test_has_clock(text, clock):
     assert has_clock(text) is clock
+
+
+@pytest.mark.parametrize(
+    ("when", "message", "expected"),
+    [
+        # live 2026-10-23: felt-llm added 3pm Mario never said
+        ("4 November 15:00", "put the 4th of November in my calendar as WoW Forever release", True),
+        ("nov 4 9am", "Add reminder for wow forever release on4th of novemeber", True),
+        ("4th november", "", True),
+        ("tomorrow at 11am", "schedule my dentist to tomorrow at 11", False),
+        # follow-ups name no day: her `when` decides
+        ("tomorrow at 11am", "none", False),
+        ("tomorrow at 11am", "it's at Clínica Sorriso in Gaia", False),
+        ("friday 3pm", "decide on the dentist friday at 3", False),
+    ],
+)
+def test_day_only(when, message, expected):
+    assert day_only(when, message) is expected

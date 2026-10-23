@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from felt_core import appointment_hold
-from felt_core.date_resolution import has_clock, resolve_datetime
+from felt_core.date_resolution import day_only, resolve_datetime
 from felt_core.ha_calendar import (
     TZ,
     CalendarUnavailable,
@@ -79,7 +79,7 @@ async def handle(params, ctx):
         start = start.replace(tzinfo=TZ)
     # a day with no time ("4th November is the WoW release"): an all-day event,
     # not an hour at midnight, and no place to ask for (cm-0vl)
-    all_day = not has_clock(str(when_text))
+    all_day = day_only(str(when_text), ctx.original_message or "")
     if all_day:
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
