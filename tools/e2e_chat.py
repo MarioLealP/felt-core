@@ -29,7 +29,7 @@ from urllib.parse import parse_qs
 
 import httpx
 
-from felt_core import appointment_hold, ha_calendar
+from felt_core import appointment_hold, features, ha_calendar
 from felt_core.brain import router
 from felt_core.brain.orchestrator import chat, chat_streamed
 from felt_core.brain.result import ChatResult
@@ -263,9 +263,10 @@ CASES: list[Case] = [
         note="remind",
         place=False,
     ),
-    # live 2026-10-18, typos and all - she said "I've set that reminder" and set nothing
+    # live 2026-10-18 ("for 21th"), typos and all - she said "I've set that reminder" and
+    # set nothing; a day + month, since a bare day number goes past within days
     Case(
-        "set an reminder for 21th to check on teh semantic router",
+        "set an reminder for 3rd of decmber to check on teh semantic router",
         ["POST /calendar/reminder"],
         note="remind",
     ),
@@ -460,7 +461,7 @@ class Recorder:
             return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
             return self._ha(request, path)
-        if host.startswith("felt-voice."):
+        if host.split(".")[0] == "felt-voice":  # felt-voice:8421 in the container
             # her proactive lines (a held appointment going in) pre-render
             # their voice in the background - not a write, and it lands in
             # whichever case runs next
@@ -581,6 +582,11 @@ async def main() -> int:
 
     tmp = tempfile.mkdtemp(prefix="felt-e2e-")
     config = load_config().model_copy(update={"db_path": f"{tmp}/felt.db"})
+    # the day's first chat fires the morning brief (and the diary + its
+    # greeting) in the background; its TTS + phone notify landed in whatever
+    # case was running and failed it (2026-10-23)
+    for name in ("brief.morning", "ambient.morning_greeting", "memory.diary"):
+        features.set_enabled(config.db_path, name, False)
     # the semantic router in shadow mode (cm-6b0): the image's model, or a
     # one-off copy for a run before it's deployed
     if not os.path.isdir(config.router_model_dir):
