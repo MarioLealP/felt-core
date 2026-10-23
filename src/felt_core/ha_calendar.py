@@ -154,10 +154,16 @@ async def create_event(
     *,
     rrule: str | None = None,
     location: str | None = None,
+    all_day: bool = False,
 ) -> None:
     """`rrule`: an iCal repeat rule without the "RRULE:" prefix, e.g.
-    "FREQ=WEEKLY"."""
-    event: dict = {"summary": summary, "dtstart": start.isoformat(), "dtend": end.isoformat()}
+    "FREQ=WEEKLY". `all_day`: dates only - `start`'s day up to (not
+    including) `end`'s."""
+    if all_day:
+        span = (start.date().isoformat(), end.date().isoformat())
+    else:
+        span = (start.isoformat(), end.isoformat())
+    event: dict = {"summary": summary, "dtstart": span[0], "dtend": span[1]}
     if description:
         event["description"] = description
     if location:
