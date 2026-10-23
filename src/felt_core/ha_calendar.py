@@ -193,6 +193,11 @@ def remember_created(
     db.set_setting(config.db_path, _LAST_KEY, json.dumps(last))
 
 
+def forget_created(config: FeltConfig) -> None:
+    """No appointment counts as just made (the e2e run's cases are separate days)."""
+    db.set_setting(config.db_path, _LAST_KEY, "")
+
+
 def last_created(config: FeltConfig, now: datetime) -> dict | None:
     """The appointment create_calendar_event made in the last 2 h, if any."""
     raw = db.get_setting(config.db_path, _LAST_KEY)

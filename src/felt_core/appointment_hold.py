@@ -4,16 +4,21 @@ it here and she asks where; set_event_location adds it with the answer (or
 at once, without a place, on "none"), or after PLACE_WAIT_S it goes in
 without one and she says so in a short line - if he missed her question,
 that's how he learns it has no place. One add either way - whoever claims
-it first. An answer after that goes through set_event_location's change
-path (create-then-delete).
+it first. An answer after that goes through change_place (create-then-delete),
+from set_event_location or from create_calendar_event called again for the
+appointment just added (cm-2hu: never a second one).
 
+The 30 s start once her reply (the question) is out - chat() calls
+start_wait - not at the request: a slow reply used to eat the wait (cm-a4b).
 Held in memory: a felt-core restart inside the 30 s loses it.
 """
 
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import httpx
 
 from felt_core import ha_calendar
 from felt_core.config import FeltConfig
@@ -23,6 +28,8 @@ from felt_core.proactive import enqueue_proactive
 logger = logging.getLogger(__name__)
 
 PLACE_WAIT_S = 30
+# create_calendar_event again at the start of the one added this recently = the same one
+JUST_ADDED = timedelta(minutes=10)
 # "no place": the appointment goes in now, without one
 _NO_PLACE = re.compile(
     r"^\W*(?:none|no(?:pe)?|nowhere|no (?:place|location|address)|n/?a|online|"
@@ -44,13 +51,20 @@ def _spawn(coro) -> asyncio.Task:
 
 
 def hold(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime):
-    """Hold an appointment for its place; an earlier one still held goes in now."""
-    global _held, _timer
+    """Hold an appointment for its place; an earlier one still held goes in now.
+    The wait starts at start_wait, once she has asked."""
+    global _held
     earlier = claim()
     if earlier is not None:
         _spawn(_add_and_say(config, earlier))
     _held = {"calendar": calendar_id, "summary": summary, "start": start, "end": end}
-    _timer = _spawn(_add_after_wait(config))
+
+
+def start_wait(config: FeltConfig) -> None:
+    """Her reply is out: start the 30 s for what's held, if its wait hasn't started."""
+    global _timer
+    if _held is not None and _timer is None:
+        _timer = _spawn(_add_after_wait(config))
 
 
 def no_place(answer: str) -> bool:
@@ -65,6 +79,22 @@ def claim_same(start: datetime) -> dict | None:
     if _held is None or _held["start"] != start:
         return None
     return claim()
+
+
+def just_added(config: FeltConfig, summary: str, start: datetime) -> dict | None:
+    """The appointment create_calendar_event added in the last 10 min, if it's
+    this one (`start`, and the title one inside the other: "dentist" / "Dentist
+    appointment") - being called again for it is his answer, not a second one."""
+    now = datetime.now(ha_calendar.TZ)
+    last = ha_calendar.last_created(config, now)
+    if last is None or datetime.fromisoformat(last["start"]) != start:
+        return None
+    a, b = summary.casefold().strip(), last["summary"].casefold().strip()
+    if a not in b and b not in a:
+        return None
+    if now - datetime.fromisoformat(last["at"]) > JUST_ADDED:
+        return None
+    return last
 
 
 def claim() -> dict | None:
@@ -96,6 +126,45 @@ async def add(config: FeltConfig, held: dict, place: str | None) -> bool:
         config, held["calendar"], held["summary"], held["start"], held["end"]
     )
     return True
+
+
+def _same(event: dict, summary: str, start: datetime) -> bool:
+    return event.get("summary") == summary and ha_calendar.event_start(event) == start
+
+
+async def _matching(config, calendar_id: str, summary: str, start: datetime) -> list[dict]:
+    async with httpx.AsyncClient(timeout=20) as client:
+        await ha_calendar.refresh(client, config, calendar_id)
+        events = await ha_calendar.list_events(
+            client, config, calendar_id, start, start + timedelta(minutes=1)
+        )
+    return [e for e in events if _same(e, summary, start)]
+
+
+async def change_place(config: FeltConfig, last: dict, place: str) -> str:
+    """Give the appointment already added (`last`, from remember_created) a place.
+    HA can't edit an event, so the one with the place goes in first and the old
+    one is deleted only after: a failure halfway leaves a duplicate, never a lost
+    appointment. Returns what to tell her."""
+    calendar_id, summary = last["calendar"], last["summary"]
+    start = datetime.fromisoformat(last["start"])
+    end = datetime.fromisoformat(last["end"])
+    try:
+        old = await _matching(config, calendar_id, summary, start)
+        await ha_calendar.create_event(config, calendar_id, summary, start, end, location=place)
+        new = [
+            e
+            for e in await _matching(config, calendar_id, summary, start)
+            if e["uid"] not in {o["uid"] for o in old}
+        ]
+        if not new:
+            return "I couldn't confirm the change in the calendar."
+        for event in old:
+            await ha_calendar.delete_event(config, calendar_id, event["uid"])
+    except (ha_calendar.CalendarUnavailable, httpx.HTTPError):
+        return "I couldn't reach the calendar to add the place."
+    ha_calendar.remember_created(config, calendar_id, summary, start, end)
+    return f"'{summary}', {when(start)}, is now at {place}. Read it back to Mario as written."
 
 
 async def add_unanswered(config: FeltConfig) -> None:
