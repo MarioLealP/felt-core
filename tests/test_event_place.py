@@ -90,13 +90,13 @@ def _skills(monkeypatch, fake):
         ("writable", fake.writable),
     ]:
         monkeypatch.setattr(create, name, fn)
+    # the place change (appointment_hold.change_place) talks to HA through ha_calendar
     for name, fn in [
-        ("create_event", fake.create),
         ("delete_event", fake.delete),
         ("list_events", fake.list_events),
         ("refresh", fake.refresh),
     ]:
-        monkeypatch.setattr(place, name, fn)
+        monkeypatch.setattr(ha_calendar, name, fn)
     return create, place
 
 
@@ -197,7 +197,12 @@ async def test_3_the_answer_adds_it_once_with_the_place(monkeypatch, tmp_path, c
 async def test_4_no_answer_adds_it_after_the_wait_and_says_so(monkeypatch, tmp_path, cal):
     monkeypatch.setattr(appointment_hold, "PLACE_WAIT_S", 0.01)
     create, _ = _skills(monkeypatch, cal)
-    await create.handle(DENTIST, _ctx(tmp_path))
+    ctx = _ctx(tmp_path)
+    await create.handle(DENTIST, ctx)
+    # cm-a4b: her reply (the question) can take a while - the wait hasn't started
+    await asyncio.sleep(0.05)
+    assert cal.calls == []
+    appointment_hold.start_wait(ctx.config)  # chat(): her reply is out
     await asyncio.sleep(0.05)
     assert cal.calls == ["create None"]
     [line] = cal.lines
@@ -214,6 +219,64 @@ async def test_a_late_answer_changes_the_one_already_added(monkeypatch, tmp_path
     assert cal.calls == ["create None", "create Clínica Sorriso", "delete u1"]
     [event] = cal.events
     assert event["location"] == "Clínica Sorriso" and "is now at" in (answer.text or "")
+
+
+async def test_none_through_create_after_the_wait_adds_nothing_more(monkeypatch, tmp_path, cal):
+    # cm-2hu (e2e 2026-10-23): it was already in when "none" came through
+    # create_calendar_event again - it made a second one
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle(DENTIST, ctx)
+    await appointment_hold.add_unanswered(ctx.config)  # the 30 s ran out
+    answer = await create.handle({**DENTIST, "place": "none"}, ctx)
+    assert cal.calls == ["create None"] and "already in the calendar" in (answer.text or "")
+
+
+async def test_none_through_create_after_a_made_up_place_adds_nothing_more(
+    monkeypatch, tmp_path, cal
+):
+    # cm-2hu, the other way in: turn 1 came with a place, so it went in at once
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle({**DENTIST, "place": "dentist"}, ctx)
+    await create.handle({**DENTIST, "place": "none"}, ctx)
+    await create.handle(DENTIST, ctx)
+    assert cal.calls == ["create dentist"]
+
+
+async def test_a_late_place_through_create_changes_the_one_added(monkeypatch, tmp_path, cal):
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle(DENTIST, ctx)
+    await appointment_hold.add_unanswered(ctx.config)
+    answer = await create.handle({**DENTIST, "place": "Clínica Sorriso"}, ctx)
+    assert cal.calls == ["create None", "create Clínica Sorriso", "delete u1"]
+    assert "is now at Clínica Sorriso" in (answer.text or "")
+
+
+async def test_the_same_time_later_is_a_new_appointment(monkeypatch, tmp_path, cal):
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle({**DENTIST, "place": "Clínica Sorriso"}, ctx)
+    monkeypatch.setattr(appointment_hold, "JUST_ADDED", timedelta(0))
+    await create.handle({**DENTIST, "place": "Clínica Sorriso"}, ctx)
+    assert cal.calls == ["create Clínica Sorriso", "create Clínica Sorriso"]
+
+
+async def test_another_appointment_at_the_same_time_is_its_own(monkeypatch, tmp_path, cal):
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle({**DENTIST, "place": "Clínica Sorriso"}, ctx)
+    await create.handle({"title": "call mum", "when": "tomorrow at 11am", "place": "none"}, ctx)
+    assert cal.calls == ["create Clínica Sorriso", "create None"]
+
+
+async def test_a_reworded_title_is_still_the_same_one(monkeypatch, tmp_path, cal):
+    create, _ = _skills(monkeypatch, cal)
+    ctx = _ctx(tmp_path)
+    await create.handle({**DENTIST, "place": "Clínica Sorriso"}, ctx)
+    await create.handle({**DENTIST, "title": "Dentist appointment", "place": "none"}, ctx)
+    assert cal.calls == ["create Clínica Sorriso"]
 
 
 async def test_a_late_none_changes_nothing(monkeypatch, tmp_path, cal):

@@ -586,7 +586,13 @@ async def chat(
 
     he_is_here(config)
 
-    return await _chat_local(message, config, session_id, tone, registry, history, speaker)
+    from felt_core import appointment_hold
+
+    try:
+        return await _chat_local(message, config, session_id, tone, registry, history, speaker)
+    finally:
+        # an appointment she just asked "where?" about: his 30 s start now (cm-a4b)
+        appointment_hold.start_wait(config)
 
 
 async def chat_streamed(

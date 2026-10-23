@@ -95,6 +95,16 @@ async def handle(params, ctx):
         added = f"Added '{waiting['summary']}', {appointment_hold.when(start)}"
         where = f"at {place}" if place else "no place"
         return SkillResult(text=f"{added}, {where}. Read it back to Mario as written.")
+    # ...or for the one just added (it went in at once, or the 30 s ran out first):
+    # his answer again, never a second event (cm-2hu, e2e 2026-10-23)
+    just = appointment_hold.just_added(config, str(title), start)
+    if just is not None:
+        if place is None:
+            return SkillResult(
+                text=f"'{just['summary']}', {appointment_hold.when(start)}, is already in the "
+                "calendar, no place. Read it back to Mario as written."
+            )
+        return SkillResult(text=await appointment_hold.change_place(config, just, place))
 
     async with httpx.AsyncClient(timeout=20) as client:
         calendars = await list_calendars(client, config)

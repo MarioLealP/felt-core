@@ -645,6 +645,8 @@ async def main() -> int:
                     await router.drain()
                 # no (further) answer: what she held goes in now, not in 30 s
                 await appointment_hold.add_unanswered(config)
+                # the next case is a new appointment, not this one again (cm-2hu guard)
+                ha_calendar.forget_created(config)
             except Exception as e:  # noqa: BLE001 - a crash is a result here
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)

@@ -4,28 +4,14 @@ held (appointment_hold.py) goes in with the place: one add. An answer that
 comes after the 30 s, when it went in without a place, changes the one
 create_calendar_event made last (within 2 h) - never a guess by title.
 
-HA can't edit an event, so a change adds the appointment again with the
-place and only then deletes the old one: a failure halfway leaves a
-duplicate, never a lost appointment.
+HA can't edit an event: appointment_hold.change_place adds it again with the
+place and only then deletes the old one.
 """
 
-from datetime import datetime, timedelta
-
-import httpx
+from datetime import datetime
 
 from felt_core import appointment_hold
-from felt_core.ha_calendar import (
-    TZ,
-    CalendarUnavailable,
-    connected,
-    create_event,
-    delete_event,
-    event_start,
-    last_created,
-    list_events,
-    refresh,
-    remember_created,
-)
+from felt_core.ha_calendar import TZ, connected, last_created
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -40,17 +26,6 @@ parameters_schema = {
     "properties": {"place": {"type": "string", "description": "As mario said it"}},
     "required": ["place"],
 }
-
-
-def _same(event: dict, summary: str, start: datetime) -> bool:
-    return event.get("summary") == summary and event_start(event) == start
-
-
-async def _matching(config, calendar_id: str, summary: str, start: datetime) -> list[dict]:
-    async with httpx.AsyncClient(timeout=20) as client:
-        await refresh(client, config, calendar_id)
-        events = await list_events(client, config, calendar_id, start, start + timedelta(minutes=1))
-    return [e for e in events if _same(e, summary, start)]
 
 
 async def handle(params, ctx):
@@ -79,25 +54,4 @@ async def handle(params, ctx):
             "with the place in it."
         )
 
-    calendar_id, summary = last["calendar"], last["summary"]
-    start = datetime.fromisoformat(last["start"])
-    end = datetime.fromisoformat(last["end"])
-    try:
-        old = await _matching(config, calendar_id, summary, start)
-        await create_event(config, calendar_id, summary, start, end, location=str(place))
-        new = [
-            e
-            for e in await _matching(config, calendar_id, summary, start)
-            if e["uid"] not in {o["uid"] for o in old}
-        ]
-        if not new:
-            return SkillResult(text="I couldn't confirm the change in the calendar.")
-        for event in old:
-            await delete_event(config, calendar_id, event["uid"])
-    except (CalendarUnavailable, httpx.HTTPError):
-        return SkillResult(text="I couldn't reach the calendar to add the place.")
-    remember_created(config, calendar_id, summary, start, end)
-    return SkillResult(
-        text=f"'{summary}', {appointment_hold.when(start)}, is now at {place}. Read it back "
-        "to Mario as written."
-    )
+    return SkillResult(text=await appointment_hold.change_place(config, last, str(place)))
