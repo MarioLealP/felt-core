@@ -43,9 +43,7 @@ _NINJA_BASE = "https://poe.ninja/poe2/api/economy"
 _TRADE_BASE = "https://www.pathofexile.com/api/trade2"
 # Anonymous requests to the trade API get blocked without a real-looking
 # User-Agent (confirmed live 2026-09-14).
-_TRADE_HEADERS = {
-    "User-Agent": "felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)"
-}
+_TRADE_HEADERS = {"User-Agent": "felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)"}
 _CURRENCY_TYPES = ["Currency", "Fragments", "UncutGems", "Essences", "Runes"]
 _UNIQUE_TYPES = [
     "UniqueWeapons",

@@ -34,6 +34,10 @@ DAILY_CAP = 50
 # (the runner caps Claude at 6 min for urgent, 10 otherwise)
 CLAIM_WITHIN = {"urgent": 2, "high": 3, "default": 5, "low": 5}
 REPORT_WITHIN = {"urgent": 8, "high": 12, "default": 12, "low": 12}
+# when Claude can't (out of quota, or his report was unreadable) the responder has her own
+# model investigate instead (2026-10-24, Mario: "work on the fallback"): ~15-20 min at her
+# speed, so from the moment she takes it over she gets this long, whatever the tier
+FELT_REPORT_WITHIN = 30
 WAKE_FILE = "responder-wake"
 
 VERDICTS = ("expected", "fixed-itself", "needs-mario", "unknown")
@@ -125,6 +129,23 @@ def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -
     return cursor.rowcount == 1
 
 
+def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> bool:
+    """The responder hands a claimed incident to her own model: her report deadline
+    starts now. False if it isn't a claimed one still waiting for its report."""
+    conn = _connect(db_path)
+    try:
+        _ensure(conn)
+        with conn:
+            cursor = conn.execute(
+                "UPDATE incidents SET investigator = 'felt', handed_at = ? WHERE id = ?"
+                " AND handed_at IS NOT NULL AND report IS NULL AND missed_at IS NULL",
+                (_ts(now or datetime.now(UTC)), incident_id),
+            )
+    finally:
+        conn.close()
+    return cursor.rowcount == 1
+
+
 def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
     """Incidents Claude didn't get to in time, by tier: never claimed within
     CLAIM_WITHIN of opening, or claimed with no report within REPORT_WITHIN.
@@ -150,7 +171,8 @@ def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
                     f"SELECT id FROM incidents WHERE ({_WAITING}"
                     f" AND {_age('COALESCE(due_at, first_at)')} >= {_minutes(CLAIM_WITHIN)})"
                     " OR (handed_at IS NOT NULL AND report IS NULL AND missed_at IS NULL"
-                    f" AND {_age('handed_at')} >= {_minutes(REPORT_WITHIN)})",
+                    f" AND {_age('handed_at')} >= CASE WHEN investigator = 'felt'"
+                    f" THEN {FELT_REPORT_WITHIN} ELSE {_minutes(REPORT_WITHIN)} END)",
                     (stamp, stamp),
                 )
             ]

@@ -93,6 +93,7 @@ def test_route_table_covers_each_client():
         assert authorize(W + "tray", "", method, path, []) is None
     assert authorize(W + "tray", "", "GET", "/v1/events", []) is not None
     assert authorize(W + "felt-responder", "", "POST", "/v1/incidents/12/report", []) is None
+    assert authorize(W + "felt-responder", "", "POST", "/v1/incidents/12/local", []) is None
     assert authorize(W + "felt-responder", "", "POST", "/v1/incidents/12/handled", []) is not None
 
 

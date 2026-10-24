@@ -34,9 +34,7 @@ logger = logging.getLogger(__name__)
 _TRADE_BASE = "https://www.pathofexile.com/api/trade2"
 # Anonymous, unauthenticated requests to the trade API get blocked
 # without a real-looking User-Agent (confirmed live 2026-09-14).
-_TRADE_HEADERS = {
-    "User-Agent": "felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)"
-}
+_TRADE_HEADERS = {"User-Agent": "felt-core/0.1 (personal assistant; contact: lealmariop@gmail.com)"}
 _REFRESH_TZ = ZoneInfo("Europe/Lisbon")
 _REFRESH_WEEKDAY = 4  # Monday=0 .. Friday=4
 _REFRESH_HOUR = 23

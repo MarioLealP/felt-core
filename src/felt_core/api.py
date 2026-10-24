@@ -257,7 +257,7 @@ def _sso_gated(method: str, path: str) -> bool:
 # WP-58: the only routes the responder's own token opens
 _RESPONDER_ROUTES = (
     ("GET", re.compile(r"/v1/incidents/waiting")),
-    ("POST", re.compile(r"/v1/incidents/(handoff|\d+/report)")),
+    ("POST", re.compile(r"/v1/incidents/(handoff|\d+/(report|local))")),
 )
 
 

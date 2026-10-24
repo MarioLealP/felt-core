@@ -88,6 +88,9 @@ _ADDED_COLUMNS = (
     ("handled_by", "TEXT"),
     # WP-58: why Claude didn't look - "late" or "off" (the kill switch)
     ("missed_why", "TEXT"),
+    # who is investigating once handed over: NULL = Claude, "felt" = her own model on the
+    # server when Claude couldn't (its own, longer report deadline)
+    ("investigator", "TEXT"),
 )
 
 
