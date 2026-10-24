@@ -42,11 +42,22 @@ class Report(BaseModel):
     couldnt_check: list[str] = Field(default_factory=list, max_length=50)
     # WP-42.5: his investigation, step by step, for the incident details
     trail: list[dict] = Field(default_factory=list, max_length=200)
+    # who looked: Claude, the responder's plain checks (a package or commit that explains it,
+    # no model), or her own model when Claude couldn't
+    by: Literal["claude", "checks", "felt"] = "claude"
 
 
 class ReportIn(BaseModel):
     report: Report
     session_id: str = Field(max_length=100)
+
+
+@router.post("/{incident_id}/local")
+async def local(incident_id: int) -> dict:
+    """Claude couldn't: her own model investigates this claimed incident instead."""
+    if not await asyncio.to_thread(responder.take_local, load_config().db_path, incident_id):
+        raise HTTPException(status_code=409, detail="not a claimed incident waiting for its report")
+    return {"ok": True}
 
 
 @router.post("/{incident_id}/report")

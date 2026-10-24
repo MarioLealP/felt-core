@@ -102,16 +102,18 @@ _INSTRUCTION = (
     "Plain words, no jargon unless it's in the facts. No emojis."
 )
 _FOLLOWUP = (
-    "Earlier you told Mario that Claude was looking into a server alert. Claude has "
-    "reported back. Write ONE short message (max ~35 words), in character, casual, "
+    "Earlier you told Mario that Claude was looking into a server alert. It has been "
+    "looked into now - the facts say by whom. Write ONE short message (max ~35 words), "
+    "in character, casual, "
     "telling Mario the outcome in your own words: what it turned out to be, and "
     "whether there's anything for him to do. Use ONLY the facts below - don't add "
     "causes, steps, numbers, names or files that aren't there. No emojis."
 )
 _BOTH = (
-    "A server alert came in and Claude has already looked into it. Write ONE short "
-    "message (max ~40 words), in character, casual, telling Mario in your own words "
-    "what happened, what Claude found, and whether there's anything for him to do. "
+    "A server alert came in and it has already been looked into - the facts say by "
+    "whom. Write ONE short message (max ~40 words), in character, casual, telling Mario "
+    "in your own words what happened, what was found, and whether there's anything for "
+    "him to do. "
     "Use ONLY the facts below - don't add causes, steps, numbers, names or files that "
     "aren't there. No emojis."
 )
@@ -124,7 +126,20 @@ _VERDICTS = {
     "expected": "it was expected - something on our side",
     "fixed-itself": "it fixed itself",
     "needs-mario": "it needs Mario",
-    "unknown": "Claude couldn't tell for sure",
+    "unknown": "couldn't tell for sure",
+}
+# who looked (the report's "by"): in her facts, and in her plain line when felt-llm is down
+_WHO = {
+    "claude": ("Claude", "Claude"),
+    "checks": (
+        "the automatic checks (no AI needed - they matched it to a package update or"
+        " one of our own commits)",
+        "Checks",
+    ),
+    "felt": (
+        "you yourself - Claude couldn't, so you looked into it with your own tools",
+        "I looked",
+    ),
 }
 _BACK = (
     "A server problem you told Mario about earlier is fixed now. Write ONE very short "
@@ -178,12 +193,14 @@ def followup_facts(incident: dict) -> str:
         report = json.loads(incident["report"])
         verdict = _VERDICTS.get(report.get("verdict", ""), _VERDICTS["unknown"])
         todo = str(report.get("for_mario") or "nothing")
+        by = report.get("by") if report.get("by") in _WHO else "claude"
         lines += [
-            f"What Claude concluded: {verdict}.",
-            f"What Claude found: {str(report.get('summary', ''))[:_MESSAGE_CHARS]}",
+            f"Who looked into it: {_WHO[by][0]}.",
+            f"The conclusion: {verdict}.",
+            f"What was found: {str(report.get('summary', ''))[:_MESSAGE_CHARS]}",
             f"Anything for Mario to do: {todo[:_MESSAGE_CHARS]}.",
         ]
-        if report.get("verdict") in ("needs-mario", "unknown"):
+        if by == "claude" and report.get("verdict") in ("needs-mario", "unknown"):
             lines.append("He can join Claude's investigation to go through it together.")
     elif incident.get("handed_at"):
         lines.append("Claude started looking but didn't finish in time.")
@@ -204,7 +221,8 @@ def plain_line(incident: dict, kind: str) -> str:
     report = json.loads(incident["report"]) if incident.get("report") else None
     if kind in ("followup", "both") and report:
         verdict = _VERDICTS.get(report.get("verdict", ""), _VERDICTS["unknown"])
-        text = f"{about.capitalize()}. Claude: {verdict}. {str(report.get('summary', ''))[:220]}"
+        who = _WHO.get(report.get("by", ""), _WHO["claude"])[1]
+        text = f"{about.capitalize()}. {who}: {verdict}. {str(report.get('summary', ''))[:220]}"
     elif kind in ("followup", "both"):
         text = f"{about.capitalize()}. Claude couldn't look at it - you may want to check."
     elif kind == "back":

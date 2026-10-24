@@ -56,11 +56,11 @@ MACHINE_ROUTES: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
         ("GET", r"/v1/music/now"),
         ("GET", r"/v1/music/lyrics"),
     ),
-    # felt-responder (server host): the 3 incident routes it had (WP-58)
+    # felt-responder (server host): its incident routes (WP-58; local = her model takes over)
     _W + "felt-responder": _r(
         ("GET", r"/v1/incidents/waiting"),
         ("POST", r"/v1/incidents/handoff"),
-        ("POST", r"/v1/incidents/\d+/report"),
+        ("POST", r"/v1/incidents/\d+/(report|local)"),
     ),
 }
 

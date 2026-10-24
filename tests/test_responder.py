@@ -85,6 +85,26 @@ def test_one_claude_doesnt_get_to_is_missed_sooner_the_more_urgent(tmp_path):
     assert responder.claim_next(db, _at(10)) is None  # missed ones aren't handed later
 
 
+def test_when_felt_takes_over_she_gets_her_own_longer_deadline(tmp_path):
+    db = str(tmp_path / "f.db")
+    honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent: report within 8 for Claude
+    assert not responder.take_local(db, honeypot, _at(1))  # not claimed yet
+    responder.claim_next(db, _at(1))
+    assert responder.take_local(db, honeypot, _at(5))  # Claude out of quota: hers from 5
+    assert responder.mark_missed(db, _at(34)) == []
+    assert responder.mark_missed(db, _at(35)) == [honeypot]
+    assert not responder.take_local(db, honeypot, _at(36))  # missed: too late to take
+
+
+def test_her_report_counts_like_claudes(tmp_path):
+    db = str(tmp_path / "f.db")
+    trivy = _in(db, "Trivy: weekly scan")
+    responder.claim_next(db, _at(1))
+    responder.take_local(db, trivy, _at(2))
+    assert responder.save_report(db, trivy, {**REPORT, "by": "felt"}, "felt-local")
+    assert _get(db, trivy)["state"] == "handled" and _get(db, trivy)["investigator"] == "felt"
+
+
 def test_an_urgent_one_nobody_claims_is_missed_after_two_minutes(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")
@@ -136,6 +156,31 @@ def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
     assert alert_lines.due(db, _at(17)) == [(unclaimed, "followup")]
 
 
+def test_the_follow_up_says_who_looked(tmp_path):
+    db = str(tmp_path / "f.db")
+    looked = {}
+    for by in ("claude", "checks", "felt"):
+        incident_id = _in(db, f"HONEYPOT: {by} touched")
+        responder.claim_next(db, _at(1))
+        report = {**REPORT, "verdict": "needs-mario", "by": by}
+        responder.save_report(db, incident_id, report, "s")
+        looked[by] = alert_lines.followup_facts(_get(db, incident_id))
+    assert "Who looked into it: Claude." in looked["claude"]
+    assert "join Claude's investigation" in looked["claude"]
+    assert "automatic checks" in looked["checks"] and "join" not in looked["checks"]
+    assert "you yourself" in looked["felt"] and "join" not in looked["felt"]
+
+
+def test_an_old_report_without_by_was_claudes(tmp_path):
+    db = str(tmp_path / "f.db")
+    incident_id = _in(db, "HONEYPOT: ssh touched")
+    responder.claim_next(db, _at(1))
+    responder.save_report(db, incident_id, REPORT, "s1")
+    incident = _get(db, incident_id)
+    assert "Who looked into it: Claude." in alert_lines.followup_facts(incident)
+    assert "Claude: it was expected" in alert_lines.plain_line(incident, "followup")
+
+
 def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_API_TOKEN", "main")
@@ -181,6 +226,25 @@ def test_handoff_and_report_over_http(tmp_path, monkeypatch):
         )
         stored = _get(str(tmp_path / "felt.db"), incident_id)
         assert json.loads(stored["report"])["summary"].startswith("The deploy")
+
+
+def test_felt_takes_over_over_http(tmp_path, monkeypatch):
+    resp = {"Authorization": "Bearer resp"}
+    with _client(tmp_path, monkeypatch) as c:
+        incident_id = _in(str(tmp_path / "felt.db"), "HONEYPOT: ssh touched", at=datetime.now(UTC))
+        assert c.post(f"/v1/incidents/{incident_id}/local", headers=resp).status_code == 409
+        c.post("/v1/incidents/handoff", headers=resp)
+        assert c.post(f"/v1/incidents/{incident_id}/local").status_code == 401
+        assert c.post(f"/v1/incidents/{incident_id}/local", headers=resp).json() == {"ok": True}
+        body = {"report": {**REPORT, "by": "felt"}, "session_id": "felt-local"}
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {
+            "ok": True
+        }
+        body["report"]["by"] = "gpt"
+        assert (
+            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
+            == 422
+        )
 
 
 def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
