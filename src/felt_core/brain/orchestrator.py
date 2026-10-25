@@ -361,9 +361,9 @@ async def _chat_local(
     any point (the API answers 503)."""
     prefix = local_turn_messages(message, history, config, tone)
     tools = skill_tools(registry)
-    # cm-6b0: the semantic router's pick, recorded next to what she does -
-    # shadow only, never awaited
-    shadow = router.start_shadow(message, _router_context(history))
+    # cm-6b0: the semantic router's pick (a few ms, in a thread while
+    # ha_assist runs), recorded next to what she does
+    pick_task = router.start_pick(message, _router_context(history))
 
     # The presence fast path skips the model entirely (WP-09): "shut up"
     # must never wait on, or be second-guessed by, a model round trip.
@@ -374,7 +374,7 @@ async def _chat_local(
         # (ha_assist.py; replaced the home_fast_path regex, 2026-10-19)
         done = await ha_assist.handle(config, message)
         if done is not None:
-            router.finish_shadow(config, shadow, message, "smart_home_control", fast=True)
+            router.record_pick(config, pick_task, message, "smart_home_control", fast=True)
             async with metrics.timed("reply", route="local", model=config.local_llm_model):
                 reply = await phrase_skill_result(
                     message, f"Home Assistant did it. It says: {done}", history, config, tone
@@ -385,7 +385,19 @@ async def _chat_local(
     tool_call: dict | None = None
     claimed = False
     if fast_call is None:
-        first = await _reply_turn(prefix, config, speaker, tools=tools, guard=claims_a_tool_use)
+        sure = await router.sure_skill(config, pick_task)
+        if sure is not None and sure.skill in registry:
+            # cm-6b0 act mode: it's clearly a request for a skill, so her
+            # first turn must call a tool - never a plain "sure, added!"
+            logger.info(
+                "router: sure of %s (%.2f, %s) - tool call required",
+                sure.skill,
+                sure.score,
+                sure.via,
+            )
+            first = await _forced_tool_turn(prefix, tools, config)
+        if first is None:
+            first = await _reply_turn(prefix, config, speaker, tools=tools, guard=claims_a_tool_use)
         if not first.tool_calls and claims_a_tool_use(first.text):
             claimed = True
             # FELT-108: she said she'd look it up ("pulling up the wiki...")
@@ -404,8 +416,8 @@ async def _chat_local(
             call = (name, params) if name else None
 
     call = _apply_call_guards(call, fast_call, message)
-    router.finish_shadow(
-        config, shadow, message, call[0] if call else None, fast=fast_call is not None
+    router.record_pick(
+        config, pick_task, message, call[0] if call else None, fast=fast_call is not None
     )
 
     precompute = _weather_fast_line(call)

@@ -3,14 +3,17 @@ the real model's accuracy is measured by tools/e2e_chat.py and the shadow
 records, not here."""
 
 import asyncio
+import json
 import re
 import zlib
 
 import numpy as np
 import pytest
 
-from felt_core.brain import router
+from felt_core.brain import orchestrator, router
 from felt_core.config import FeltConfig
+from felt_core.plugin import SkillResult
+from felt_core.plugin_loader import LoadedSkill
 
 DIM = 256
 
@@ -79,7 +82,7 @@ def test_below_the_bar_is_unsure(r):
     assert not r.pick("tell me about octopus brains").sure
 
 
-# --- shadow mode ----------------------------------------------------------------
+# --- the record ------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -92,8 +95,8 @@ def live(tmp_path, monkeypatch):
 
 
 async def test_shadow_records_the_pick_next_to_the_real_route(live):
-    task = router.start_shadow("skip this song", router.Context())
-    router.finish_shadow(live, task, "skip this song", "media_control", fast=True)
+    task = router.start_pick("skip this song", router.Context())
+    router.record_pick(live, task, "skip this song", "media_control", fast=True)
     await router.drain()
     [row] = router.shadow_rows(live.db_path)
     assert (row["pick"], row["actual"], row["fast"], row["sure"]) == (
@@ -106,8 +109,8 @@ async def test_shadow_records_the_pick_next_to_the_real_route(live):
 
 async def test_shadow_is_off_without_a_router(tmp_path):
     router.reset()
-    assert router.start_shadow("skip", router.Context()) is None
-    router.finish_shadow(FeltConfig(db_path=str(tmp_path / "f.db")), None, "skip", None, False)
+    assert router.start_pick("skip", router.Context()) is None
+    router.record_pick(FeltConfig(db_path=str(tmp_path / "f.db")), None, "skip", None, False)
 
 
 async def test_a_missing_model_leaves_it_off(tmp_path):
@@ -116,4 +119,95 @@ async def test_a_missing_model_leaves_it_off(tmp_path):
 
     router.reset()
     await router.warm(FeltConfig(db_path=str(tmp_path / "f.db")), embedder=broken)
-    assert router.start_shadow("skip", router.Context()) is None
+    assert router.start_pick("skip", router.Context()) is None
+
+
+# --- act mode -------------------------------------------------------------------
+
+WIKI = {**EXAMPLES, "poe2_wiki": ["what does a chaos orb do"]}
+
+
+def _wiki_registry(handled):
+    async def handle(params, ctx):
+        handled.append(params)
+        return SkillResult(text="[Chaos Orb] Rerolls one random modifier.")
+
+    return {
+        "poe2_wiki": LoadedSkill(
+            name="poe2_wiki",
+            description="wiki",
+            parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            handle=handle,
+        )
+    }
+
+
+def _wiki_call():
+    return {
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "poe2_wiki", "arguments": json.dumps({"query": "chaos orb"})},
+    }
+
+
+@pytest.fixture
+def acting(tmp_path, monkeypatch):
+    def start(mode="act"):
+        config = FeltConfig(db_path=str(tmp_path / "felt.db"), router_bar=0.6, router_mode=mode)
+        monkeypatch.setattr(router, "EXAMPLES", WIKI)
+        asyncio.run(router.warm(config, embedder=lambda c: fake_embed))
+        return config
+
+    yield start
+    router.reset()
+
+
+async def test_a_sure_skill_pick_makes_the_first_turn_a_tool_call(acting, monkeypatch, fake_llm):
+    config = await asyncio.to_thread(acting)
+    handled = []
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _wiki_registry(handled))
+    fake_llm.script = [{"text": "", "tool_calls": [_wiki_call()]}, "It rerolls one modifier."]
+
+    result = await orchestrator.chat("what does a chaos orb do", config, session_id="s")
+
+    assert handled == [{"query": "chaos orb"}]
+    assert [c["tool_choice"] for c in fake_llm.calls] == ["required", None]
+    assert result.reply == "It rerolls one modifier."
+
+
+async def test_shadow_mode_never_forces_a_tool(acting, monkeypatch, fake_llm):
+    config = await asyncio.to_thread(acting, "shadow")
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _wiki_registry([]))
+    fake_llm.script = ["It rerolls one modifier."]
+
+    await orchestrator.chat("what does a chaos orb do", config, session_id="s")
+
+    assert [c["tool_choice"] for c in fake_llm.calls] == [None]
+
+
+async def test_chat_is_never_forced(acting, monkeypatch, fake_llm):
+    config = await asyncio.to_thread(acting)
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _wiki_registry([]))
+    fake_llm.script = ["Hi!"]
+
+    await orchestrator.chat("hello there", config, session_id="s")
+
+    assert [c["tool_choice"] for c in fake_llm.calls] == [None]
+
+
+async def test_a_forced_turn_that_calls_nothing_falls_back_to_a_normal_turn(
+    acting, monkeypatch, fake_llm
+):
+    config = await asyncio.to_thread(acting)
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _wiki_registry([]))
+    fake_llm.script = ["no tool", "A Chaos Orb rerolls modifiers."]
+
+    result = await orchestrator.chat("what does a chaos orb do", config, session_id="s")
+
+    assert [c["tool_choice"] for c in fake_llm.calls] == ["required", None]
+    assert result.reply == "A Chaos Orb rerolls modifiers."
+
+
+async def test_an_unsure_pick_is_not_acted_on(live):
+    task = router.start_pick("something about orbs maybe", router.Context())
+    assert await router.sure_skill(live, task) is None
