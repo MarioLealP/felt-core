@@ -205,6 +205,17 @@ CASES: list[Case] = [
         ["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] 30%"],
         note="home",
     ),
+    # colour (cm-7gf): HA's matcher misses these too
+    Case(
+        "make the chandelure blue",
+        ["POST /home/turn_on ['light.chandelure'] colour=blue"],
+        note="home",
+    ),
+    Case(
+        "lights warm white please",
+        ["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] colour=2700"],
+        note="home",
+    ),
     # not commands: nothing switched
     Case("can you turn around?", None, HOME_WRITES, "home"),
     Case("is the server on fire?", None, HOME_WRITES, "home"),
@@ -375,7 +386,8 @@ class Recorder:
             entity = path.removeprefix("/api/states/")
             attrs: dict = {"friendly_name": HA_DEVICES[entity]}
             if entity.startswith("light."):
-                attrs["supported_color_modes"] = ["brightness"]
+                # as HA reports the Chandelure and the Yeelights (2026-10-25)
+                attrs["supported_color_modes"] = ["color_temp", "hs", "rgb"]
             return httpx.Response(
                 200, json={"entity_id": entity, "state": "on", "attributes": attrs}
             )
@@ -383,7 +395,9 @@ class Recorder:
         if m:
             body = json.loads(request.content or b"{}")
             dim = f" {body['brightness_pct']}%" if "brightness_pct" in body else ""
-            self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}")
+            colour = body.get("color_name") or body.get("color_temp_kelvin")
+            colour = f" colour={colour}" if colour else ""
+            self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}{colour}")
             return httpx.Response(200, json=[])
         if path.startswith("/api/states/sensor.ender_"):
             field = path.removeprefix("/api/states/sensor.ender_")
