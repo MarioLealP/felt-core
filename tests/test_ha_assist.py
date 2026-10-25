@@ -87,3 +87,13 @@ async def test_long_messages_and_no_home_assistant_are_not_asked(monkeypatch):
     assert await ha_assist.handle(CONFIG, story) is None
     assert await ha_assist.handle(FeltConfig(ha_url=None), "lights off") is None
     assert seen == []
+
+
+async def test_several_things_for_a_list_go_to_her_model(monkeypatch):
+    # cm-fmy: HA added "eggs and bread" as one item
+    seen = []
+    _ha(monkeypatch, _speech("action_done", "Added eggs and bread"), seen)
+    for message in ("put eggs and bread on my shopping list", "add eggs, bread to the list"):
+        assert await ha_assist.handle(CONFIG, message) is None
+    assert seen == []
+    assert await ha_assist.handle(CONFIG, "add milk to the shopping list") == "Added eggs and bread"

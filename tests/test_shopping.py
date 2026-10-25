@@ -129,3 +129,28 @@ async def test_skill_says_so_when_ha_is_down(tmp_path, ha):
     assert await _say(tmp_path, {"item": "bread"}) == (
         "Couldn't reach the shopping list in Home Assistant right now."
     )
+
+
+async def test_several_items_are_added_one_by_one(tmp_path, ha):
+    # cm-fmy: "put eggs and bread on my shopping list"
+    text = await _say(tmp_path, {"action": "add", "items": ["eggs", "bread"]})
+    assert text == "Added eggs and bread to the shopping list."
+    added = [c[2]["item"] for c in ha.calls if c[1] == "/api/services/todo/add_item"]
+    assert added == ["eggs", "bread"]
+
+
+async def test_items_and_a_lone_item_count_once(tmp_path, ha):
+    text = await _say(tmp_path, {"items": ["Eggs", "milk"], "item": "eggs"})
+    assert text == "Added Eggs and milk to the shopping list."
+
+
+async def test_items_alone_is_not_mistaken_for_an_action(tmp_path, ha):
+    text = await _say(tmp_path, {"items": ["eggs", "bread", "coffee"]})
+    assert text == "Added eggs, bread and coffee to the shopping list."
+
+
+async def test_several_removed(tmp_path, ha):
+    text = await _say(tmp_path, {"action": "remove", "items": ["milk", "cheese"]})
+    assert text == (
+        "Removed milk from the shopping list. I don't see 'cheese' on the shopping list."
+    )

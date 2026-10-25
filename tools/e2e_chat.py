@@ -72,7 +72,6 @@ HA_MATCHES = {
     "lights off": "action_done",
     "set the chandelure to 30%": "action_done",
     "turn off the dehumidifier": "action_done",
-    "put eggs and bread on my shopping list": "action_done",
     "is the fan on": "query_answer",
 }
 # what the model path's smart_home_control sees (FELT_HA_ENTITIES' states)
@@ -151,10 +150,15 @@ CASES: list[Case] = [
     Case("what time is my alarm set for tomorrow", [], [], "phone", ("list_alarms",)),
     # the shopping list: Home Assistant's todo list (fake - the real one stays untouched)
     Case("add milk to the shopping list", ["POST /todo/add_item"], note="shop"),
-    # HA's matcher adds it (as one item - HA's own sentence, like the old bug)
+    # several at once: her skill, one add each (cm-fmy; HA's matcher made it one item)
     Case(
         "put eggs and bread on my shopping list",
-        ["POST /ha-assist put eggs and bread on my shopping list"],
+        ["POST /todo/add_item", "POST /todo/add_item"],
+        note="shop",
+    ),
+    Case(
+        "add coffee, oat milk and bananas to the list",
+        ["POST /todo/add_item", "POST /todo/add_item", "POST /todo/add_item"],
         note="shop",
     ),
     Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
@@ -415,7 +419,9 @@ class Recorder:
                 ]
                 todo = {"todo.shopping_list": {"items": items}}
                 return httpx.Response(200, json={"changed_states": [], "service_response": todo})
-            self.calls.append(f"POST /todo/{service}")
+            # the item after "?" (the verdict compares the part before it)
+            item = json.loads(request.content or b"{}").get("item", "")
+            self.calls.append(f"POST /todo/{service}?{item}")
             return httpx.Response(200, json=[])
         self.calls.append(f"{request.method} /ha{path}")
         return httpx.Response(503)
