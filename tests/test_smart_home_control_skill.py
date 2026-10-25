@@ -29,6 +29,8 @@ STATES = {
 ALLOWED = [e for e in STATES if not e.startswith("lock.")]
 # 2026-10-19: the Shelf plug shown as a light (HA's switch_as_x) - it switches, can't dim
 ONOFF = {"light.shelf"}
+# 2026-10-25: the Chandelure and the Yeelights take colours (HA: color_temp, hs, rgb)
+COLOUR = {"light.chandelure", "light.front_left"}
 DIM_STATES = {k: v for k, v in STATES.items() if k != "switch.shelf"} | {
     "light.shelf": ("Shelf", "on")
 }
@@ -42,7 +44,13 @@ def _mock(monkeypatch, calls, states=STATES):
             name, state = states[eid]
             attributes = {"friendly_name": name}
             if eid.startswith("light."):
-                attributes["supported_color_modes"] = ["onoff"] if eid in ONOFF else ["brightness"]
+                attributes["supported_color_modes"] = (
+                    ["onoff"]
+                    if eid in ONOFF
+                    else ["color_temp", "hs", "rgb"]
+                    if eid in COLOUR
+                    else ["brightness"]
+                )
             return httpx.Response(200, json={"state": state, "attributes": attributes})
         if path.startswith("/api/services/"):
             calls.append((path, json.loads(request.content)))
@@ -152,3 +160,58 @@ async def test_a_plug_cant_dim(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "shelf", calls, action="dim")
     assert calls == [] and "can't be dimmed" in text
+
+
+# --- colour (cm-7gf) ---
+
+
+async def test_a_colour_by_name(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "chandelure", calls, color="Blue")
+    assert calls == [
+        ("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "color_name": "blue"})
+    ]
+    assert text == "Chandelure set to blue."
+
+
+async def test_a_two_word_colour_is_one_ha_name(monkeypatch):
+    calls = []
+    await _dim(monkeypatch, "chandelure", calls, color="light blue")
+    assert calls[0][1]["color_name"] == "lightblue"
+
+
+async def test_warm_white_is_a_colour_temperature(monkeypatch):
+    calls = []
+    await _dim(monkeypatch, "chandelure", calls, color="warm white")
+    assert calls[0][1] == {"entity_id": ["light.chandelure"], "color_temp_kelvin": 2700}
+
+
+async def test_a_colour_with_a_brightness(monkeypatch):
+    calls = []
+    await _dim(monkeypatch, "chandelure", calls, color="red", brightness=40)
+    assert calls[0][1] == {
+        "entity_id": ["light.chandelure"],
+        "color_name": "red",
+        "brightness_pct": 40,
+    }
+
+
+async def test_the_lights_colour_skips_the_ones_that_cant(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "the lights", calls, color="blue", action="on")
+    [(_, body)] = calls
+    assert sorted(body["entity_id"]) == ["light.chandelure", "light.front_left"]
+    assert text.startswith("2 lights set to blue") and "Shelf" in text
+
+
+async def test_a_light_that_only_dims_cant_change_colour(monkeypatch):
+    calls = []
+    text = await _dim(monkeypatch, "backright", calls, color="blue")
+    assert calls == [] and "can't change colour" in text
+
+
+async def test_an_unknown_colour_says_so(monkeypatch):
+    calls = []
+    # HA itself answers 200 to an unknown name (checked live 2026-10-25)
+    text = await _dim(monkeypatch, "chandelure", calls, color="sparkly")
+    assert calls == [] and text == "Home Assistant doesn't know the colour 'sparkly'."

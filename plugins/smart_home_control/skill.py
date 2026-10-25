@@ -17,6 +17,12 @@ Dimming (2026-10-19, Mario: "a dim the lights call without giving a %"):
 FELT_HA_DIM_PERCENT. Plain commands usually reach Home Assistant's own
 matcher first (ha_assist.py); this is the model's path for what it misses
 ("dim the chandelure", a typo'd "30 percente").
+
+Colour (cm-7gf, 2026-10-25): "make the lights blue" sends HA the colour by
+name; the whites ("warm white", "cool") go as a colour temperature. HA
+answers 200 to a name it doesn't know (it just logs it), so the names are
+checked here first, against HA's own list. Only lights that can do it are
+touched.
 """
 
 import httpx
@@ -26,9 +32,9 @@ from felt_core.plugin import SkillResult
 
 name = "smart_home_control"
 description = (
-    "Turns a light, plug or fan on or off, dims lights (to a % or the usual level), or "
-    "checks if it's on, e.g. 'turn off the lights' (plural = all of that kind), 'dim the "
-    "chandelure to 30%'."
+    "Turns a light, plug or fan on or off, dims lights (to a % or the usual level), sets "
+    "a light's colour, or checks if it's on, e.g. 'turn off the lights' (plural = all of "
+    "that kind), 'dim the chandelure to 30%', 'make the lights blue'."
 )
 parameters_schema = {
     "type": "object",
@@ -42,6 +48,10 @@ parameters_schema = {
         "brightness": {
             "type": "integer",
             "description": "Percent 1-100, only with dim, only if Mario says a number",
+        },
+        "color": {
+            "type": "string",
+            "description": "Only if Mario names a colour: blue, red, purple, warm white...",
         },
     },
     "required": ["device"],
@@ -65,6 +75,7 @@ async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, 
                 "state": data.get("state", "unknown"),
                 # a light that can be dimmed (not just switched)
                 "dimmable": any(mode != "onoff" for mode in modes),
+                "modes": set(modes),
             }
     return states
 
@@ -148,6 +159,75 @@ async def _dim(client, config, params, states, matches, label) -> SkillResult:
     return SkillResult(text=f"{len(dimmable)} lights dimmed to {percent}%{rest}.")
 
 
+# Home Assistant's colour names (homeassistant/util/color.py COLORS, 2026.10.2)
+_HA_COLOUR_NAMES = (
+    "aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue "
+    "blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue "
+    "cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey "
+    "darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon "
+    "darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet "
+    "deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen "
+    "fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew "
+    "hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon "
+    "lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey "
+    "lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey "
+    "lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine "
+    "mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue "
+    "mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose "
+    "moccasin navajowhite navy navyblue oldlace olive olivedrab orange orangered orchid "
+    "palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink "
+    "plum powderblue purple red rosybrown royalblue saddlebrown salmon sandybrown "
+    "seagreen seashell sienna silver skyblue slateblue slategray slategrey snow "
+    "springgreen steelblue tan teal thistle tomato turquoise violet wheat white "
+    "whitesmoke yellow yellowgreen homeassistant"
+)
+_HA_COLOURS = set(_HA_COLOUR_NAMES.split())
+# a light that takes a colour by name
+_COLOR_MODES = {"hs", "rgb", "rgbw", "rgbww", "xy"}
+# the whites aren't colour names: a colour temperature instead (kelvin)
+_WHITES = {
+    "warm": 2700,
+    "warm white": 2700,
+    "white": 4000,
+    "neutral": 4000,
+    "neutral white": 4000,
+    "cool": 6500,
+    "cool white": 6500,
+    "daylight": 6500,
+}
+
+
+async def _colour(client, config, params, states, matches, label) -> SkillResult:
+    colour = " ".join(str(params.get("color")).lower().split())
+    kelvin = _WHITES.get(colour)
+    if not kelvin and colour.replace(" ", "") not in _HA_COLOURS:
+        return SkillResult(text=f"Home Assistant doesn't know the colour '{colour}'.")
+    able = [
+        eid
+        for eid in matches
+        if ("color_temp" in states[eid]["modes"] if kelvin else states[eid]["modes"] & _COLOR_MODES)
+    ]
+    if not able:
+        return SkillResult(text=f"{label} can't change colour.")
+    body: dict = {"entity_id": able}
+    if kelvin:
+        body["color_temp_kelvin"] = kelvin
+    else:
+        body["color_name"] = colour.replace(" ", "")  # HA's names: "lightblue"
+    if params.get("brightness") is not None:
+        body["brightness_pct"] = dim_percent(params, config)
+    try:
+        response = await client.post(f"{config.ha_url}/api/services/light/turn_on", json=body)
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return SkillResult(text=f"Couldn't reach Home Assistant to change {label}.")
+    if len(able) == 1:
+        return SkillResult(text=f"{states[able[0]]['friendly_name']} set to {colour}.")
+    skipped = [states[eid]["friendly_name"] for eid in matches if eid not in able]
+    rest = f" ({', '.join(skipped)} can't change colour)" if skipped else ""
+    return SkillResult(text=f"{len(able)} lights set to {colour}{rest}.")
+
+
 async def handle(params, ctx):
     config = ctx.config
     if not config.ha_url or not config.ha_token or not config.ha_entities_list():
@@ -179,6 +259,8 @@ async def handle(params, ctx):
             or "status"
         ).lower()
 
+        if params.get("color"):
+            return await _colour(client, config, params, states, matches, label)
         if action == "dim" or params.get("brightness") is not None:
             return await _dim(client, config, params, states, matches, label)
         if "on" in action and "off" not in action:
