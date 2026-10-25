@@ -241,10 +241,12 @@ class FeltConfig(BaseSettings):
     # Lives next to the sqlite db by default, on the same persistent volume.
     poe_trade_cache_path: str = "./data/poe_trade_cache.json"
 
-    # Semantic router (brain/router.py, cm-6b0) - shadow mode: it only records
-    # what it would have picked. The model is baked into the image
-    # (Dockerfile); without it on disk the router stays off.
+    # Semantic router (brain/router.py, cm-6b0). "act": when it's sure a
+    # message needs a skill, her first turn must call a tool; "shadow": it
+    # only records what it would have picked. The model is baked into the
+    # image (Dockerfile); without it on disk the router stays off.
     router_enabled: bool = True
+    router_mode: Literal["act", "shadow"] = "act"
     router_model: str = "BAAI/bge-small-en-v1.5"
     router_model_dir: str = "/app/models"
     router_bar: float = 0.78

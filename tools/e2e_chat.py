@@ -158,6 +158,8 @@ CASES: list[Case] = [
         note="shop",
     ),
     Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
+    # router shadow 2026-10-18..25: answered in words, nothing added (cm-6b0 act mode)
+    Case("add baguette to the shopping list", ["POST /todo/add_item"], note="shop"),
     Case("what's on my shopping list?", [], [], "shop", ("shopping_list",)),
     Case("take oat milk off the shopping list", ["POST /todo/remove_item"], note="shop"),
     # the Ender, read from HA (2026-10-19)
@@ -189,6 +191,8 @@ CASES: list[Case] = [
         ("smart_home_control",),
     ),
     Case("are the lights still on", [], [], "home", ("smart_home_control",)),
+    # router shadow 2026-10-18..25: no match in HA, then a reply with no tool
+    Case("lights on", None, [], "home", ("smart_home_control",)),
     # dimming (2026-10-19): HA's matcher misses these, her skill dims
     Case(
         "chandelure to 30 percente please",
@@ -537,7 +541,12 @@ class _SkillLog(logging.Handler):
 
     def emit(self, record):
         msg = record.getMessage()
-        if "skill call" in msg or "fast path" in msg or "claimed" in msg or "router shadow" in msg:
+        if (
+            "skill call" in msg
+            or "fast path" in msg
+            or "claimed" in msg
+            or msg.startswith("router")
+        ):
             self.lines.append(msg)
 
 

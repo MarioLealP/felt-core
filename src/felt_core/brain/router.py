@@ -6,10 +6,14 @@ is playing, and - for a short follow-up like "what about the weekend?" -
 the previous message. Above `router_bar` it's sure; below, felt-llm with
 the whole conversation decides, as today.
 
-For now it runs in SHADOW mode only: chat() asks it alongside the normal
-routing and records "router would pick X, Felt did Y" (router_shadow
-table) - it never changes what she does, never delays a reply, and a
-router that isn't loaded (no model on disk, tests) is just skipped.
+chat() asks it alongside the normal routing and records "router picked X,
+Felt did Y" (router_shadow table). In "act" mode (router_mode) a sure pick
+of a skill makes her first turn a required tool call - felt-llm ignores a
+named tool_choice, so she still picks the tool and fills its arguments
+with the whole conversation, and the full tool list keeps her prompt cache
+warm. What it fixes: a plain "add baguette to the shopping list" answered
+in words with nothing done. In "shadow" mode it only records. A router that
+isn't loaded (no model on disk, tests) is just skipped.
 """
 
 from __future__ import annotations
@@ -138,10 +142,13 @@ async def warm(config: FeltConfig, embedder: Callable[[FeltConfig], Embed] = fas
         embed = await asyncio.to_thread(embedder, config)
         _router = await asyncio.to_thread(Router, embed, config.router_bar)
         logger.info(
-            "router: loaded (%s, bar %.2f) - shadow mode", config.router_model, config.router_bar
+            "router: loaded (%s, bar %.2f) - %s mode",
+            config.router_model,
+            config.router_bar,
+            config.router_mode,
         )
     except Exception as e:  # noqa: BLE001 - optional; Felt routes as before without it
-        logger.warning("router: not loaded (%r) - shadow mode off", e)
+        logger.warning("router: not loaded (%r) - router off", e)
 
 
 def reset() -> None:
@@ -149,7 +156,7 @@ def reset() -> None:
     _router = None
 
 
-def start_shadow(message: str, ctx: Context) -> asyncio.Task[Pick] | None:
+def start_pick(message: str, ctx: Context) -> asyncio.Task[Pick] | None:
     """Kick off the router's pick in a thread; None when it isn't loaded."""
     if _router is None:
         return None
@@ -160,7 +167,20 @@ def start_shadow(message: str, ctx: Context) -> asyncio.Task[Pick] | None:
     return task
 
 
-def finish_shadow(
+async def sure_skill(config: FeltConfig, task: asyncio.Task[Pick] | None) -> Pick | None:
+    """In act mode, the pick when it's sure of a skill (not plain chat);
+    None otherwise - or if the pick failed, which never costs her the reply."""
+    if task is None or config.router_mode != "act":
+        return None
+    try:
+        pick = await asyncio.shield(task)
+    except Exception as e:  # noqa: BLE001 - routing goes on as without the router
+        logger.warning("router pick failed (%r) - routing as without it", e)
+        return None
+    return pick if pick.sure and pick.skill is not None else None
+
+
+def record_pick(
     config: FeltConfig,
     task: asyncio.Task[Pick] | None,
     message: str,
@@ -168,18 +188,18 @@ def finish_shadow(
     fast: bool,
 ) -> None:
     """Record the pick next to what Felt did, whenever the pick is ready -
-    never awaited by the reply."""
+    never awaited here."""
     if task is None:
         return
 
     def done(t: asyncio.Task[Pick]) -> None:
         if t.cancelled() or t.exception() is not None:
-            logger.warning("router shadow failed: %r", None if t.cancelled() else t.exception())
+            logger.warning("router pick failed: %r", None if t.cancelled() else t.exception())
             return
         pick = t.result()
         agree = pick.skill == actual
         logger.info(
-            "router shadow: pick=%s (%.2f%s, %s) actual=%s%s %s",
+            "router: pick=%s (%.2f%s, %s) actual=%s%s %s",
             pick.skill,
             pick.score,
             "" if pick.sure else " unsure",
@@ -191,13 +211,13 @@ def finish_shadow(
         try:
             record(config.db_path, message, pick, actual, fast)
         except sqlite3.Error:
-            logger.warning("router shadow: couldn't record", exc_info=True)
+            logger.warning("router: couldn't record the pick", exc_info=True)
 
     task.add_done_callback(done)
 
 
 async def drain() -> None:
-    """Wait for outstanding shadow picks (tests, the e2e harness)."""
+    """Wait for outstanding picks (tests, the e2e harness)."""
     if _pending:
         await asyncio.gather(*list(_pending), return_exceptions=True)
     await asyncio.sleep(0)
