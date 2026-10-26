@@ -219,13 +219,18 @@ async def _react_to_screen_local(
     *,
     app: str = "",
     title: str = "",
+    seen: str | None = None,
 ) -> dict | None:
     """felt-llm with the JPEG as an image part and the schema-constrained
     JSON reply. One retry on a parse failure; None after two unparseable
-    replies. LocalLLMUnavailable propagates (the API answers 503)."""
-    if config.vision_url:
+    replies. LocalLLMUnavailable propagates (the API answers 503).
+
+    `seen` is a description felt-tray already got from the desktop's own
+    felt-vision (cm-qplv) - then nobody here looks at an image."""
+    if seen is not None or config.vision_url:
         # felt-vision reads the image; Bonsai gets its words (vision spike 2026-10-21)
-        seen = await vision.describe(jpeg_bytes, app, title, config, poe=schema is not None)
+        if seen is None:
+            seen = await vision.describe(jpeg_bytes, app, title, config, poe=schema is not None)
         user_text = user_text.replace("Look at the screenshot", "Read what your eyes saw (below)")
         content: str | list = f"{user_text}\n\n{_FROM_DESCRIPTION}\nOn his screen: {seen}"
     else:
@@ -271,6 +276,7 @@ async def react_to_screen(
     session_id: str = "default",
     trigger: str = "focus",
     tone: str | None = None,
+    seen: str | None = None,
 ) -> ChatResult:
     """WP-07's per-window, image-based screen reaction path: ONE felt-llm
     multimodal call (schema-constrained JSON, route "local"). Raises
@@ -309,6 +315,7 @@ async def react_to_screen(
             schema=poe_reactions.POE_SCHEMA if poe else None,
             app=app,
             title=title,
+            seen=seen,
         )
 
     if parsed is None:
