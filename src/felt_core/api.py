@@ -907,19 +907,26 @@ async def screen_context_endpoint(
 
 @app.post("/v1/react/screen")
 async def react_screen_endpoint(
-    image: UploadFile = File(...),
+    image: UploadFile | None = File(None),
     app_name: str = Form(..., alias="app"),
     title: str = Form(""),
     trigger: str = Form("focus"),
     session_id: str = "dashboard",
     tone: str | None = Form(None),
+    seen: str | None = Form(None),
 ) -> Response:
     """WP-07: felt-tray's new per-window capture path - the JPEG has
     already cleared the blocklist client-side before this is ever called.
     A single multimodal felt-llm call - 503 {"detail": "felt-llm offline"}
-    when it's unreachable, which felt-tray treats as "no reaction"."""
+    when it's unreachable, which felt-tray treats as "no reaction".
+
+    cm-qplv: with its [vision] table set, felt-tray describes the screen on
+    the desktop's own GPU and sends that text as `seen` instead of the image."""
+    if image is None and not (seen and seen.strip()):
+        raise HTTPException(status_code=422, detail="send an image or seen")
     config = load_config()
-    jpeg_bytes = await image.read()
+    jpeg_bytes = await image.read() if image is not None else b""
+    seen = seen.strip() if seen and seen.strip() else None
     # "look at this" (manual) is him asking: chat; the rest is ambient
     gate = (
         contextlib.nullcontext()
@@ -928,7 +935,14 @@ async def react_screen_endpoint(
     )
     with gate:
         result = await react_to_screen(
-            jpeg_bytes, app_name, title, config, session_id=session_id, trigger=trigger, tone=tone
+            jpeg_bytes,
+            app_name,
+            title,
+            config,
+            session_id=session_id,
+            trigger=trigger,
+            tone=tone,
+            seen=seen,
         )
 
     emotion_headers = {"X-Emotion": quote(result.emotion)} if result.emotion else {}

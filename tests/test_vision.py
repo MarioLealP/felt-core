@@ -94,3 +94,46 @@ async def test_without_felt_vision_the_image_goes_to_bonsai(tmp_path, fake_llm):
     await screen_reactions.react_to_screen(b"jpeg", "game.exe", "Game", config, trigger="manual")
     user = fake_llm.calls[0]["messages"][-1]["content"]
     assert isinstance(user, list) and user[1]["type"] == "image_url"
+
+
+async def test_a_description_from_the_desktop_skips_the_image(tmp_path, fake_llm, monkeypatch):
+    """cm-qplv: felt-tray described the screen on the desktop GPU - no
+    felt-vision call here, even with vision_url set, and no image to Bonsai."""
+    config = _config(tmp_path, vision_url="http://felt-vision:8080")
+
+    async def describe(*args, **kwargs):
+        raise AssertionError("felt-vision must not be called")
+
+    monkeypatch.setattr(vision, "describe", describe)
+    fake_llm.script = ['{"seen": "HN", "line": "Again?", "emotion": "amused"}']
+
+    result = await screen_reactions.react_to_screen(
+        b"", "firefox", "Hacker News", config, trigger="manual", seen="Hacker News front page."
+    )
+
+    assert result.reply == "Again?"
+    user = fake_llm.calls[0]["messages"][-1]["content"]
+    assert isinstance(user, str) and "On his screen: Hacker News front page." in user
+
+
+def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from felt_core import api
+
+    got = {}
+
+    async def fake_react(jpeg, app, title, config, **kwargs):
+        got.update(jpeg=jpeg, seen=kwargs["seen"])
+        return screen_reactions.ChatResult(reply="", animation_tag=None)
+
+    monkeypatch.setattr(api, "react_to_screen", fake_react)
+    with TestClient(api.app) as client:
+        ok = client.post(
+            "/v1/react/screen",
+            data={"app": "firefox", "title": "x", "trigger": "manual", "seen": " a wiki page "},
+        )
+        neither = client.post("/v1/react/screen", data={"app": "firefox", "trigger": "manual"})
+
+    assert ok.status_code == 200 and got == {"jpeg": b"", "seen": "a wiki page"}
+    assert neither.status_code == 422
