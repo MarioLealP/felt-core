@@ -211,3 +211,10 @@ async def test_a_forced_turn_that_calls_nothing_falls_back_to_a_normal_turn(
 async def test_an_unsure_pick_is_not_acted_on(live):
     task = router.start_pick("something about orbs maybe", router.Context())
     assert await router.sure_skill(live, task) is None
+
+
+def test_ha_assist_agrees_with_a_home_or_list_pick():
+    assert router.agrees("smart_home_control", router.HA_ASSIST)
+    assert router.agrees("shopping_list", router.HA_ASSIST)
+    assert not router.agrees("set_timer", router.HA_ASSIST)
+    assert not router.agrees("shopping_list", "smart_home_control")
