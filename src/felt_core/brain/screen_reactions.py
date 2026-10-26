@@ -27,7 +27,7 @@ from felt_core import features, local_llm, metrics, vision
 from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
 from felt_core.brain.personality import daily_persona, per_call_context, with_context
-from felt_core.brain.replies import local_reply
+from felt_core.brain.replies import EMOTIONS, local_reply
 from felt_core.brain.result import ChatResult
 from felt_core.config import FeltConfig
 from felt_core.db import (
@@ -178,14 +178,6 @@ async def process_screen_context(
     return ChatResult(reply=reply_raw, animation_tag=None)
 
 
-# WP-07's fixed emotion set - anything else that comes back gets folded to
-# "neutral" rather than passed through as an arbitrary string (X-Emotion
-# is meant to drive a small fixed set of expressions client-side, not an
-# open vocabulary).
-_EMOTION_VALUES = frozenset(
-    {"happy", "excited", "amused", "sad", "annoyed", "surprised", "thinking", "sleepy", "neutral"}
-)
-
 _SCREEN_REACT_INSTRUCTION = (
     "Look at the screenshot. Respond with ONLY a JSON object, no other text, "
     "no markdown code fences, with exactly these three fields:\n"
@@ -205,7 +197,7 @@ _SCREEN_REACT_SCHEMA = {
     "properties": {
         "seen": {"type": "string"},
         "line": {"type": "string"},
-        "emotion": {"type": "string", "enum": sorted(_EMOTION_VALUES)},
+        "emotion": {"type": "string", "enum": sorted(EMOTIONS)},
     },
     "required": ["seen", "line", "emotion"],
     "additionalProperties": False,
@@ -326,7 +318,7 @@ async def react_to_screen(
     seen = str(parsed.get("seen") or "").strip()
     line = str(parsed.get("line") or "").strip()
     emotion = parsed.get("emotion")
-    emotion = emotion if emotion in _EMOTION_VALUES else "neutral"
+    emotion = emotion if emotion in EMOTIONS else "neutral"
 
     if poe and isinstance(parsed.get("items"), list):
         prices = await poe_reactions.price_items(parsed["items"], config)

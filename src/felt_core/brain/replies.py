@@ -103,6 +103,13 @@ def local_turn_messages(
     )
 
 
+# WP-07's fixed emotion set: X-Emotion drives a small fixed set of
+# expressions client-side, not an open vocabulary
+EMOTIONS = frozenset(
+    {"happy", "excited", "amused", "sad", "annoyed", "surprised", "thinking", "sleepy", "neutral"}
+)
+
+
 async def local_reply(
     messages_tail: list[dict], config: FeltConfig, *, include_facts: bool, tone: str | None = None
 ) -> str:

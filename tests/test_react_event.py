@@ -134,6 +134,23 @@ async def test_music_event_speaks_then_cools_down_with_zero_model_calls(tmp_path
     assert calls[0]["messages"][-1]["role"] == "user"
 
 
+async def test_she_picks_the_feeling_of_her_own_line(tmp_path, fake_llm):
+    calls = _fake_llm(fake_llm, "[amused] this one again?")
+
+    said = await events.react_to_event("music_new_track", _TRACK, _config(tmp_path), "s")
+
+    assert (said.line, said.emotion) == ("this one again?", "amused")
+    assert "[amused]" in calls[0]["messages"][-1]["content"]
+
+
+async def test_a_feeling_outside_the_set_falls_back_to_the_events_own(tmp_path, fake_llm):
+    _fake_llm(fake_llm, "[melancholic] ooh")
+
+    said = await events.react_to_event("music_new_track", _TRACK, _config(tmp_path), "s")
+
+    assert (said.line, said.emotion) == ("ooh", "happy")
+
+
 async def test_event_is_never_a_screen_observation(tmp_path, fake_llm):
     config = _config(tmp_path)
     _fake_llm(fake_llm)
