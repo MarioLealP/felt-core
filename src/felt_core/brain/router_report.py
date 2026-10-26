@@ -12,7 +12,7 @@ import argparse
 import sys
 from collections import Counter
 
-from felt_core.brain.router import shadow_rows
+from felt_core.brain.router import agrees, shadow_rows
 from felt_core.config import load_config
 
 
@@ -25,20 +25,21 @@ def main() -> int:
         print("no shadow records yet")
         return 0
     sure = [r for r in rows if r["sure"]]
-    agree = [r for r in sure if r["pick"] == r["actual"]]
+    agree = [r for r in sure if agrees(r["pick"], r["actual"])]
     print(f"{len(rows)} messages since {rows[0]['at']}")
     print(f"  sure: {len(sure)} - agree {len(agree)}, differ {len(sure) - len(agree)}")
     print(f"  unsure (would go to felt-llm): {len(rows) - len(sure)}")
     print(f"  of the fast-path ones: {sum(r['fast'] for r in rows)}")
-    pairs = Counter((r["pick"], r["actual"]) for r in sure if r["pick"] != r["actual"])
+    pairs = Counter((r["pick"], r["actual"]) for r in sure if not agrees(r["pick"], r["actual"]))
     if pairs:
         print("\nmost common differences (router -> actual):")
         for (pick, actual), n in pairs.most_common(10):
             print(f"  {n:3} x {pick} -> {actual}")
     print()
     for r in rows:
-        if args.all or (r["sure"] and r["pick"] != r["actual"]):
-            mark = "  " if r["pick"] == r["actual"] else "!!"
+        differ = not agrees(r["pick"], r["actual"])
+        if args.all or (r["sure"] and differ):
+            mark = "!!" if differ else "  "
             route = f"router={r['pick']} actual={r['actual']}"
             print(f"{mark} {r['score']:.2f} {r['via']:9} {route}: {r['message'][:70]!r}")
     return 0

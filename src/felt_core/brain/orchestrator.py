@@ -374,7 +374,7 @@ async def _chat_local(
         # (ha_assist.py; replaced the home_fast_path regex, 2026-10-19)
         done = await ha_assist.handle(config, message)
         if done is not None:
-            router.record_pick(config, pick_task, message, "smart_home_control", fast=True)
+            router.record_pick(config, pick_task, message, router.HA_ASSIST, fast=True)
             async with metrics.timed("reply", route="local", model=config.local_llm_model):
                 reply = await phrase_skill_result(
                     message, f"Home Assistant did it. It says: {done}", history, config, tone

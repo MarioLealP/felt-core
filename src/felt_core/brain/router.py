@@ -180,6 +180,18 @@ async def sure_skill(config: FeltConfig, task: asyncio.Task[Pick] | None) -> Pic
     return pick if pick.sure and pick.skill is not None else None
 
 
+# what Home Assistant's own matcher (ha_assist) did is recorded as this: it
+# does home commands and list adds, so either pick agrees with it
+HA_ASSIST = "ha_assist"
+_HA_ASSIST_SKILLS = frozenset({"smart_home_control", "shopping_list"})
+
+
+def agrees(pick: str | None, actual: str | None) -> bool:
+    if actual == HA_ASSIST:
+        return pick in _HA_ASSIST_SKILLS
+    return pick == actual
+
+
 def record_pick(
     config: FeltConfig,
     task: asyncio.Task[Pick] | None,
@@ -197,7 +209,7 @@ def record_pick(
             logger.warning("router pick failed: %r", None if t.cancelled() else t.exception())
             return
         pick = t.result()
-        agree = pick.skill == actual
+        agree = agrees(pick.skill, actual)
         logger.info(
             "router: pick=%s (%.2f%s, %s) actual=%s%s %s",
             pick.skill,
