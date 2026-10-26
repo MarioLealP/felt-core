@@ -1,7 +1,10 @@
 """The Systems summary as sensors: one per area (state = status, like the
-Felt app's dots), "needs you" in total, and the latest incidents."""
+Felt app's dots), "needs you" in total, and the latest incidents. Plus today's
+brief (state = when she gave it, the text as an attribute)."""
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -29,7 +32,7 @@ async def async_setup_entry(
     coordinator: FeltCoordinator = entry.runtime_data.coordinator
     async_add_entities(
         [AreaSensor(coordinator, entry, key, *meta) for key, meta in AREAS.items()]
-        + [NeedsYouSensor(coordinator, entry)]
+        + [NeedsYouSensor(coordinator, entry), BriefSensor(coordinator, entry)]
     )
 
 
@@ -82,3 +85,24 @@ class NeedsYouSensor(_Base):
     @property
     def extra_state_attributes(self) -> dict:
         return {"latest": self._systems.get("latest") or []}
+
+
+class BriefSensor(_Base):
+    _attr_name = "Brief"
+    _attr_icon = "mdi:script-text-outline"
+    _attr_device_class = "timestamp"
+
+    def __init__(self, coordinator: FeltCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "brief")
+
+    @property
+    def _brief(self) -> dict | None:
+        return (self.coordinator.data or {}).get("brief")
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self._brief["at"] if self._brief else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"text": self._brief["text"] if self._brief else ""}
