@@ -338,7 +338,7 @@ async def test_react_to_screen_local(tmp_path, fake_llm):
     assert result.emotion == "amused"
     call = fake_llm.calls[0]
     assert [p["type"] for p in call["messages"][-1]["content"]] == ["text", "image_url"]
-    assert set(call["json_schema"]["properties"]["emotion"]["enum"]) == set(screen._EMOTION_VALUES)
+    assert set(call["json_schema"]["properties"]["emotion"]["enum"]) == set(screen.EMOTIONS)
 
 
 async def test_react_to_screen_raises_when_felt_llm_is_down(tmp_path, fake_llm):

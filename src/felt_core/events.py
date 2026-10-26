@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -414,11 +415,37 @@ async def _poe_item_details(details: dict, config: FeltConfig) -> dict:
     return {**item, "prices": prices}
 
 
-async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str | None) -> str:
+# Mario 2026-10-26 ("it should be more varied"): she picks the feeling of
+# her own line, like a screen reaction does - the policy's fixed emotion is
+# only the fallback when her reply doesn't carry one. A bracket tag, not a
+# JSON schema: llama.cpp's grammar made these lines ~4x slower (2.5 -> 9.4 s).
+_EMOTION_TAG = re.compile(r"^\s*\[(\w+)\]\s*")
+
+
+def _emotion_note(emotions: frozenset[str]) -> str:
+    return (
+        "\n\nStart with how you feel saying it, in square brackets - one of "
+        + ", ".join(sorted(emotions))
+        + ' - then the remark, e.g. "[amused] this one again?"'
+    )
+
+
+def _line_and_emotion(text: str, emotions: frozenset[str]) -> tuple[str, str | None]:
+    """Her "[feeling] line" reply; without a known tag it's all line, with no
+    emotion of her own."""
+    tag = _EMOTION_TAG.match(text)
+    emotion = tag.group(1).lower() if tag else None
+    line = text[tag.end() :] if tag else text
+    return line.strip(" \n\"'"), emotion if emotion in emotions else None
+
+
+async def _generate_line(
+    event: str, prompt: str, config: FeltConfig, tone: str | None
+) -> tuple[str, str | None]:
     # WP-40: brain.replies is felt-core's small public surface for reply
     # generation - this used to reach straight into brain.py's
     # underscore-prefixed (private-by-convention) internals instead.
-    from felt_core.brain.replies import local_reply, music_taste_context
+    from felt_core.brain.replies import EMOTIONS, local_reply, music_taste_context
 
     # Music taste keeps her opinions of a track consistent ("oh, this one
     # again?").
@@ -427,10 +454,13 @@ async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str 
     async with metrics.timed("event_reaction", route="local", model=config.local_llm_model):
         # No facts (an event remark doesn't need them); local_reply adds
         # the personality prompt and the length cap.
-        line = await local_reply(
-            taste + [{"role": "user", "content": prompt}], config, include_facts=False, tone=tone
+        text = await local_reply(
+            taste + [{"role": "user", "content": prompt + _emotion_note(EMOTIONS)}],
+            config,
+            include_facts=False,
+            tone=tone,
         )
-    return line.strip(" \n\"'")
+    return _line_and_emotion(text, EMOTIONS)
 
 
 async def react_to_event(
@@ -486,14 +516,13 @@ async def react_to_event(
     )
 
     try:
-        line = await _generate_line(event, prompt, config, tone)
+        line, emotion = await _generate_line(event, prompt, config, tone)
         if event == "unhushed":
             line = cap_words(line, UNHUSHED_MAX_WORDS)
             if same_line(line, previous):
                 logger.info("event reaction %s: repeated the last line, asking once more", event)
-                line = cap_words(
-                    await _generate_line(event, prompt, config, tone), UNHUSHED_MAX_WORDS
-                )
+                line, emotion = await _generate_line(event, prompt, config, tone)
+                line = cap_words(line, UNHUSHED_MAX_WORDS)
     except local_llm.LocalLLMUnavailable:
         logger.warning("event reaction %s: felt-llm unavailable", event)
         raise
@@ -510,5 +539,5 @@ async def react_to_event(
         config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}"
     )
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
-    logger.info("event reaction %s: %r", event, line)
-    return EventReaction(line=line, emotion=table[event].emotion)
+    logger.info("event reaction %s (%s): %r", event, emotion or "policy", line)
+    return EventReaction(line=line, emotion=emotion or table[event].emotion)
