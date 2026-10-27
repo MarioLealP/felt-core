@@ -250,3 +250,11 @@ def test_the_panel_routes_refuse_everything_else(client, monkeypatch):
     # and the HA token still doesn't open the SSO copy of the same routes
     auth = {"Authorization": f"Bearer {_token()}"}
     assert client.get("/v1/app/history", headers=auth).status_code == 401
+
+
+def test_new_mail_from_ha_is_stored_once(client):
+    mail = {"key": "<1@x>", "sender": "Ana <ana@x.pt>", "subject": "Dinner", "text": "hi"}
+    headers = {"Authorization": f"Bearer {_token()}"}
+    assert client.post("/v1/ha/email", json=mail, headers=headers).json() == {"new": True}
+    assert client.post("/v1/ha/email", json=mail, headers=headers).json() == {"new": False}
+    assert client.post("/v1/ha/email", json=mail).status_code == 401

@@ -198,18 +198,9 @@ class FeltConfig(BaseSettings):
     # calls never go through it). Falls back to comfyui_url if unset.
     comfyui_display_url: str | None = None
 
-    # Proactive email awareness (assistant-skills.md, Mario 2026-09-11:
-    # "on email arrives -> You have mail from X, want me summarize?").
-    # Unset host = the watcher simply doesn't start, same "unset/empty =
-    # disabled" convention as everything else here. Poll-based (not IMAP
-    # IDLE) — Mario's own spec explicitly allows "IDLE for push, or a
-    # short poll interval," and polling is far simpler to get right.
-    imap_host: str | None = None
-    imap_port: int = 993
-    imap_user: str | None = None
-    imap_password: str | None = None
-    imap_mailbox: str = "INBOX"
-    imap_poll_seconds: int = 60
+    # Her "btw, you've got mail" (WP-43, emails.py): at most one mention per
+    # this many seconds; everything waiting by then goes in that one line.
+    email_mention_gap_s: int = 3600
 
     # Personal document search (drive-rag, a sibling internal service on the
     # server) — RAG over Mario's locally-synced Google Drive (docs, PDFs,

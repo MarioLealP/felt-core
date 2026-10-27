@@ -27,6 +27,8 @@ HA_ROUTES = frozenset(
         ("GET", "/v1/ha/controls"),
         ("POST", "/v1/ha/controls"),
         ("GET", "/v1/ha/systems"),
+        # new mail from HA's IMAP integration (WP-43, emails.py)
+        ("POST", "/v1/ha/email"),
         # the Felt panel in HA (2026-10-19): the app's Talk + Margins routes
         ("GET", "/v1/ha/app/me"),
         ("GET", "/v1/ha/app/history"),

@@ -27,7 +27,7 @@ FEATURES: dict[str, tuple[bool, str]] = {
     "ambient.marks": (False, "App notebook: decides on a circle/underline after each reply"),
     "ambient.weather_line": (False, "Re-writes a ready weather line every 15 min"),
     "ambient.morning_greeting": (True, "The diary's morning line"),
-    "email.new_mail": (True, "'Mail from X, want a summary?' when mail arrives"),
+    "email.new_mail": (True, "'Btw, mail from X' - at most hourly, list mail judged by her"),
     "calendar.headsup": (True, "Heads-up 30 and 10 min before events, leave-now lines"),
     "ender.print_done": (True, "Ender print finished/failed lines"),
     "brief.morning": (True, "Morning brief: today, weather, news, overnight alerts"),

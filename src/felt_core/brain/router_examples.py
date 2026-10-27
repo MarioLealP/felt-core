@@ -132,7 +132,17 @@ EXAMPLES: dict[str | None, list[str]] = {
     ],
     "get_recent_alerts": ["any alerts on the server", "is anything down", "did zabbix complain"],
     "printer_status": ["how's the 3d print going", "printer status", "is the print done"],
-    "check_email": ["any new mail", "check my inbox", "did I get emails"],
+    "check_email": [
+        "any new mail",
+        "check my inbox",
+        "did I get emails",
+        "what was that email about",
+    ],
+    "mute_email_sender": [
+        "I don't care about patreon emails",
+        "stop telling me about amazon mails",
+        "never mention emails from linkedin",
+    ],
     "shopping_list": [
         "put milk on the shopping list",
         "what's on my shopping list",

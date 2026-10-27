@@ -99,6 +99,10 @@ class FeltClient:
     async def set_control(self, name: str, on: bool) -> dict:
         return await self._call("POST", "/v1/ha/controls", {"name": name, "on": on})
 
+    async def email(self, mail: dict) -> None:
+        """A new mail (mail.payload) for her to maybe mention."""
+        await self._call("POST", "/v1/ha/email", mail)
+
     async def app_call(self, method: str, path: str, payload: dict | None = None) -> Any:
         """The Felt panel: one of the app's routes, under /v1/ha/app."""
         return await self._call(method, "/v1/ha/app" + path, payload)

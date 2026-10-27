@@ -23,7 +23,7 @@ from collections.abc import AsyncIterator, Callable
 
 import httpx
 
-from felt_core import features, ha_assist, local_llm, metrics
+from felt_core import emails, features, ha_assist, local_llm, metrics
 from felt_core.animation import resolve_animation_tag
 from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
@@ -44,12 +44,9 @@ from felt_core.db import (
     get_current_screen_description,
     get_her_recent_lines,
     get_history,
-    get_unresolved_pending_email,
-    mark_email_resolved,
     save_message,
 )
 from felt_core.dj import control as dj_control
-from felt_core.email_watcher import fetch_email_body
 from felt_core.plugin import ExecutionContext
 from felt_core.plugin_loader import LoadedSkill, load_plugins
 from felt_core.spotify_client import music_playing_cached
@@ -59,12 +56,12 @@ logger = logging.getLogger(__name__)
 
 # Deliberately a plain keyword set, not a model call: a bare "yes" has no
 # content for a tool-vs-chat decision to work with, and this only ever
-# fires when a pending_emails row already says a confirmation is being
-# waited on, so the blast radius of a false positive is small (summarizing
+# fires right after her mail mention (emails.just_mentioned), so the blast radius of a false positive is small (summarizing
 # an email Mario didn't actually ask about) compared to the complexity of
 # a more "proper" intent check.
 _AFFIRMATIVE_RE = re.compile(
-    r"^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|please|do it|summarize( it)?)[.!]?\s*$",
+    r"^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|please|do it|summarize( it)?|"
+    r"tell me more|what does it say)[.!?]?\s*$",
     re.IGNORECASE,
 )
 
@@ -512,24 +509,19 @@ async def _chat_local(
     return _skill_chat_result(reply, result, skill_name, registry)
 
 
-async def _summarize_pending_email(config: FeltConfig, session_id: str, message: str) -> str:
-    pending = get_unresolved_pending_email(config.db_path)
-    assert pending is not None  # only called when the caller already confirmed this
-    body = await asyncio.to_thread(fetch_email_body, config, pending["uid"])
-    prompt = (
-        f"Summarize this email from {pending['sender']} "
-        f"(subject: {pending['subject']}) in 2-3 sentences, "
-        f"conversationally, as if telling a friend what it says:\n\n{body[:6000]}"
-    )
-
+async def _summarize_mentioned_emails(
+    config: FeltConfig, session_id: str, message: str, mails: list[dict]
+) -> str:
     # Same shape as every other local reply (personality prompt + the
     # spoken-length cap). No facts: the email body is all the context needed.
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
         summary = await local_reply(
-            [{"role": "user", "content": prompt}], config, include_facts=False
+            [{"role": "user", "content": emails.summary_prompt(mails)}],
+            config,
+            include_facts=False,
         )
 
-    mark_email_resolved(config.db_path, pending["id"])
+    emails.mark_summarised(config.db_path, [m["id"] for m in mails])
     save_message(config.db_path, session_id, "user", message)
     save_message(config.db_path, session_id, "assistant", summary)
     return summary
@@ -555,11 +547,11 @@ async def chat(
     speaker: ReplySpeaker | None = None,
 ) -> ChatResult:
     # Checked before anything else, including history/facts loading — a
-    # bare "yes" answering the proactive "want me to summarize it?" ping
-    # (email_watcher.py) has to be caught here or it falls through to a
-    # generic chat reply that doesn't know any email exists.
-    if _looks_affirmative(message) and get_unresolved_pending_email(config.db_path):
-        summary = await _summarize_pending_email(config, session_id, message)
+    # bare "yes" / "tell me more" answering her mail mention (emails.py) has
+    # to be caught here or it falls through to a generic chat reply that
+    # doesn't know any email exists.
+    if _looks_affirmative(message) and (mails := emails.just_mentioned(config.db_path)):
+        summary = await _summarize_mentioned_emails(config, session_id, message, mails)
         return ChatResult(reply=summary)
 
     registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))

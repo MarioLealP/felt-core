@@ -77,19 +77,18 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     assert chat == ["real question", "real answer"]
 
 
-async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, monkeypatch, fake_llm):
-    from felt_core.db import get_unresolved_pending_email, save_pending_email
+async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, fake_llm):
+    from felt_core import emails
 
     config = _config(tmp_path)
-    save_pending_email(config.db_path, "uid-1", "Ana", "Dinner")
+    emails.add(config.db_path, "<1@x>", "Ana", "Dinner", "Dinner on Friday?", False)
+    mails = [{"id": 1, "sender": "Ana", "subject": "Dinner", "body": "Dinner on Friday?"}]
     fake_llm.script = ["Ana wants dinner Friday."]
-    monkeypatch.setattr(orchestrator, "fetch_email_body", lambda cfg, uid: "Dinner on Friday?")
 
-    summary = await orchestrator._summarize_pending_email(config, "s", "yes")
+    summary = await orchestrator._summarize_mentioned_emails(config, "s", "yes", mails)
 
     assert summary == "Ana wants dinner Friday."
     call = fake_llm.calls[0]
     assert call["messages"][0]["role"] == "system"
     assert brain.PERSONALITY_PROMPT in call["messages"][0]["content"]
     assert call["max_tokens"] == brain._REPLY_MAX_TOKENS
-    assert get_unresolved_pending_email(config.db_path) is None
