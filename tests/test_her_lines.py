@@ -4,7 +4,7 @@ Margins and her own history even when the desktop never caught them."""
 
 from datetime import datetime, timedelta
 
-import felt_core.email_watcher as email_watcher
+from felt_core import emails, local_llm
 from felt_core.alarms import _fire_at
 from felt_core.asides import current_asides
 from felt_core.config import FeltConfig
@@ -45,19 +45,19 @@ def test_a_push_is_a_line_even_if_it_expires_undelivered(tmp_path):
     assert get_history(config.db_path, APP_SESSION)[-1]["content"] == "Dentist in 15."
 
 
-async def test_new_mail_is_a_line_she_remembers(tmp_path, monkeypatch):
+async def test_new_mail_is_a_line_she_remembers(tmp_path, fake_llm):
     config = _config(tmp_path)
-    found = [{"uid": "42", "sender": "Ana", "subject": "Dinner"}]
-    monkeypatch.setattr(email_watcher, "_fetch_unseen", lambda cfg: found)
-    await email_watcher._poll_once(config)
-    await email_watcher._poll_once(config)  # same uid: not said twice
+    mail_id = emails.add(config.db_path, "<1@x>", "Ana <ana@x.pt>", "Dinner", "hi", False)
+    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    await emails.tick(config)
+    await emails.tick(config)  # same mail: not said twice
     assert _lines(config.db_path) == [
         (
             APP_SESSION,
             "assistant",
-            "You have mail from Ana: Dinner. Want me to summarize it?",
+            'Btw, you\'ve got mail from Ana: "Dinner".',
             EMAIL,
-            "email:42",
+            f"email:{mail_id}",
         )
     ]
 

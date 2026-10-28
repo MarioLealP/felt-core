@@ -11,6 +11,9 @@ and automations can flip them without asking her.
 The Systems summary (2026-10-18, Mario: "zabbix and wazuh and ntfy on it"):
 the app's Systems page - Zabbix/Wazuh/ntfy alerts as triaged incidents -
 per area plus the latest few, for the HA dashboard.
+
+New mail (WP-43, 2026-10-27): the integration forwards HA's IMAP events
+here; emails.py decides what she mentions.
 """
 
 import asyncio
@@ -19,7 +22,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from felt_core import controls, local_llm, systems
+from felt_core import controls, emails, local_llm, systems
 from felt_core.brain import chat
 from felt_core.config import FeltConfig, load_config
 from felt_core.dj import control as dj_control
@@ -135,3 +138,25 @@ async def ha_systems() -> HaSystems:
             for r in page["incidents"][:5]
         ],
     )
+
+
+class HaEmail(BaseModel):
+    # Message-ID, else the IMAP uid: the same mail forwarded twice is one mail
+    key: str = Field(min_length=1, max_length=500)
+    sender: str = Field(max_length=500)
+    subject: str = Field(default="", max_length=1000)
+    text: str = Field(default="", max_length=60_000)
+    # mailing-list mail (a List-Unsubscribe header)
+    bulk: bool = False
+
+
+class HaEmailStored(BaseModel):
+    new: bool
+
+
+@router.post("/email", response_model=HaEmailStored)
+async def ha_email(req: HaEmail) -> HaEmailStored:
+    mail_id = await asyncio.to_thread(
+        emails.add, load_config().db_path, req.key, req.sender, req.subject, req.text, req.bulk
+    )
+    return HaEmailStored(new=mail_id is not None)

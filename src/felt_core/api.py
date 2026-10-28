@@ -93,7 +93,7 @@ from felt_core.db import (
     update_diary_entry,
     update_self_memory,
 )
-from felt_core.email_watcher import watch as email_watch
+from felt_core.emails import watch as email_watch
 from felt_core.ender import watch as ender_watch
 from felt_core.events import react_to_event
 from felt_core.felt_tls import voice_client

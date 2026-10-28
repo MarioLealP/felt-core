@@ -33,7 +33,7 @@ CHAT = "chat"
 REMARK = "remark"  # a spoken screen reaction
 EVENT = "event"  # a line reacting to a desktop event (song, guest, unhush…)
 PROACTIVE = "proactive"  # a push she starts (morning greeting, calendar heads-up)
-EMAIL = "email"  # "you have mail from X, want me to summarize it?"
+EMAIL = "email"  # her "btw, you've got mail from X" (emails.py)
 ALARM = "alarm"
 # WP-44: her line about a server/PC alert; lives in Systems, never in the
 # Margins with her chatter (WP-42 2.8)
@@ -154,24 +154,6 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             label TEXT NOT NULL DEFAULT '',
             fired INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    # Proactive email awareness (see email_watcher.py) — one row per new
-    # message the watcher has already pinged Mario about. `uid` is the
-    # IMAP UID (unique within a mailbox), used both to avoid re-notifying
-    # the same message across restarts and, once resolved, to fetch the
-    # full body for summarizing. `resolved` distinguishes "already
-    # summarized on confirmation" from "still waiting for a yes/no."
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pending_emails (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uid TEXT NOT NULL UNIQUE,
-            sender TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            resolved INTEGER NOT NULL DEFAULT 0,
-            notified_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         """
     )
@@ -543,8 +525,7 @@ def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float |
     """None if she's never actually spoken a screen reaction in this
     session - the caller (the cooldown check) treats that as "not on
     cooldown," not as "infinitely long ago." Age math done in SQL
-    (julianday), same convention as get_unresolved_pending_email's
-    `datetime('now', '-10 minutes')` - `created_at` is SQLite's own
+    (julianday) - `created_at` is SQLite's own
     `datetime('now')` UTC string, and comparing it in Python would mean
     parsing that format back out for no benefit."""
     conn = _connect(db_path)
@@ -589,64 +570,6 @@ def get_all_facts(db_path: str) -> list[str]:
     rows = conn.execute("SELECT content FROM facts ORDER BY id ASC").fetchall()
     conn.close()
     return [row[0] for row in rows]
-
-
-def is_known_email_uid(db_path: str, uid: str) -> bool:
-    conn = _connect(db_path)
-    row = conn.execute("SELECT 1 FROM pending_emails WHERE uid = ?", (uid,)).fetchone()
-    conn.close()
-    return row is not None
-
-
-def save_pending_email(db_path: str, uid: str, sender: str, subject: str) -> int:
-    conn = _connect(db_path)
-    with conn:
-        cursor = conn.execute(
-            "INSERT INTO pending_emails (uid, sender, subject) VALUES (?, ?, ?)",
-            (uid, sender, subject),
-        )
-        email_id = _require_lastrowid(cursor)
-    conn.close()
-    return email_id
-
-
-def get_unresolved_pending_email(db_path: str) -> dict | None:
-    """The most recent still-unanswered "want me to summarize?" ping, if
-    any — there's only ever meant to be one live at a time from Mario's
-    point of view, so the newest is the one a bare "yes" refers to.
-
-    Bounded to the last 10 minutes: without this, a "yes" said days after
-    ignoring a ping would wrongly reopen it and blurt out a stale email
-    summary in response to something unrelated (2026-09-14 review
-    finding). 10 minutes is a generous window for "still talking about
-    the thing that was just pinged," not a precise cutoff Mario ever
-    specified."""
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT id, uid, sender, subject FROM pending_emails "
-        "WHERE resolved = 0 AND notified_at >= datetime('now', '-10 minutes') "
-        "ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
-    if row is None:
-        return None
-    return {"id": row[0], "uid": row[1], "sender": row[2], "subject": row[3]}
-
-
-def get_recent_pending_emails(db_path: str, limit: int = 5) -> list[dict]:
-    conn = _connect(db_path)
-    rows = conn.execute(
-        "SELECT sender, subject, resolved FROM pending_emails ORDER BY id DESC LIMIT ?", (limit,)
-    ).fetchall()
-    conn.close()
-    return [{"sender": s, "subject": subj, "resolved": bool(r)} for s, subj, r in rows]
-
-
-def mark_email_resolved(db_path: str, email_id: int) -> None:
-    conn = _connect(db_path)
-    with conn:
-        conn.execute("UPDATE pending_emails SET resolved = 1 WHERE id = ?", (email_id,))
-    conn.close()
 
 
 def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> int:
