@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import mail
+from . import mail, tell
 from .client import FeltClient, FeltError
 from .const import CONF_CLIENT_ID, CONF_PASSWORD, CONF_TOKEN_URL, CONF_URL, CONF_USERNAME
 from .coordinator import FeltCoordinator
@@ -18,7 +18,7 @@ from .panel import async_register as register_panel
 from .panel import async_unregister as unregister_panel
 
 # bumped with manifest.json; also busts the browser cache of the panel
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,9 +60,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.async_create_background_task(hass, forward(body), "felt-email")
 
     entry.async_on_unload(hass.bus.async_listen(mail.EVENT, on_mail))
+    tell.async_register(hass, client)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unregister_panel(hass)
+    tell.async_unregister(hass)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

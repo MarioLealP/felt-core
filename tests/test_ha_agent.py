@@ -258,3 +258,34 @@ def test_new_mail_from_ha_is_stored_once(client):
     assert client.post("/v1/ha/email", json=mail, headers=headers).json() == {"new": True}
     assert client.post("/v1/ha/email", json=mail, headers=headers).json() == {"new": False}
     assert client.post("/v1/ha/email", json=mail).status_code == 401
+
+
+@pytest.fixture
+def told(monkeypatch):
+    said = []
+
+    async def fake_tell(config, text, title, tag):
+        said.append((text, title, tag))
+        return "Your dehumidifier's tank is full."
+
+    monkeypatch.setattr(ha_api.ha_tell, "tell", fake_tell)
+    return said
+
+
+def test_tell_takes_only_the_ha_token(client, told):
+    body = {"text": "Dehumidifier tank full", "title": "Dehumidifier", "tag": "dehum"}
+    headers = {"Authorization": f"Bearer {_token()}"}
+    r = client.post("/v1/ha/tell", json=body, headers=headers)
+    assert r.json() == {"said": "Your dehumidifier's tank is full."}
+    assert told == [("Dehumidifier tank full", "Dehumidifier", "dehum")]
+    assert client.post("/v1/ha/tell", json=body).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"text": ""}, {"text": "   "}, {"text": "x", "tag": "Bad Tag!"}, {"text": "x" * 1001}],
+)
+def test_tell_refuses_bad_input(client, told, body):
+    headers = {"Authorization": f"Bearer {_token()}"}
+    assert client.post("/v1/ha/tell", json=body, headers=headers).status_code == 422
+    assert told == []

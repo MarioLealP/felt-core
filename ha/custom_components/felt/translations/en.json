@@ -15,5 +15,25 @@
     },
     "error": { "cannot_login": "Couldn't log in to Authentik with these details." },
     "abort": { "already_configured": "Felt is already set up." }
+  },
+  "services": {
+    "tell": {
+      "name": "Tell",
+      "description": "Felt words the text in her own voice and says it at the desk and on the phone.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "What to tell Mario, plain words. Sent as-is when her model is down."
+        },
+        "title": {
+          "name": "Title",
+          "description": "The phone notification's title."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Phone notification tag (a-z, 0-9, -): a new message with the same tag replaces the last one."
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,18 @@
+tell:
+  fields:
+    text:
+      required: true
+      example: "The dehumidifier's tank is full."
+      selector:
+        text:
+          multiline: true
+    title:
+      default: "Felt"
+      example: "Dehumidifier"
+      selector:
+        text:
+    tag:
+      default: "ha"
+      example: "dehumidifier"
+      selector:
+        text:

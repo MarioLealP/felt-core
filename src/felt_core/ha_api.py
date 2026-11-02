@@ -14,6 +14,9 @@ per area plus the latest few, for the HA dashboard.
 
 New mail (WP-43, 2026-10-27): the integration forwards HA's IMAP events
 here; emails.py decides what she mentions.
+
+Tell (2026-11-02): any text from an HA automation, worded by her and said at
+the desk + on the phone (ha_tell.py).
 """
 
 import asyncio
@@ -22,7 +25,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from felt_core import controls, emails, local_llm, systems
+from felt_core import controls, emails, ha_tell, local_llm, systems
 from felt_core.brain import chat
 from felt_core.config import FeltConfig, load_config
 from felt_core.dj import control as dj_control
@@ -160,3 +163,23 @@ async def ha_email(req: HaEmail) -> HaEmailStored:
         emails.add, load_config().db_path, req.key, req.sender, req.subject, req.text, req.bulk
     )
     return HaEmailStored(new=mail_id is not None)
+
+
+class HaTell(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    title: str = Field(default="Felt", min_length=1, max_length=100)
+    # the phone notification's tag: the same tag replaces the last one
+    tag: str = Field(default="ha", pattern=r"^[a-z0-9-]{1,40}$")
+
+
+class HaTold(BaseModel):
+    # her line, or None when the ha.tell feature is off
+    said: str | None
+
+
+@router.post("/tell", response_model=HaTold)
+async def ha_tell_route(req: HaTell) -> HaTold:
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="empty message")
+    return HaTold(said=await ha_tell.tell(load_config(), text, req.title, req.tag))
