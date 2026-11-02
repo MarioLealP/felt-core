@@ -103,6 +103,10 @@ class FeltClient:
         """A new mail (mail.payload) for her to maybe mention."""
         await self._call("POST", "/v1/ha/email", mail)
 
+    async def tell(self, text: str, title: str, tag: str) -> dict:
+        """Her line for `text`, at the desk + on the phone: {"said": ...}."""
+        return await self._call("POST", "/v1/ha/tell", {"text": text, "title": title, "tag": tag})
+
     async def app_call(self, method: str, path: str, payload: dict | None = None) -> Any:
         """The Felt panel: one of the app's routes, under /v1/ha/app."""
         return await self._call(method, "/v1/ha/app" + path, payload)
