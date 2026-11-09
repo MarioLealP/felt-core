@@ -35,7 +35,17 @@ from felt_core.brain.orchestrator import chat, chat_streamed
 from felt_core.brain.result import ChatResult
 from felt_core.config import load_config
 
-LLM_HOSTS = {"felt-llm", "felt-vision"}  # the models are real; everything else is faked
+
+def _llm_hosts() -> set[str]:
+    """The models are real; everything else is faked. Their hosts come from her settings, so
+    a model moved to a fixed address (felt-vision on k3s: FELT_VISION_URL=http://10.43.0.71)
+    stays real."""
+    config = load_config()
+    urls = (config.local_llm_url, config.vision_url)
+    return {"felt-llm", "felt-vision"} | {httpx.URL(u).host for u in urls if u}
+
+
+LLM_HOSTS = _llm_hosts()
 FAKE_URI = "spotify:track:{:022d}"
 
 
