@@ -21,13 +21,12 @@ parameters_schema = {
     "required": ["query"],
 }
 
-_SEARXNG_URL = "http://searxng:8080/search"
-
 
 async def handle(params, ctx):
     query = params.get("query") or ctx.original_message
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(_SEARXNG_URL, params={"q": query, "format": "json"})
+        params = {"q": query, "format": "json"}
+        response = await client.get(ctx.config.web_search_url, params=params)
         response.raise_for_status()
         results = response.json().get("results", [])[:5]
 

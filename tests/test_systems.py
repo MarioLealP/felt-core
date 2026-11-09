@@ -9,6 +9,8 @@ from felt_core import alert_lines, incidents, responder, systems
 from felt_core.api import app
 from felt_core.asides import remark_text
 
+LINKS = {"zabbix": "https://zabbix.example", "wazuh": "https://wazuh.example"}
+
 SSO = {"X-Authentik-Username": "mario"}
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 REPORT = {
@@ -67,11 +69,11 @@ def test_details_carry_the_report_with_its_trail_and_the_raw_alerts(tmp_path):
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned", "Telnet connect on port 23")
     responder.claim_next(db, T0)
     responder.save_report(db, honeypot, REPORT, "s1")
-    found = systems.details(db, honeypot)
+    found = systems.details(db, honeypot, LINKS)
     assert found is not None
     assert found["report"]["trail"][0]["input"].startswith("clockmost-read")
     assert found["alerts"][0]["message"] == "Telnet connect on port 23"
-    assert found["session_id"] == "s1" and "zabbix" in found["links"]
+    assert found["session_id"] == "s1" and found["links"] == LINKS
 
 
 def test_handled_from_the_app_closes_it(tmp_path):
@@ -79,7 +81,7 @@ def test_handled_from_the_app_closes_it(tmp_path):
     backup = _in(db, "backup full FAILED")
     assert systems.mark_handled(db, backup)
     assert not systems.mark_handled(db, backup)  # only once
-    found = systems.details(db, backup)
+    found = systems.details(db, backup, LINKS)
     assert found is not None and found["state"] == "handled" and found["handled_by"] == "mario"
     assert systems.page(db)["circled"] is None
 

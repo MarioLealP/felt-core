@@ -37,7 +37,6 @@ _HOST = re.compile(r"(?:Host|agent): ([\w.-]+)")
 _TIERS = ("urgent", "high", "default", "low")
 # what the dot says, worst first
 STATUSES = ("needs-you", "looking", "watching", "fine")
-LINKS = {"zabbix": "https://zabbix.clockmost.com", "wazuh": "https://wazuh.clockmost.com"}
 
 
 def area_of(incident_type: str, title: str, message: str) -> str:
@@ -154,9 +153,9 @@ def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
     }
 
 
-def details(db_path: str, incident_id: int) -> dict | None:
+def details(db_path: str, incident_id: int, links: dict[str, str]) -> dict | None:
     """Everything about one incident: her lines, Claude's full report with
-    his trail, the raw alerts, the session to join, links out."""
+    his trail, the raw alerts, the session to join, links out (name -> URL, from the settings)."""
     incident = get(db_path, incident_id)
     if incident is None or incident["state"] == "dropped":
         return None
@@ -166,7 +165,7 @@ def details(db_path: str, incident_id: int) -> dict | None:
     out["session_id"] = incident.get("session_id")
     out["handled_at"] = incident.get("handled_at")
     out["handled_by"] = incident.get("handled_by")
-    out["links"] = LINKS
+    out["links"] = links
     conn = _connect(db_path)
     try:
         out["line_message_id"] = _her_lines(conn, [incident_id]).get(incident_id)
