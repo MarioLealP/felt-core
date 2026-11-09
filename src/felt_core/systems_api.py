@@ -27,7 +27,10 @@ async def systems_page(
 
 @router.get("/incidents/{incident_id}")
 async def incident(incident_id: int, _user: str = Depends(sso_user)) -> dict:
-    found = await asyncio.to_thread(systems.details, load_config().db_path, incident_id)
+    config = load_config()
+    urls = {"zabbix": config.zabbix_url, "wazuh": config.wazuh_url}
+    links = {name: url for name, url in urls.items() if url}  # an unset one gets no link
+    found = await asyncio.to_thread(systems.details, config.db_path, incident_id, links)
     if found is None:
         raise HTTPException(status_code=404, detail="no such incident")
     return found

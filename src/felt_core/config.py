@@ -75,6 +75,11 @@ class FeltConfig(BaseSettings):
     # B5.3 (D10.1): poe2rag's search, via Caddy's machine host with her Felt cert
     # (https://poe2-api.clockmost.com/api/search) - or the old in-network URL.
     poe2_search_url: str = "http://poe2rag:8000/api/search"
+    # web_search's SearXNG (FELT_WEB_SEARCH_URL): the compose container on the
+    # `search` network, or its k3s Service.
+    web_search_url: str = "http://searxng:8080/search"
+    # Where the Systems page's Wazuh link goes (its Zabbix link is zabbix_url below).
+    wazuh_url: str = "https://wazuh.clockmost.com"
     # WP-55: shared bearer token for every API route (FELT_API_TOKEN, sops on
     # the server; the desktop clients send it). Unset = no auth (the old LAN
     # posture) - set it only once every client sends it.
