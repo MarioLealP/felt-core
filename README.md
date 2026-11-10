@@ -64,3 +64,9 @@ the sync/deploy flow). Not yet built: felt-overlay's fuller tag→clip
 resolution (fallback broadening, repeat-avoidance) is still felt-overlay's
 own responsibility per the architecture split - felt-core just resolves an
 `animation_tag`, it doesn't reach into what clips exist.
+
+## Checks
+
+`scripts/check.sh` runs every check CI runs (ruff, format, ty, file size, layout, TLS, lockfile, pip-audit, pytest).
+Run it before a pull request. The file-size and layout checks read `scripts/baseline/`: what failed when felt-core
+adopted the Meru standard (2026-11-10). Fix a file, delete its line; never add one.
