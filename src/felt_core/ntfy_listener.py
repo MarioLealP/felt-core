@@ -19,7 +19,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
-import httpx
+import httpx2
 
 from felt_core import incidents, responder
 from felt_core.config import FeltConfig, reveal
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 def _basic_auth(user: str | None, password: str | None) -> tuple[str, str] | None:
-    """`httpx.AsyncClient(auth=...)` wants either a real `(user, password)`
+    """`httpx2.AsyncClient(auth=...)` wants either a real `(user, password)`
     pair or `None` - never a pair with a `None` half. A user set without a
     password (WP-40 audit: `config.ntfy_password` is independently
     Optional) used to build exactly that broken half-pair and would have
@@ -68,7 +68,7 @@ async def listen(config: FeltConfig) -> None:
 
     while True:
         try:
-            async with httpx.AsyncClient(auth=auth, timeout=None) as client:
+            async with httpx2.AsyncClient(auth=auth, timeout=None) as client:
                 params = stream_params(config.db_path)
                 if params:
                     logger.info("ntfy: catching up since %s", params["since"])

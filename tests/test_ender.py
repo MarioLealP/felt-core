@@ -4,7 +4,7 @@ nor repeats one."""
 
 from datetime import UTC, datetime
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import db, ender, local_llm, phone
@@ -27,19 +27,19 @@ def ha(monkeypatch):
     def handler(request):
         if request.method == "POST":
             HA.posts.append({"path": request.url.path})
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         name = request.url.path.rsplit("/", 1)[1]
         field = name.removeprefix("binary_sensor.ender_").removeprefix("sensor.ender_")
         if field not in HA.states:
-            return httpx.Response(404)
-        return httpx.Response(200, json={"state": HA.states[field]})
+            return httpx2.Response(404)
+        return httpx2.Response(200, json={"state": HA.states[field]})
 
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
     for mod in (ender, phone):
         monkeypatch.setattr(
-            mod.httpx,
+            mod.httpx2,
             "AsyncClient",
-            lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+            lambda **kw: real(transport=httpx2.MockTransport(handler), **kw),
         )
     HA.states = {}
     HA.posts = []

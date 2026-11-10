@@ -6,7 +6,7 @@ delegate_research when the question needs actual synthesis/reasoning a
 snippet list can't provide.
 """
 
-import httpx
+import httpx2
 
 from felt_core.plugin import SkillResult
 
@@ -24,7 +24,7 @@ parameters_schema = {
 
 async def handle(params, ctx):
     query = params.get("query") or ctx.original_message
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         params = {"q": query, "format": "json"}
         response = await client.get(ctx.config.web_search_url, params=params)
         response.raise_for_status()

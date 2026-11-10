@@ -38,7 +38,7 @@ async def test_second_fetch_within_ttl_uses_the_cache(monkeypatch):
         calls.append(params)
         return _FakeResponse(_fake_data(20.0))
 
-    monkeypatch.setattr(skill.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(skill.httpx2.AsyncClient, "get", fake_get)
     monkeypatch.setattr(skill.time, "monotonic", lambda: clock[0])
 
     first = await skill._fetch(38.7, -9.1, "celsius")
@@ -58,7 +58,7 @@ async def test_fetch_after_ttl_expiry_refetches(monkeypatch):
         calls.append(params)
         return _FakeResponse(_fake_data(20.0 + len(calls)))
 
-    monkeypatch.setattr(skill.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(skill.httpx2.AsyncClient, "get", fake_get)
     monkeypatch.setattr(skill.time, "monotonic", lambda: clock[0])
 
     await skill._fetch(38.7, -9.1, "celsius")
@@ -77,7 +77,7 @@ async def test_different_units_are_cached_separately(monkeypatch):
         calls.append(params)
         return _FakeResponse(_fake_data(20.0))
 
-    monkeypatch.setattr(skill.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(skill.httpx2.AsyncClient, "get", fake_get)
     monkeypatch.setattr(skill.time, "monotonic", lambda: clock[0])
 
     await skill._fetch(38.7, -9.1, "celsius")

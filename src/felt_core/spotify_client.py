@@ -16,7 +16,7 @@ import re
 import time
 from typing import Any
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig, reveal
 from felt_core.oauth_token import refresh_access_token
@@ -43,7 +43,7 @@ _now_playing_cache: dict = {"data": "unset", "cached_at": 0.0}
 _NOW_PLAYING_CACHE_TTL_S = 10.0
 
 
-async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
+async def _get_access_token(client: httpx2.AsyncClient, config: FeltConfig) -> str:
     basic = base64.b64encode(f"{config.spotify_client_id}:{reveal(config.spotify_client_secret)}".encode()).decode()
     return await refresh_access_token(
         client,
@@ -61,7 +61,7 @@ _BY = re.compile(r"^(?P<title>.+?)\s+(?:by|from)\s+(?P<artist>.+)$", re.IGNORECA
 _FILLER = re.compile(r"^(?:some|a\s+bit\s+of|the\s+song)\s+", re.IGNORECASE)
 
 
-async def search_track(client: httpx.AsyncClient, config: FeltConfig, query: str) -> dict | None:
+async def search_track(client: httpx2.AsyncClient, config: FeltConfig, query: str) -> dict | None:
     query = _FILLER.sub("", query.strip())
     m = _BY.match(query)
     tries = [query]
@@ -111,7 +111,7 @@ def music_playing_cached() -> bool | None:
     return bool(data and data.get("is_playing"))
 
 
-async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+async def get_currently_playing(client: httpx2.AsyncClient, config: FeltConfig) -> dict | None:
     """WP-16 Part 2: `{track, progress_ms, duration_ms, is_playing}` or
     None when nothing's loaded (204 No Content, or no `item` in the body -
     both happen, e.g. an empty queue after the last track ends). `track`
@@ -149,14 +149,14 @@ async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -
     return result
 
 
-async def list_devices(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:
+async def list_devices(client: httpx2.AsyncClient, config: FeltConfig) -> list[dict]:
     token = await _get_access_token(client, config)
     response = await client.get(f"{_API_BASE}/me/player/devices", headers={"Authorization": f"Bearer {token}"})
     response.raise_for_status()
     return response.json().get("devices", [])
 
 
-async def _player_call(client: httpx.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs) -> None:
+async def _player_call(client: httpx2.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs) -> None:
     """One player/library change; the now-playing cache is dropped so the
     next read sees it.
     """
@@ -168,7 +168,7 @@ async def _player_call(client: httpx.AsyncClient, config: FeltConfig, method: st
     _now_playing_cache["data"] = "unset"
 
 
-async def get_player(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+async def get_player(client: httpx2.AsyncClient, config: FeltConfig) -> dict | None:
     """The playback state (`is_playing`, `device.volume_percent`, ...), or
     None when no device is active (204).
     """
@@ -180,39 +180,39 @@ async def get_player(client: httpx.AsyncClient, config: FeltConfig) -> dict | No
     return response.json()
 
 
-async def pause(client: httpx.AsyncClient, config: FeltConfig) -> None:
+async def pause(client: httpx2.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "PUT", "/me/player/pause")
 
 
-async def resume(client: httpx.AsyncClient, config: FeltConfig) -> None:
+async def resume(client: httpx2.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "PUT", "/me/player/play")
 
 
-async def next_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+async def next_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "POST", "/me/player/next")
 
 
-async def previous_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+async def previous_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "POST", "/me/player/previous")
 
 
-async def restart_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
+async def restart_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
     await _player_call(client, config, "PUT", "/me/player/seek", params={"position_ms": 0})
 
 
-async def set_volume(client: httpx.AsyncClient, config: FeltConfig, percent: int) -> None:
+async def set_volume(client: httpx2.AsyncClient, config: FeltConfig, percent: int) -> None:
     percent = max(0, min(100, percent))
     await _player_call(client, config, "PUT", "/me/player/volume", params={"volume_percent": percent})
 
 
-async def save_to_library(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+async def save_to_library(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
     """The generic library endpoint (Spotify's February 2026 change replaced
     PUT /me/tracks); scope user-library-modify.
     """
     await _player_call(client, config, "PUT", "/me/library", params={"uris": uri})
 
 
-async def queue_track(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+async def queue_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
     await _player_call(client, config, "POST", "/me/player/queue", params={"uri": uri})
 
 
@@ -220,7 +220,7 @@ class NoActivePlayer(Exception):
     """Spotify has no awake player to start the song on."""
 
 
-async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str, name: str | None = None) -> None:
+async def start_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str, name: str | None = None) -> None:
     """Plays `uri` now: queued, then skipped to. Not PUT /me/player/play with
     uris - on Mario's Linux desktop client that's accepted (204) and loads
     nothing, and while playing it stops the music (2026-10-18). Queue + next
@@ -252,7 +252,7 @@ def _is(track: dict | None, uri: str, name: str | None) -> bool:
     return track.get("uri") == uri or (name is not None and norm_name(track.get("name", "")) == norm_name(name))
 
 
-async def _playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
+async def _playing(client: httpx2.AsyncClient, config: FeltConfig) -> dict | None:
     """The track on right now, uncached."""
     token = await _get_access_token(client, config)
     response = await client.get(
@@ -264,7 +264,7 @@ async def _playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None
     return response.json().get("item")
 
 
-async def _settled(client: httpx.AsyncClient, config: FeltConfig, before: dict | None) -> dict | None:
+async def _settled(client: httpx2.AsyncClient, config: FeltConfig, before: dict | None) -> dict | None:
     """The track once it differs from `before`; None if it never does."""
     old = (before or {}).get("uri")
     for _ in range(_SKIP_SETTLE_TRIES):
@@ -285,31 +285,31 @@ def felt_started(uri: str | None) -> bool:
     return uri is not None and time.monotonic() - _felt_started.get(uri, -1e9) < _FELT_MARK_S
 
 
-async def add_to_queue(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
+async def add_to_queue(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
     """queue_track, with no active device (404) as NoActivePlayer."""
     try:
         await queue_track(client, config, uri)
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise NoActivePlayer from e
         raise
 
 
-async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:
+async def _get(client: httpx2.AsyncClient, config: FeltConfig, path: str, **params) -> Any:
     token = await _get_access_token(client, config)
     response = await client.get(f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, params=params)
     response.raise_for_status()
     return response.json()
 
 
-async def top_artists(client: httpx.AsyncClient, config: FeltConfig, limit: int = 30) -> list[str]:
+async def top_artists(client: httpx2.AsyncClient, config: FeltConfig, limit: int = 30) -> list[str]:
     """Mario's top artists over ~6 months (scope user-top-read)."""
     data = await _get(client, config, "/me/top/artists", time_range="medium_term", limit=limit)
     items = data.get("items", []) if isinstance(data, dict) else []
     return [a["name"] for a in items if a.get("name")]
 
 
-async def library_contains(client: httpx.AsyncClient, config: FeltConfig, uris: list[str]) -> list[bool]:
+async def library_contains(client: httpx2.AsyncClient, config: FeltConfig, uris: list[str]) -> list[bool]:
     """Which of `uris` (max 40) Mario has saved (scope user-library-read)."""
     if not uris:
         return []
@@ -322,7 +322,7 @@ def norm_name(text: str) -> str:
     return "".join(ch for ch in text.lower() if ch.isalnum())
 
 
-async def artist_tracks(client: httpx.AsyncClient, config: FeltConfig, artist: str) -> list[dict]:
+async def artist_tracks(client: httpx2.AsyncClient, config: FeltConfig, artist: str) -> list[dict]:
     """Tracks whose main artist is `artist` (by name, Spotify's search order -
     roughly the popular ones first); empty if Spotify has no such artist.
     """

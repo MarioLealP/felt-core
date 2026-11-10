@@ -31,7 +31,7 @@ import random
 import time
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from felt_core.plugin import SkillResult
 
@@ -102,7 +102,7 @@ async def _submit_and_wait(comfyui_url: str, workflow: dict) -> dict | None:
     for a single image on the Nitro5's RTX 3060 — poll generously rather
     than risk giving up on a run that's still legitimately in progress.
     """
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx2.AsyncClient(timeout=30) as client:
         response = await client.post(f"{comfyui_url}/prompt", json={"prompt": workflow})
         response.raise_for_status()
         prompt_id = response.json()["prompt_id"]

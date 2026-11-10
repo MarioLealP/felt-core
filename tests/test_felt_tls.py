@@ -9,7 +9,7 @@ import subprocess
 import threading
 from types import SimpleNamespace
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core.felt_tls import voice_client
@@ -192,7 +192,7 @@ async def test_renewed_client_cert_used_next_call(pki):
 @pytest.mark.asyncio
 async def test_wrong_server_name_refused(pki):
     port, _ = _server(pki, "notvoice", "feltint")
-    with pytest.raises(httpx.ConnectError) as e:
+    with pytest.raises(httpx2.ConnectError) as e:
         await _get(_cfg(pki, port))
     assert _cert_error(e.value), e.value
 
@@ -200,7 +200,7 @@ async def test_wrong_server_name_refused(pki):
 @pytest.mark.asyncio
 async def test_server_from_another_ca_refused(pki):
     port, _ = _server(pki, "rogue", "wrong")
-    with pytest.raises(httpx.ConnectError) as e:
+    with pytest.raises(httpx2.ConnectError) as e:
         await _get(_cfg(pki, port))
     assert _cert_error(e.value), e.value
 
@@ -208,14 +208,14 @@ async def test_server_from_another_ca_refused(pki):
 @pytest.mark.asyncio
 async def test_https_without_identity_fails_closed(pki):
     port, _ = _server(pki, "voice", "feltint")
-    with pytest.raises(httpx.ConnectError) as e:  # system trust store: never silently unverified
+    with pytest.raises(httpx2.ConnectError) as e:  # system trust store: never silently unverified
         await _get(_cfg(pki, port, identity=False))
     assert _cert_error(e.value), e.value
 
 
 def test_plain_http_unchanged():
     c = voice_client(SimpleNamespace(voice_url="http://192.168.10.104:8421", identity_dir="/nope"))
-    assert isinstance(c, httpx.AsyncClient)  # no cert files touched for plain HTTP
+    assert isinstance(c, httpx2.AsyncClient)  # no cert files touched for plain HTTP
 
 
 @pytest.mark.asyncio
@@ -235,4 +235,4 @@ def test_felt_client_plain_url_unchanged():
     from felt_core.felt_tls import felt_client
 
     c = felt_client(SimpleNamespace(identity_dir="/nope"), "http://drive-rag:8000")
-    assert isinstance(c, httpx.AsyncClient)
+    assert isinstance(c, httpx2.AsyncClient)

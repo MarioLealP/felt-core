@@ -5,7 +5,7 @@
 import asyncio
 from typing import Literal
 
-import httpx
+import httpx2
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -31,7 +31,7 @@ async def _voice_up(config: FeltConfig) -> bool | None:
         async with voice_client(config, timeout=2.0) as client:
             await client.get(config.voice_url)
         return True  # any answer means it's there
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return False
 
 

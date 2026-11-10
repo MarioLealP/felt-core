@@ -9,7 +9,7 @@ import asyncio
 import time
 from datetime import UTC, datetime, timedelta
 
-import httpx
+import httpx2
 from fastapi import APIRouter, HTTPException
 
 from felt_core import ha_calendar
@@ -70,7 +70,7 @@ async def upcoming(days: int = 14) -> dict:
             raise HTTPException(status_code=503, detail="calendar not connected")
         now = datetime.now(UTC)
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx2.AsyncClient(timeout=20) as client:
             cals = await ha_calendar.list_calendars(client, config)
             per_cal = await asyncio.gather(
                 *(ha_calendar.list_events(client, config, c["id"], start, now + timedelta(days=days)) for c in cals)

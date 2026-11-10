@@ -9,7 +9,7 @@ request that isn't a GET is refused before it leaves the process.
 
 import json
 
-import httpx
+import httpx2
 
 from felt_core.config import reveal
 from felt_core.params import get_single_param
@@ -61,7 +61,7 @@ _COLUMNS = [
 _LIST_MAX = 6
 
 
-async def _read_only(request: httpx.Request) -> None:
+async def _read_only(request: httpx2.Request) -> None:
     if request.method != "GET":
         raise RuntimeError(f"board_status is read-only, refused {request.method}")
 
@@ -77,7 +77,7 @@ def _focus(raw: str | None) -> str:
 async def fetch_issues(config) -> list[dict]:
     """The board's issues, one dict per line of the Beads export."""
     url = f"{config.board_gitea_url.rstrip('/')}/api/v1/repos/{config.board_repo}/raw/{config.board_path}"
-    async with httpx.AsyncClient(
+    async with httpx2.AsyncClient(
         timeout=15,
         headers={"Authorization": f"token {reveal(config.board_token)}"},
         event_hooks={"request": [_read_only]},
@@ -148,6 +148,6 @@ async def handle(params, ctx):
     focus = _focus(get_single_param(params, "focus") or ctx.original_message)
     try:
         issues = await fetch_issues(config)
-    except httpx.HTTPError, ValueError, KeyError:
+    except httpx2.HTTPError, ValueError, KeyError:
         return SkillResult(text="Couldn't read the board right now.")
     return SkillResult(text=summarise(build_board(issues), focus))

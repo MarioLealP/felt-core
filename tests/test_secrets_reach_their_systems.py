@@ -8,7 +8,7 @@ import asyncio
 import base64
 import json
 
-import httpx
+import httpx2
 import pytest
 from conftest import load_plugin_module
 
@@ -23,11 +23,11 @@ def _config(tmp_path, **values):
     return FeltConfig(_env_file=None, db_path=str(tmp_path / "felt.db"), **values)
 
 
-def _sent_value_in(request: httpx.Request) -> bool:
+def _sent_value_in(request: httpx2.Request) -> bool:
     return SECRET in request.headers.get("authorization", "") or SECRET in request.content.decode()
 
 
-def _sent_value_in_basic(request: httpx.Request) -> bool:
+def _sent_value_in_basic(request: httpx2.Request) -> bool:
     scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
     return scheme == "Basic" and base64.b64decode(encoded).decode().endswith(f":{SECRET}")
 
@@ -36,10 +36,10 @@ async def test_zabbix_token_in_the_header(tmp_path):
     skill = load_plugin_module("get_container_status/skill.py")
     config = _config(tmp_path, zabbix_url="http://zabbix.invalid", zabbix_api_token=SECRET)
     seen = []
-    transport = httpx.MockTransport(
-        lambda r: seen.append(_sent_value_in(r)) or httpx.Response(200, json={"result": []})
+    transport = httpx2.MockTransport(
+        lambda r: seen.append(_sent_value_in(r)) or httpx2.Response(200, json={"result": []})
     )
-    async with httpx.AsyncClient(transport=transport) as client:
+    async with httpx2.AsyncClient(transport=transport) as client:
         await skill._zabbix_call(client, config, "host.get", {})
     assert seen == [True]
 
@@ -57,7 +57,7 @@ async def test_ntfy_publish_login(tmp_path):
         ntfy_publish_user="felt",
         ntfy_publish_password=SECRET,
     )
-    with pytest.raises(httpx.ConnectError):
+    with pytest.raises(httpx2.ConnectError):
         await notify.notify(config, "hi")
 
 
@@ -65,15 +65,15 @@ async def test_ntfy_listen_login(tmp_path, monkeypatch):
     real_sleep = asyncio.sleep  # ntfy_listener.asyncio is this same module: patching it patches asyncio.sleep too
     monkeypatch.setattr(ntfy_listener.asyncio, "sleep", lambda *_: real_sleep(10))  # one attempt, then wait
     seen = []
-    real_client = httpx.AsyncClient
+    real_client = httpx2.AsyncClient
 
     def client(**kwargs):
         # a SecretStr in the auth tuple fails while encoding, before any request: record what is actually sent
         # 401 takes the error path (log, sleep, retry); a clean 200 would reconnect in a loop that never yields
-        transport = httpx.MockTransport(lambda r: seen.append(_sent_value_in_basic(r)) or httpx.Response(401))
+        transport = httpx2.MockTransport(lambda r: seen.append(_sent_value_in_basic(r)) or httpx2.Response(401))
         return real_client(transport=transport, **kwargs)
 
-    monkeypatch.setattr(ntfy_listener.httpx, "AsyncClient", client)
+    monkeypatch.setattr(ntfy_listener.httpx2, "AsyncClient", client)
     config = _config(tmp_path, ntfy_url="http://ntfy.invalid", ntfy_topic="t", ntfy_user="felt", ntfy_password=SECRET)
     with pytest.raises(TimeoutError):
         await asyncio.wait_for(ntfy_listener.listen(config), 2)
@@ -87,9 +87,9 @@ async def test_spotify_refresh_token_in_the_body(tmp_path, monkeypatch):
 
     def answer(request):
         seen.append(SECRET in request.content.decode())
-        return httpx.Response(200, json={"access_token": "a", "expires_in": 3600})
+        return httpx2.Response(200, json={"access_token": "a", "expires_in": 3600})
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as client:
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(answer)) as client:
         await spotify_client._get_access_token(client, config)
     assert seen == [True]
 

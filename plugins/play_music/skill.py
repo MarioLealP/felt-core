@@ -9,7 +9,7 @@ woken remotely.
 Mario 2026-10-18: "make it different things, add to queue or play").
 """
 
-import httpx
+import httpx2
 
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
@@ -50,7 +50,7 @@ async def handle(params, ctx):
     if not query:
         return SkillResult(text="What should I play?")
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         track = await search_track(client, config, query)
         if track is None:
             return SkillResult(text=f"Couldn't find '{query}' on Spotify.")
@@ -63,7 +63,7 @@ async def handle(params, ctx):
                 await start_track(client, config, track["uri"], track.get("name"))
         except NoActivePlayer:
             return SkillResult(text="Spotify's asleep on your desktop - hit play on anything once, then ask again.")
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text="Spotify didn't take that right now.")
 
     return SkillResult(text=f"{'Queued' if queue else 'Playing'} {format_track_name(track)}.")

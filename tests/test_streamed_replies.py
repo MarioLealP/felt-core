@@ -5,7 +5,7 @@ first-sentence fake-claim guard, the late-hit correction, history once)."""
 import json
 import random
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import local_llm
@@ -108,12 +108,12 @@ def _end(reason="stop", **timings):
 
 
 def _mock_client(monkeypatch, handler):
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
 
     def factory(*args, **kwargs):
-        return real(transport=httpx.MockTransport(handler), **kwargs)
+        return real(transport=httpx2.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(local_llm.httpx, "AsyncClient", factory)
+    monkeypatch.setattr(local_llm.httpx2, "AsyncClient", factory)
 
 
 async def test_chat_stream_hands_over_text_as_it_comes(tmp_path, monkeypatch):
@@ -127,7 +127,7 @@ async def test_chat_stream_hands_over_text_as_it_comes(tmp_path, monkeypatch):
             _delta(content=" there!"),
             _end(prompt_n=4, cache_n=261),
         )
-        return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+        return httpx2.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
     _mock_client(monkeypatch, handler)
     pieces = []
@@ -156,7 +156,7 @@ async def test_chat_stream_collects_a_tool_call_whole_and_says_nothing(tmp_path,
             _delta(content="ignored"),
             _end("tool_calls"),
         )
-        return httpx.Response(200, text=body)
+        return httpx2.Response(200, text=body)
 
     _mock_client(monkeypatch, handler)
     pieces = []
@@ -177,7 +177,7 @@ async def test_chat_stream_collects_a_tool_call_whole_and_says_nothing(tmp_path,
 
 async def test_chat_stream_hitting_max_tokens_ends_at_last_sentence(tmp_path, monkeypatch):
     def handler(request):
-        return httpx.Response(200, text=_sse(_delta(content="One. Two is cut"), _end("length")))
+        return httpx2.Response(200, text=_sse(_delta(content="One. Two is cut"), _end("length")))
 
     _mock_client(monkeypatch, handler)
     reply = await local_llm.chat_stream(
@@ -191,7 +191,7 @@ async def test_chat_stream_hitting_max_tokens_ends_at_last_sentence(tmp_path, mo
 
 
 async def test_chat_stream_errors_are_unavailable(tmp_path, monkeypatch):
-    _mock_client(monkeypatch, lambda request: httpx.Response(503, text="loading"))
+    _mock_client(monkeypatch, lambda request: httpx2.Response(503, text="loading"))
     with pytest.raises(local_llm.LocalLLMUnavailable):
         await local_llm.chat_stream(
             [{"role": "user", "content": "hi"}],

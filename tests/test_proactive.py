@@ -1,7 +1,7 @@
 """WP-25: the proactive channel - enqueue_proactive/wait_for_next (pure
 logic against a tmp db), and the four /v1/proactive/* endpoints."""
 
-import httpx
+import httpx2
 from fastapi.testclient import TestClient
 
 import felt_core.api as api
@@ -183,7 +183,7 @@ def test_audio_endpoint_503_when_felt_voice_is_off(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_VOICE_URL", "http://felt-voice.invalid:1")
 
     async def unreachable(config, text, emotion=None):
-        raise httpx.ConnectError("All connection attempts failed")
+        raise httpx2.ConnectError("All connection attempts failed")
 
     monkeypatch.setattr(api, "proactive_audio", unreachable)
     item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]

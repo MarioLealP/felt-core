@@ -8,7 +8,7 @@ just as real an answer as a personal-calendar event. Through HA since
 
 from datetime import datetime
 
-import httpx
+import httpx2
 
 from felt_core.date_resolution import resolve_date
 from felt_core.ha_calendar import (
@@ -40,7 +40,7 @@ async def handle(params, ctx):
     resolved = (resolve_date(str(day_text), today) if day_text else None) or today
     time_min, time_max = day_bounds(resolved)
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         calendars = await list_calendars(client, config)
         events_by_calendar = []
         for calendar in calendars:

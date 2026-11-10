@@ -6,7 +6,7 @@ Starting something new by name is play_music; "what's this song" is
 now_playing.
 """
 
-import httpx
+import httpx2
 
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
@@ -91,7 +91,7 @@ async def handle(params, ctx):
     action = str(get_single_param(params, "action", "command", ignore_keys=("level", "volume")) or "").lower()
     op = _operation(action)
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx2.AsyncClient(timeout=15) as client:
         try:
             player = await get_player(client, config)
             if player is None:
@@ -138,9 +138,9 @@ async def handle(params, ctx):
                 return SkillResult(text="It's already playing.")
             await resume(client, config)
             return SkillResult(text="Playing again.")
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             if e.response.status_code == 403:
                 return SkillResult(text="Spotify refused that (it needs Premium, or the player is restricted).")
             return SkillResult(text="Spotify didn't take that right now.")
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text="Couldn't reach Spotify right now.")

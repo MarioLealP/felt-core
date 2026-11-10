@@ -22,7 +22,7 @@ her shopping_list skill takes them one by one.
 import logging
 import re
 
-import httpx
+import httpx2
 
 from felt_core.brain.command_words import POLITE, TAIL
 from felt_core.config import FeltConfig, reveal
@@ -61,7 +61,7 @@ async def handle(config: FeltConfig, message: str) -> str | None:
     if config.ha_assist_device:
         body["device_id"] = config.ha_assist_device
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx2.AsyncClient(timeout=5) as client:
             response = await client.post(
                 f"{config.ha_url}/api/conversation/process",
                 headers={"Authorization": f"Bearer {reveal(config.ha_token)}"},
@@ -69,7 +69,7 @@ async def handle(config: FeltConfig, message: str) -> str | None:
             )
             response.raise_for_status()
             answer = response.json().get("response", {})
-    except (httpx.HTTPError, ValueError) as e:
+    except (httpx2.HTTPError, ValueError) as e:
         logger.info("ha assist: Home Assistant didn't answer (%r), her model takes it", e)
         return None
     if answer.get("response_type") not in _HANDLED:

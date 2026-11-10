@@ -20,7 +20,7 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import httpx
+import httpx2
 from pydantic import BaseModel
 
 from felt_core import db, features, llm_gate, phone
@@ -112,14 +112,14 @@ async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]
     headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     out: dict[str, str] = {}
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             for f in fields:
                 r = await client.get(f"{config.ha_url}/api/states/sensor.ender_{f}")
                 if r.status_code == 200:
                     out[f] = r.json()["state"]
                 elif r.status_code != 404:
                     raise EnderUnavailable(f"HA {r.status_code}")
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise EnderUnavailable(repr(e)) from e
     return out
 
@@ -129,11 +129,11 @@ async def _filament(config: FeltConfig) -> str | None:
     in), or None when HA doesn't have it - never in the way of the line.
     """
     try:
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             timeout=15, headers={"Authorization": f"Bearer {reveal(config.ha_token)}"}
         ) as client:
             r = await client.get(f"{config.ha_url}/api/states/binary_sensor.ender_filament")
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return None
     return r.json()["state"] if r.status_code == 200 else None
 

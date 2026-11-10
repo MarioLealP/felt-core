@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import certifi
-import httpx
+import httpx2
 
 
 def felt_client_context(identity_dir: str) -> ssl.SSLContext:
@@ -29,30 +29,30 @@ def felt_client_context(identity_dir: str) -> ssl.SSLContext:
     return ctx
 
 
-def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
+def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
     """A client for one of Caddy's machine hosts (B5.3, e.g. poe2-api): Caddy
     shows its normal public certificate (verified against the public CAs, as
-    httpx does by default), and she presents her Felt cert. Plain otherwise.
+    httpx2 does by default), and she presents her Felt cert. Plain otherwise.
     """
     identity_dir = getattr(config, "identity_dir", None)
     if (url or "").startswith("https://") and identity_dir:
         ctx = ssl.create_default_context(cafile=certifi.where())
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
         ctx.load_cert_chain(str(Path(identity_dir) / "client" / "current" / "bundle.pem"))
-        return httpx.AsyncClient(verify=ctx, **kwargs)
-    return httpx.AsyncClient(**kwargs)
+        return httpx2.AsyncClient(verify=ctx, **kwargs)
+    return httpx2.AsyncClient(**kwargs)
 
 
-def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
+def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
     """A client for a Felt peer at ``url``: mTLS with her Felt cert when the URL
     is https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before).
     """
     identity_dir = getattr(config, "identity_dir", None)
     if (url or "").startswith("https://") and identity_dir:
-        return httpx.AsyncClient(verify=felt_client_context(identity_dir), **kwargs)
-    return httpx.AsyncClient(**kwargs)
+        return httpx2.AsyncClient(verify=felt_client_context(identity_dir), **kwargs)
+    return httpx2.AsyncClient(**kwargs)
 
 
-def voice_client(config: Any, **kwargs: Any) -> httpx.AsyncClient:
+def voice_client(config: Any, **kwargs: Any) -> httpx2.AsyncClient:
     """felt-voice (B5.1)."""
     return felt_client(config, getattr(config, "voice_url", None), **kwargs)

@@ -12,7 +12,7 @@ felt-core being down. `config.phone` is the app's device name in HA
 
 from datetime import datetime
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig, reveal
 
@@ -35,9 +35,9 @@ async def _notify(config: FeltConfig, message: str, data: dict | None = None) ->
     if data:
         body["data"] = data
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.post(f"{config.ha_url}/api/services/notify/mobile_app_{config.phone}", json=body)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
         raise PhoneUnavailable(f"HA {response.status_code}")
@@ -104,9 +104,9 @@ async def next_alarm(config: FeltConfig) -> datetime | None:
     """
     headers = _headers(config)
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm")
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
         raise PhoneUnavailable(f"HA {response.status_code}")
@@ -120,10 +120,10 @@ async def battery(config: FeltConfig) -> tuple[int, bool]:
     """(percent, charging) from the app's sensors."""
     headers = _headers(config)
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             level = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_level")
             state = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_state")
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if level.status_code != 200:
         raise PhoneUnavailable(f"HA {level.status_code}")

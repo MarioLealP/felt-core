@@ -25,7 +25,7 @@ checked here first, against HA's own list. Only lights that can do it are
 touched.
 """
 
-import httpx
+import httpx2
 
 from felt_core.config import reveal
 from felt_core.params import get_single_param
@@ -59,7 +59,7 @@ parameters_schema = {
 }
 
 
-async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, dict]:
+async def _fetch_allowed_states(client: httpx2.AsyncClient, config) -> dict[str, dict]:
     """entity_id -> {"friendly_name": ..., "state": ...} for just the
     allowlisted entities — one call per entity rather than fetching HA's
     entire state list and filtering, so a large HA instance elsewhere
@@ -153,7 +153,7 @@ async def _dim(client, config, params, states, matches, label) -> SkillResult:
             json={"entity_id": dimmable, "brightness_pct": percent},
         )
         response.raise_for_status()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return SkillResult(text=f"Couldn't reach Home Assistant to dim {label}.")
     if len(dimmable) == 1:
         return SkillResult(text=f"{states[dimmable[0]]['friendly_name']} dimmed to {percent}%.")
@@ -222,7 +222,7 @@ async def _colour(client, config, params, states, matches, label) -> SkillResult
     try:
         response = await client.post(f"{config.ha_url}/api/services/light/turn_on", json=body)
         response.raise_for_status()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return SkillResult(text=f"Couldn't reach Home Assistant to change {label}.")
     if len(able) == 1:
         return SkillResult(text=f"{states[able[0]]['friendly_name']} set to {colour}.")
@@ -241,10 +241,10 @@ async def handle(params, ctx):
         return SkillResult(text="Which device?")
 
     headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
-    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+    async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
         try:
             states = await _fetch_allowed_states(client, config)
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text="Couldn't reach Home Assistant right now.")
 
         matches, group = _match(str(device), states)
@@ -284,7 +284,7 @@ async def handle(params, ctx):
                 f"{config.ha_url}/api/services/{domain}/{service}", json={"entity_id": matches}
             )
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text=f"Couldn't reach Home Assistant to control {label}.")
 
     return SkillResult(text=f"{label} turned {'on' if service == 'turn_on' else 'off'}.")

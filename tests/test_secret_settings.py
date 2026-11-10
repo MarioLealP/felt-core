@@ -1,6 +1,6 @@
 """Secret settings: SecretStr in FeltConfig, plain only through config.reveal() (Meru standard)."""
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig, reveal
 
@@ -46,14 +46,14 @@ def test_unset_and_empty_secrets_are_falsy_so_the_guards_still_work():
 
 async def test_the_guard_sees_a_masked_secret_in_headers_logins_and_bodies(masked_secret_guard):
     cfg = _config(ha_token="t-1")
-    transport = httpx.MockTransport(lambda request: httpx.Response(200))
-    async with httpx.AsyncClient(transport=transport) as client:
+    transport = httpx2.MockTransport(lambda request: httpx2.Response(200))
+    async with httpx2.AsyncClient(transport=transport) as client:
         await client.get("http://ha.invalid/", headers={"Authorization": f"Bearer {reveal(cfg.ha_token)}"})
         assert masked_secret_guard == []
         await client.get("http://ha.invalid/", headers={"Authorization": f"Bearer {cfg.ha_token}"})
-    async with httpx.AsyncClient(transport=transport, auth=("u", str(cfg.ha_token))) as client:
+    async with httpx2.AsyncClient(transport=transport, auth=("u", str(cfg.ha_token))) as client:
         await client.get("http://ntfy.invalid/")
-    async with httpx.AsyncClient(transport=transport) as client:
+    async with httpx2.AsyncClient(transport=transport) as client:
         await client.post("http://spotify.invalid/", data={"refresh_token": str(cfg.ha_token)})
     assert len(masked_secret_guard) == 3
     masked_secret_guard.clear()  # seen - don't fail this test at teardown

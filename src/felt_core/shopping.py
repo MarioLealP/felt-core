@@ -8,7 +8,7 @@ An item is {"id": HA's uid, "text": its summary, "checked": completed?},
 the same shape the app had from the old table, ids now strings.
 """
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig, reveal
 
@@ -26,11 +26,11 @@ async def _call(config: FeltConfig, service: str, data: dict | None = None) -> d
     body = {"entity_id": config.ha_shopping_list, **(data or {})}
     headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     try:
-        async with httpx.AsyncClient(timeout=10, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=10, headers=headers) as client:
             response = await client.post(url, json=body)
             response.raise_for_status()
             return response.json()
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise ShoppingUnavailable(str(e)) from e
 
 
@@ -71,10 +71,10 @@ async def version(config: FeltConfig) -> str:
         return ""
     headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     try:
-        async with httpx.AsyncClient(timeout=5, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=5, headers=headers) as client:
             response = await client.get(f"{config.ha_url}/api/states/{config.ha_shopping_list}")
             response.raise_for_status()
             state = response.json()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return ""
     return f"{state.get('state')}|{state.get('last_updated')}"

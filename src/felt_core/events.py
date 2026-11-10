@@ -26,7 +26,7 @@ import logging
 import re
 from pathlib import Path
 
-import httpx
+import httpx2
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from felt_core import local_llm, metrics
@@ -368,7 +368,7 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
 
     title = _text(details, "title").lower()
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx2.AsyncClient(timeout=5) as client:
             now_playing = await get_currently_playing(client, config)
             if now_playing is None or now_playing["track"].get("name", "").lower() != title:
                 return None

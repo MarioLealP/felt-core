@@ -1,4 +1,4 @@
-import httpx
+import httpx2
 
 import felt_core.spotify_client as spotify_client
 from felt_core.config import FeltConfig
@@ -77,9 +77,9 @@ async def test_get_currently_playing_returns_none_on_204(monkeypatch):
     async def fake_get(self, url, headers):
         return _FakeResponse(204)
 
-    monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(spotify_client.httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_currently_playing(client, FeltConfig())
 
     assert result is None
@@ -92,9 +92,9 @@ async def test_get_currently_playing_returns_none_when_body_has_no_item(monkeypa
     async def fake_get(self, url, headers):
         return _FakeResponse(200, {"item": None})
 
-    monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(spotify_client.httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_currently_playing(client, FeltConfig())
 
     assert result is None
@@ -107,9 +107,9 @@ async def test_get_currently_playing_parses_track_and_progress(monkeypatch):
     async def fake_get(self, url, headers):
         return _FakeResponse(200, {"item": _TRACK, "progress_ms": 50000, "is_playing": True})
 
-    monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(spotify_client.httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_currently_playing(client, FeltConfig())
 
     assert result is not None
@@ -130,9 +130,9 @@ async def test_get_currently_playing_caches_within_ttl(monkeypatch):
         calls.append(1)
         return _FakeResponse(200, {"item": _TRACK, "progress_ms": 1000, "is_playing": True})
 
-    monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(spotify_client.httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         await get_currently_playing(client, FeltConfig())
         clock[0] += 5  # well within the 10s TTL
         await get_currently_playing(client, FeltConfig())
@@ -151,9 +151,9 @@ async def test_get_currently_playing_refetches_after_ttl(monkeypatch):
         calls.append(1)
         return _FakeResponse(200, {"item": _TRACK, "progress_ms": 1000, "is_playing": True})
 
-    monkeypatch.setattr(spotify_client.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(spotify_client.httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         await get_currently_playing(client, FeltConfig())
         clock[0] += 11
         await get_currently_playing(client, FeltConfig())

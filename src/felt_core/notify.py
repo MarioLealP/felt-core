@@ -8,7 +8,7 @@ Unset config means proactive notifications simply aren't available yet,
 not a hardcoded assumption they are.
 """
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig, reveal
 
@@ -26,7 +26,7 @@ async def notify(config: FeltConfig, message: str, title: str | None = None, pri
     if title:
         headers["Title"] = title
 
-    async with httpx.AsyncClient(
+    async with httpx2.AsyncClient(
         auth=(config.ntfy_publish_user, reveal(config.ntfy_publish_password)), timeout=15
     ) as client:
         response = await client.post(f"{config.ntfy_url}/{config.ntfy_publish_topic}", content=message, headers=headers)

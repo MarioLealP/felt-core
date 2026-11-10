@@ -3,7 +3,7 @@
 import importlib.util
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from felt_core import spotify_client
 from felt_core.config import FeltConfig
@@ -17,7 +17,7 @@ assert _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
-_REAL_CLIENT = httpx.AsyncClient
+_REAL_CLIENT = httpx2.AsyncClient
 TRACK = {"name": "Midnight City", "uri": "spotify:track:abc", "artists": [{"name": "M83"}]}
 
 
@@ -32,18 +32,18 @@ def _mock(monkeypatch, calls, playing=True, volume=40, player=True):
         path, method = request.url.path, request.method
         if path == "/v1/me/player" and method == "GET":
             if not player:
-                return httpx.Response(204)
-            return httpx.Response(
+                return httpx2.Response(204)
+            return httpx2.Response(
                 200,
                 json={"is_playing": playing, "item": TRACK, "device": {"volume_percent": volume}},
             )
         if path == "/v1/me/player/currently-playing":
-            return httpx.Response(200, json={"item": TRACK, "is_playing": True, "progress_ms": 1})
+            return httpx2.Response(200, json={"item": TRACK, "is_playing": True, "progress_ms": 1})
         calls.append((method, path, dict(request.url.params)))
-        return httpx.Response(200)
+        return httpx2.Response(200)
 
-    transport = httpx.MockTransport(handler)
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: _REAL_CLIENT(transport=transport, **kw))
+    transport = httpx2.MockTransport(handler)
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: _REAL_CLIENT(transport=transport, **kw))
 
 
 async def _do(monkeypatch, params, **state):

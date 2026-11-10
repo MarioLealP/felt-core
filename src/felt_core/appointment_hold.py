@@ -18,7 +18,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 
-import httpx
+import httpx2
 
 from felt_core import ha_calendar
 from felt_core.config import FeltConfig
@@ -134,7 +134,7 @@ def _same(event: dict, summary: str, start: datetime) -> bool:
 
 
 async def _matching(config, calendar_id: str, summary: str, start: datetime) -> list[dict]:
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         await ha_calendar.refresh(client, config, calendar_id)
         events = await ha_calendar.list_events(client, config, calendar_id, start, start + timedelta(minutes=1))
     return [e for e in events if _same(e, summary, start)]
@@ -159,7 +159,7 @@ async def change_place(config: FeltConfig, last: dict, place: str) -> str:
             return "I couldn't confirm the change in the calendar."
         for event in old:
             await ha_calendar.delete_event(config, calendar_id, event["uid"])
-    except ha_calendar.CalendarUnavailable, httpx.HTTPError:
+    except ha_calendar.CalendarUnavailable, httpx2.HTTPError:
         return "I couldn't reach the calendar to add the place."
     ha_calendar.remember_created(config, calendar_id, summary, start, end)
     return f"'{summary}', {when(start)}, is now at {place}. Read it back to Mario as written."

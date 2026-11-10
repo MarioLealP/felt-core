@@ -3,7 +3,7 @@ calls Felt makes, the skill on top, and what happens when HA can't be reached.""
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from conftest import load_plugin_module
 
@@ -32,19 +32,19 @@ def ha(monkeypatch):
         body = None if request.method == "GET" else json.loads(request.content)
         HA.calls.append((request.method, request.url.path, body))
         if HA.status != 200:
-            return httpx.Response(HA.status)
+            return httpx2.Response(HA.status)
         if request.method == "GET":
-            return httpx.Response(200, json={"state": "1", "last_updated": "t0"})
+            return httpx2.Response(200, json={"state": "1", "last_updated": "t0"})
         if request.url.path.endswith("/get_items"):
             response = {"todo.shopping_list": {"items": HA.items}}
-            return httpx.Response(200, json={"changed_states": [], "service_response": response})
-        return httpx.Response(200, json=[])
+            return httpx2.Response(200, json={"changed_states": [], "service_response": response})
+        return httpx2.Response(200, json=[])
 
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
     monkeypatch.setattr(
-        shopping.httpx,
+        shopping.httpx2,
         "AsyncClient",
-        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+        lambda **kw: real(transport=httpx2.MockTransport(handler), **kw),
     )
     HA.calls = []
     HA.items = [

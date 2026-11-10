@@ -4,7 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core.config import FeltConfig
@@ -49,12 +49,12 @@ def _mock(monkeypatch, seen, issues=ISSUES):
     def handler(request):
         seen.append(request)
         if request.url.path == "/api/v1/repos/Benylin/workspace/raw/.beads/issues.jsonl":
-            return httpx.Response(200, text=body)
-        return httpx.Response(404)
+            return httpx2.Response(200, text=body)
+        return httpx2.Response(404)
 
-    transport = httpx.MockTransport(handler)
-    orig = httpx.AsyncClient
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    transport = httpx2.MockTransport(handler)
+    orig = httpx2.AsyncClient
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
 
 
 def _ctx(msg=""):
@@ -102,16 +102,16 @@ async def test_no_token_is_reported():
 
 async def test_unreadable_board_is_reported(monkeypatch):
     def handler(request):
-        return httpx.Response(200, text="not json\n")
+        return httpx2.Response(200, text="not json\n")
 
-    orig = httpx.AsyncClient
-    transport = httpx.MockTransport(handler)
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    orig = httpx2.AsyncClient
+    transport = httpx2.MockTransport(handler)
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
     r = await skill.handle({}, _ctx())
     assert r.text == "Couldn't read the board right now."
 
 
 async def test_non_get_is_refused_before_sending():
-    request = httpx.Request("PATCH", "https://git.example/api/v1/x")
+    request = httpx2.Request("PATCH", "https://git.example/api/v1/x")
     with pytest.raises(RuntimeError, match="read-only"):
         await skill._read_only(request)

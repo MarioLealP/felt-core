@@ -4,7 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
@@ -46,15 +46,15 @@ def _mock(monkeypatch, calls, states=STATES):
                 attributes["supported_color_modes"] = (
                     ["onoff"] if eid in ONOFF else ["color_temp", "hs", "rgb"] if eid in COLOUR else ["brightness"]
                 )
-            return httpx.Response(200, json={"state": state, "attributes": attributes})
+            return httpx2.Response(200, json={"state": state, "attributes": attributes})
         if path.startswith("/api/services/"):
             calls.append((path, json.loads(request.content)))
-            return httpx.Response(200, json=[])
-        return httpx.Response(404)
+            return httpx2.Response(200, json=[])
+        return httpx2.Response(404)
 
-    transport = httpx.MockTransport(handler)
-    orig = httpx.AsyncClient
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    transport = httpx2.MockTransport(handler)
+    orig = httpx2.AsyncClient
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
 
 
 def _ctx():

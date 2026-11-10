@@ -17,7 +17,7 @@ heads-ups.
 
 from datetime import datetime, timedelta
 
-import httpx
+import httpx2
 
 from felt_core import appointment_hold
 from felt_core.date_resolution import day_only, resolve_datetime
@@ -102,7 +102,7 @@ async def handle(params, ctx):
             )
         return SkillResult(text=await appointment_hold.change_place(config, just, place))
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         calendars = await list_calendars(client, config)
         calendar = resolve_calendar(calendars, calendar_name)
         if calendar is None:

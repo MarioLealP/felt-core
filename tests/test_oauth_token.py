@@ -5,7 +5,7 @@ copy of this exact cache-check/POST/store dance."""
 
 import time
 
-import httpx
+import httpx2
 
 from felt_core.oauth_token import refresh_access_token
 
@@ -30,7 +30,7 @@ def _client(monkeypatch, response_data=None, error=None):
             raise error
         return _FakeResponse(response_data)
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(httpx2.AsyncClient, "post", fake_post)
     return calls
 
 
@@ -38,7 +38,7 @@ async def test_fetches_and_caches_a_fresh_token(monkeypatch):
     calls = _client(monkeypatch, {"access_token": "tok-1", "expires_in": 3600})
     cache: dict = {"access_token": None, "expires_at": 0.0}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         token = await refresh_access_token(
             client, cache, "https://example.com/token", data={"grant_type": "refresh_token"}
         )
@@ -53,7 +53,7 @@ async def test_returns_the_cached_token_without_a_new_request(monkeypatch):
     calls = _client(monkeypatch, {"access_token": "should-not-be-used", "expires_in": 3600})
     cache = {"access_token": "cached-tok", "expires_at": time.monotonic() + 3600}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         token = await refresh_access_token(client, cache, "https://example.com/token", data={})
 
     assert token == "cached-tok"
@@ -66,7 +66,7 @@ async def test_refreshes_when_within_the_60s_safety_margin_of_expiry(monkeypatch
     # must never be handed out as still-good.
     cache = {"access_token": "about-to-expire", "expires_at": time.monotonic() + 30}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         token = await refresh_access_token(client, cache, "https://example.com/token", data={})
 
     assert token == "refreshed-tok"
@@ -77,7 +77,7 @@ async def test_defaults_expiry_to_one_hour_when_the_provider_omits_it(monkeypatc
     _client(monkeypatch, {"access_token": "tok"})  # no expires_in field
     cache: dict = {"access_token": None, "expires_at": 0.0}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         await refresh_access_token(client, cache, "https://example.com/token", data={})
 
     assert 3599 <= cache["expires_at"] - time.monotonic() <= 3600
@@ -87,7 +87,7 @@ async def test_passes_headers_through_when_given(monkeypatch):
     calls = _client(monkeypatch, {"access_token": "tok", "expires_in": 3600})
     cache: dict = {"access_token": None, "expires_at": 0.0}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         await refresh_access_token(
             client,
             cache,
@@ -100,12 +100,12 @@ async def test_passes_headers_through_when_given(monkeypatch):
 
 
 async def test_raises_when_the_token_endpoint_errors(monkeypatch):
-    _client(monkeypatch, error=httpx.ConnectTimeout("slow"))
+    _client(monkeypatch, error=httpx2.ConnectTimeout("slow"))
     cache: dict = {"access_token": None, "expires_at": 0.0}
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             await refresh_access_token(client, cache, "https://example.com/token", data={})
         raise AssertionError("expected the connect timeout to propagate")
-    except httpx.ConnectTimeout:
+    except httpx2.ConnectTimeout:
         pass

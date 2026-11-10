@@ -12,7 +12,7 @@ import logging
 import random
 import re
 
-import httpx
+import httpx2
 
 from felt_core import local_llm
 from felt_core import spotify_client as sp
@@ -47,13 +47,13 @@ _top_cache: dict = {"artists": [], "at": 0.0}
 _TRACK_ID = re.compile(r"^[0-9A-Za-z]{22}$")
 
 
-async def _top_artists(client: httpx.AsyncClient, config: FeltConfig) -> list[str]:
+async def _top_artists(client: httpx2.AsyncClient, config: FeltConfig) -> list[str]:
     now = dt.datetime.now().timestamp()
     if now - _top_cache["at"] > 24 * 3600:
         try:
             _top_cache["artists"] = await sp.top_artists(client, config)
             _top_cache["at"] = now
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             logger.info("dj: no top artists from Spotify right now")
     return _top_cache["artists"]
 
@@ -122,7 +122,7 @@ async def _new_artists(config: FeltConfig, profile: str, known: set[str], count:
 
 
 async def discoveries(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     config: FeltConfig,
     profile: str,
     known: set[str],
@@ -136,7 +136,7 @@ async def discoveries(
             break
         try:
             tracks = await sp.artist_tracks(client, config, a["name"])
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             continue
         tracks = [t for t in tracks[:_TRACKS_PER_NEW_ARTIST] if t["uri"] not in avoid]
         if not tracks:
@@ -156,7 +156,7 @@ async def discoveries(
     return picks
 
 
-async def pick(client: httpx.AsyncClient, config: FeltConfig, count: int, avoid: set[str]) -> list[dict]:
+async def pick(client: httpx2.AsyncClient, config: FeltConfig, count: int, avoid: set[str]) -> list[dict]:
     """Up to `count` picks {uri, title, artist, discovery[, because]}, about
     discovery_share of them by artists new to him.
     """

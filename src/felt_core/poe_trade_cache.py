@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig
 
@@ -58,14 +58,14 @@ def _build_name_index(items_data: dict) -> dict[str, dict]:
     return index
 
 
-async def _fetch_json(client: httpx.AsyncClient, path: str) -> dict:
+async def _fetch_json(client: httpx2.AsyncClient, path: str) -> dict:
     response = await client.get(f"{_TRADE_BASE}{path}", headers=_TRADE_HEADERS)
     response.raise_for_status()
     return response.json()
 
 
 async def refresh(config: FeltConfig) -> None:
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx2.AsyncClient(timeout=30) as client:
         items_data = await _fetch_json(client, "/data/items")
         leagues_data = await _fetch_json(client, "/data/leagues")
 

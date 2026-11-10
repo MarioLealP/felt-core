@@ -3,7 +3,7 @@
 import json
 import time
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import spotify_client as sp
@@ -105,7 +105,7 @@ async def test_discoveries_are_new_artists_with_real_tracks(tmp_path, monkeypatc
         return []
 
     monkeypatch.setattr(sp, "artist_tracks", tracks)
-    async with httpx.AsyncClient() as client:  # every Spotify call is faked
+    async with httpx2.AsyncClient() as client:  # every Spotify call is faked
         picks = await picker.discoveries(client, config, "profile", {"jonathanyoung"}, 1, avoid=set())
     assert picks == [
         {
@@ -131,7 +131,7 @@ async def test_pick_fills_with_familiar_when_discoveries_fail(tmp_path, monkeypa
     monkeypatch.setattr(sp, "top_artists", none)
     monkeypatch.setattr(picker.random, "random", lambda: 0.0)  # every slot wants a discovery
     picker._top_cache["at"] = 0.0
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         picks = await picker.pick(client, config, 2, avoid=set())
     assert picks == []  # nothing new found, and the one familiar song was played just now
 
@@ -276,20 +276,20 @@ class _Player:
             if self.queue_status == 204:
                 uri = request.url.params["uri"]
                 self.queue.append(self.relink.get(uri, uri) if self.relink else uri)
-            return httpx.Response(self.queue_status)
+            return httpx2.Response(self.queue_status)
         if path == "/v1/me/player/next":
             if not self.stuck and self.queue:
                 self.now = self.queue.pop(0)
                 self._stale = self.lag
-            return httpx.Response(204)
+            return httpx2.Response(204)
         if path == "/v1/me/player/currently-playing":
             if self._stale:
                 self._stale -= 1
             else:
                 self._shown = self.now
             name = "Birdbrain" if self._shown.startswith("u:x") else self._shown
-            return httpx.Response(200, json={"item": {"uri": self._shown, "name": name}})
-        return httpx.Response(204)
+            return httpx2.Response(200, json={"item": {"uri": self._shown, "name": name}})
+        return httpx2.Response(204)
 
 
 async def _start(monkeypatch, tmp_path, player, uri="u:x", name=None):
@@ -298,7 +298,7 @@ async def _start(monkeypatch, tmp_path, player, uri="u:x", name=None):
 
     monkeypatch.setattr(sp, "_get_access_token", token)
     monkeypatch.setattr(sp, "_SKIP_SETTLE_S", 0)
-    async with httpx.AsyncClient(transport=httpx.MockTransport(player.handler)) as client:
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(player.handler)) as client:
         await sp.start_track(client, _config(tmp_path), uri, name)
     return player.calls.count(("POST", "/v1/me/player/next"))
 
@@ -381,7 +381,7 @@ async def _search(monkeypatch, tmp_path, query, results):
         return {"tracks": {"items": results.get(params["q"], [])}}
 
     monkeypatch.setattr(sp, "_get", get)
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         track = await sp.search_track(client, _config(tmp_path), query)
     return track, seen
 

@@ -240,29 +240,29 @@ _MASKED = "**********"  # what a SecretStr prints as
 @pytest.fixture(autouse=True)
 def masked_secret_guard(monkeypatch):
     # Settings hold secrets as SecretStr, and an f-string or str() of one gives "**********" with no error: the
-    # outside system just answers 401. Every request a test sends is checked at httpx's last step before the network
+    # outside system just answers 401. Every request a test sends is checked at httpx2's last step before the network
     # (after auth=(user, password) has been applied), headers, URL and body; a hit fails the test at teardown, so a
     # function that catches every exception can't hide it.
     import base64
     import contextlib
     from urllib.parse import unquote_plus
 
-    import httpx
+    import httpx2
 
     hits: list[str] = []
 
-    def check(request: httpx.Request) -> None:
+    def check(request: httpx2.Request) -> None:
         sent = [str(request.url), *request.headers.values()]
         auth = request.headers.get("authorization", "")
         if auth.startswith("Basic "):
             sent.append(base64.b64decode(auth[6:]).decode(errors="replace"))
-        with contextlib.suppress(httpx.RequestNotRead):  # a streamed body - not one of ours
+        with contextlib.suppress(httpx2.RequestNotRead):  # a streamed body - not one of ours
             sent.append(unquote_plus(request.content.decode(errors="replace")))  # form bodies encode * as %2A
         if any(_MASKED in value for value in sent):
             hits.append(f"{request.method} {request.url}")
 
-    async_send = httpx.AsyncClient._send_single_request
-    sync_send = httpx.Client._send_single_request
+    async_send = httpx2.AsyncClient._send_single_request
+    sync_send = httpx2.Client._send_single_request
 
     async def checked_async_send(self, request, *args, **kwargs):
         check(request)
@@ -272,7 +272,7 @@ def masked_secret_guard(monkeypatch):
         check(request)
         return sync_send(self, request, *args, **kwargs)
 
-    monkeypatch.setattr(httpx.AsyncClient, "_send_single_request", checked_async_send)
-    monkeypatch.setattr(httpx.Client, "_send_single_request", checked_sync_send)
+    monkeypatch.setattr(httpx2.AsyncClient, "_send_single_request", checked_async_send)
+    monkeypatch.setattr(httpx2.Client, "_send_single_request", checked_sync_send)
     yield hits
     assert not hits, f"masked secret (**********) sent: {hits} - read it with config.reveal()"
