@@ -10,10 +10,11 @@ directly, no Drive API/OAuth involved. This skill just calls the already-
 built index, same internal-service pattern as any other felt-core -> sibling
 container call (no Caddy route, no SSO gate — `felt` network only).
 Since WP-62 M2b B5.2 drive-rag only answers felt-core's Felt cert (mTLS),
-so the client comes from felt_tls.felt_client.
+so the client comes from felt_tls.felt_client. On k3s (D127) it's Meru's way instead:
+her Meru certificate plus an Authentik token for audience drive-rag (felt_core.meru).
 """
 
-from felt_core.felt_tls import felt_client
+from felt_core.meru import auth_headers, meru_client
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -38,8 +39,11 @@ async def handle(params, ctx):
 
     # drive-rag answers via felt-llm since WP-56 (local, one slot, ~40 s seen),
     # so 60 s was too tight.
-    async with felt_client(config, config.drive_rag_url, timeout=120) as client:
-        response = await client.post(f"{config.drive_rag_url}/api/ask", json={"question": question})
+    headers = await auth_headers(config, "drive-rag")
+    async with meru_client(config, config.drive_rag_url, timeout=120) as client:
+        response = await client.post(
+            f"{config.drive_rag_url}/api/ask", json={"question": question}, headers=headers
+        )
         response.raise_for_status()
         body = response.json()
 
