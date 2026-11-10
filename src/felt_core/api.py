@@ -486,7 +486,7 @@ async def reaction_tag_endpoint(req: ReactionTagRequest) -> dict:
         )
     try:
         tag = json.loads(reply.text).get("tag")
-    except (json.JSONDecodeError, AttributeError):
+    except json.JSONDecodeError, AttributeError:
         return {"tag": None}
     return {"tag": tag if isinstance(tag, str) and tag in req.tags else None}
 

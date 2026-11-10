@@ -116,7 +116,7 @@ async def _new_artists(config: FeltConfig, profile: str, known: set[str], count:
     )
     try:
         artists = json.loads(reply.text).get("artists", [])
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return []
     return [a for a in artists if isinstance(a, dict) and a.get("name") and sp.norm_name(a["name"]) not in known]
 

@@ -121,7 +121,7 @@ class ReplyStream:
         return self._audio[n]
 
 
-_streams: "OrderedDict[str, ReplyStream]" = OrderedDict()
+_streams: OrderedDict[str, ReplyStream] = OrderedDict()
 
 
 def _purge() -> None:

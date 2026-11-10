@@ -17,7 +17,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - run: uv sync --frozen
 
@@ -25,6 +25,10 @@ jobs:
       # lockfile, pip-audit, pytest (Meru standard)
       - name: checks (scripts/check.sh)
         run: scripts/check.sh
+        env:
+          # -n auto counts Bahamut's cores, but the runner's Docker service is capped at CPUQuota=400%
+          # (clockmost-infra ops/ci-worker/ci-docker.service): more workers than that only fight over 4 CPUs
+          PYTEST_XDIST_AUTO_NUM_WORKERS: "4"
 
       - name: notify on CI failure
         if: failure()

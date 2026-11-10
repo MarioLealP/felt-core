@@ -150,7 +150,7 @@ class MarkRequest(BaseModel):
     all: bool = False
 
     @model_validator(mode="after")
-    def _ids_or_all(self) -> "MarkRequest":
+    def _ids_or_all(self) -> MarkRequest:
         if self.all and (self.action != "read" or self.ids):
             raise ValueError("all goes with action read and no ids")
         if not self.all and not self.ids:

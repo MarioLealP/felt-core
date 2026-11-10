@@ -147,6 +147,6 @@ async def handle(params, ctx):
     focus = _focus(get_single_param(params, "focus") or ctx.original_message)
     try:
         issues = await fetch_issues(config)
-    except (httpx.HTTPError, ValueError, KeyError):
+    except httpx.HTTPError, ValueError, KeyError:
         return SkillResult(text="Couldn't read the board right now.")
     return SkillResult(text=summarise(build_board(issues), focus))

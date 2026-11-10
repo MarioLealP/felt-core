@@ -192,7 +192,7 @@ def latest_exchange(db_path: str, session_id: str) -> dict[str, tuple[int, str]]
 def wants_to_mark(text: str) -> bool:
     try:
         d = json.loads(text)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return False
     return isinstance(d, dict) and d.get("mark") is True
 
@@ -204,7 +204,7 @@ def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
     """
     try:
         d = json.loads(text)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
     if not isinstance(d, dict):
         return None

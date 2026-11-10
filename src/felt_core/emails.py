@@ -182,7 +182,7 @@ async def _worth_mentioning(config: FeltConfig, row: tuple) -> bool:
         )
     try:
         return bool(json.loads(reply.text)["mention"])
-    except (ValueError, KeyError, TypeError):
+    except ValueError, KeyError, TypeError:
         return False
 
 

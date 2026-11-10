@@ -51,7 +51,7 @@ async def _origin(client: httpx.AsyncClient, config: FeltConfig, now: datetime) 
             updated = datetime.fromisoformat(s["last_updated"])
             if "latitude" in a and now - updated < _FRESH and s.get("state") != "home":
                 return f"{a['latitude']},{a['longitude']}"
-    except (httpx.HTTPError, KeyError, ValueError):
+    except httpx.HTTPError, KeyError, ValueError:
         pass
     return "zone.home"
 

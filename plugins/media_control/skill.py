@@ -79,7 +79,7 @@ def _operation(action: str) -> str:
 def _percent(level) -> int | None:
     try:
         value = float(level)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return round(value * 100) if 0 < value <= 1 and "." in str(level) else round(value)
 

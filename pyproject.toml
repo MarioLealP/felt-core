@@ -2,7 +2,9 @@
 name = "felt-core"
 version = "0.1.0"
 description = "Felt's brain: orchestrator, plugin interface, config, model routing"
-requires-python = ">=3.12"
+# Meru standard is 3.15; 3.14 until onnxruntime (under fastembed, the router) ships cp315 wheels - 1.31.1 has cp314 at
+# most (checked 2026-11-10).
+requires-python = ">=3.14"
 dependencies = [
     "dateparser>=1.2.2",
     "fastapi>=0.141.1",
@@ -47,7 +49,7 @@ asyncio_mode = "auto"
 # Meru's settings (Meru/nuwa-python), adopted 2026-11-10. What failed that day is listed at the
 # end of this block as a baseline; each later pass removes entries, and new files get none.
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 preview = true
@@ -224,7 +226,7 @@ convention = "google"
 "tools/spotify_authorize.py" = ["undocumented-public-function", "hardcoded-temp-file"]
 
 [tool.ty.environment]
-python-version = "3.12"
+python-version = "3.14"
 
 [tool.ty.src]
 include = ["src", "tests"]

@@ -112,7 +112,7 @@ async def next_alarm(config: FeltConfig) -> datetime | None:
         raise PhoneUnavailable(f"HA {response.status_code}")
     try:
         return datetime.fromisoformat(response.json()["state"])
-    except (KeyError, ValueError):  # "unavailable": no alarm set
+    except KeyError, ValueError:  # "unavailable": no alarm set
         return None
 
 

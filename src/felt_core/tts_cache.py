@@ -13,7 +13,7 @@ import hashlib
 from collections import OrderedDict
 
 _MAX_ENTRIES = 64
-_cache: "OrderedDict[str, bytes]" = OrderedDict()
+_cache: OrderedDict[str, bytes] = OrderedDict()
 
 
 def _key(text: str, emotion: str | None) -> str:

@@ -64,7 +64,7 @@ def _scrub_response_secrets(response):
         try:
             text = raw.decode() if isinstance(raw, bytes) else raw
             data = json.loads(text)
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except UnicodeDecodeError, json.JSONDecodeError:
             data = None
         if isinstance(data, dict) and any(field in data for field in _SECRET_JSON_FIELDS):
             for field in _SECRET_JSON_FIELDS:
@@ -223,3 +223,12 @@ def fake_llm(monkeypatch):
     monkeypatch.setattr(local_llm, "chat", fake.chat)
     monkeypatch.setattr(local_llm, "chat_stream", fake.chat_stream)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def _no_felt_llm_lookup(monkeypatch):
+    # The app's lifespan starts llm_warmup_loop, which connects to local_llm_url. Its default host `felt-llm`
+    # only resolves in the cluster; elsewhere the failed DNS lookup blocks an executor thread for 3-4 s, and every
+    # TestClient waits for it at shutdown (about half the suite's time on a 2-core CI runner). Nothing listens on
+    # port 9, so the connection is refused at once. Tests that need felt-llm set their own URL.
+    monkeypatch.setenv("FELT_LOCAL_LLM_URL", "http://127.0.0.1:9")
