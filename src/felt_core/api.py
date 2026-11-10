@@ -71,7 +71,7 @@ from felt_core.brain import (
 )
 from felt_core.calendar_api import router as calendar_router
 from felt_core.calendar_headsup import calendar_headsup_loop
-from felt_core.config import load_config
+from felt_core.config import load_config, reveal
 from felt_core.controls_api import router as controls_router
 from felt_core.db import (
     delete_diary,
@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
     config = load_config()
     # WP-62 M1: say whether the vault path delivered (never the value itself)
     if config.vault_probe:
-        logger.info("vault: probe delivered (%d chars)", len(config.vault_probe))
+        logger.info("vault: probe delivered (%d chars)", len(reveal(config.vault_probe)))
     else:
         logger.info("vault: no probe (settings not vault-delivered)")
     ntfy_task = asyncio.create_task(ntfy_listen(config))
@@ -294,7 +294,7 @@ async def auth_middleware(request: Request, call_next):
     `Authorization: Bearer <token>` (constant-time compare) or gets 401.
     """
     config = load_config()
-    token = config.api_token
+    token = reveal(config.api_token)
     path = request.url.path
     # felt-ha-hub D3: Home Assistant's route takes only its Authentik token -
     # decided first, so no proxy identity header or other path can open it
@@ -346,7 +346,7 @@ async def auth_middleware(request: Request, call_next):
     if _token_ok(given, token):
         return await call_next(request)
     if any(request.method == m and rx.fullmatch(path) for m, rx in _RESPONDER_ROUTES) and _token_ok(
-        given, config.responder_token
+        given, reveal(config.responder_token)
     ):
         return await call_next(request)
     return JSONResponse(
@@ -1386,7 +1386,7 @@ def _ws_authorized(websocket: WebSocket) -> bool:
     config = load_config()
     if config.auth_mode == "identity":
         return False  # B5.4: no shared token any more, and no machine caller uses websockets
-    token = config.api_token
+    token = reveal(config.api_token)
     if not token:
         return True
     given = websocket.headers.get("authorization", "")

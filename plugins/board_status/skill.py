@@ -11,6 +11,7 @@ import json
 
 import httpx
 
+from felt_core.config import reveal
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -78,7 +79,7 @@ async def fetch_issues(config) -> list[dict]:
     url = f"{config.board_gitea_url.rstrip('/')}/api/v1/repos/{config.board_repo}/raw/{config.board_path}"
     async with httpx.AsyncClient(
         timeout=15,
-        headers={"Authorization": f"token {config.board_token}"},
+        headers={"Authorization": f"token {reveal(config.board_token)}"},
         event_hooks={"request": [_read_only]},
     ) as client:
         text = (await client.get(url)).raise_for_status().text

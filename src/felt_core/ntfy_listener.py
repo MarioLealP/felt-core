@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 import httpx
 
 from felt_core import incidents, responder
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 from felt_core.db import get_setting, save_ntfy_event, set_setting
 
 LAST_ID = "ntfy_last_id"
@@ -64,7 +64,7 @@ async def listen(config: FeltConfig) -> None:
         return
 
     url = f"{config.ntfy_url}/{config.ntfy_topic}/json"
-    auth = _basic_auth(config.ntfy_user, config.ntfy_password)
+    auth = _basic_auth(config.ntfy_user, reveal(config.ntfy_password))
 
     while True:
         try:

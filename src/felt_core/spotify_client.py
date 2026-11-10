@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 from felt_core.oauth_token import refresh_access_token
 
 _TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -44,12 +44,12 @@ _NOW_PLAYING_CACHE_TTL_S = 10.0
 
 
 async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
-    basic = base64.b64encode(f"{config.spotify_client_id}:{config.spotify_client_secret}".encode()).decode()
+    basic = base64.b64encode(f"{config.spotify_client_id}:{reveal(config.spotify_client_secret)}".encode()).decode()
     return await refresh_access_token(
         client,
         _token_cache,
         _TOKEN_URL,
-        data={"grant_type": "refresh_token", "refresh_token": config.spotify_refresh_token},
+        data={"grant_type": "refresh_token", "refresh_token": reveal(config.spotify_refresh_token)},
         headers={"Authorization": f"Basic {basic}"},
     )
 

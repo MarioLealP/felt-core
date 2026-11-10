@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ async def drive_minutes(config: FeltConfig, destination: str, now: datetime | No
     if not (config.ha_url and config.ha_token):
         return None
     now = now or datetime.now(UTC)
-    headers = {"Authorization": f"Bearer {config.ha_token}"}
+    headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     try:
         async with httpx.AsyncClient(timeout=30, headers=headers) as client:
             origin = await _origin(client, config, now)

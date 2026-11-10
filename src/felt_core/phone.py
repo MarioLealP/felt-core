@@ -14,7 +14,7 @@ from datetime import datetime
 
 import httpx
 
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 _EXTRA = "android.intent.extra.alarm."
 
@@ -26,7 +26,7 @@ class PhoneUnavailable(Exception):
 def _headers(config: FeltConfig) -> dict[str, str]:
     if not (config.ha_url and config.ha_token and config.phone):
         raise PhoneUnavailable("phone not configured")
-    return {"Authorization": f"Bearer {config.ha_token}"}
+    return {"Authorization": f"Bearer {reveal(config.ha_token)}"}
 
 
 async def _notify(config: FeltConfig, message: str, data: dict | None = None) -> None:

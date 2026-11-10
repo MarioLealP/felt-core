@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from felt_core import db, features, llm_gate, phone
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 from felt_core.her_line import her_line
 from felt_core.proactive import enqueue_proactive
 
@@ -110,7 +110,7 @@ def snapshot_from(states: dict[str, str]) -> Snapshot:
 async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]:
     if not (config.ha_url and config.ha_token):
         raise EnderUnavailable("HA not configured")
-    headers = {"Authorization": f"Bearer {config.ha_token}"}
+    headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     out: dict[str, str] = {}
     try:
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
@@ -130,7 +130,9 @@ async def _filament(config: FeltConfig) -> str | None:
     in), or None when HA doesn't have it - never in the way of the line.
     """
     try:
-        async with httpx.AsyncClient(timeout=15, headers={"Authorization": f"Bearer {config.ha_token}"}) as client:
+        async with httpx.AsyncClient(
+            timeout=15, headers={"Authorization": f"Bearer {reveal(config.ha_token)}"}
+        ) as client:
             r = await client.get(f"{config.ha_url}/api/states/binary_sensor.ender_filament")
     except httpx.HTTPError:
         return None
