@@ -49,6 +49,9 @@ step "uv.lock up to date"
 uv lock --check
 step pip-audit
 uvx pip-audit --disable-pip --require-hashes --progress-spinner off -r <(uv export --frozen --no-emit-project --quiet)
-step "pytest, 2 minutes at most"
-timeout 120 uv run pytest -q
+# Exception to the standard's 2 minutes (Mario 2026-11-10): felt-core's CI still runs on the old shared ci-worker
+# (4 CPUs for every job at once), where the suite took 96 s to over 120 s while it runs in 10-15 s on a desktop.
+# Back to 120 when felt-core's CI moves to Meru's runner.
+step "pytest, 5 minutes at most (Meru: 2 - see above)"
+timeout 300 uv run pytest -q
 printf '\nall checks passed\n'
