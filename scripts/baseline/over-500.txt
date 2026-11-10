@@ -1,5 +1,5 @@
-src/felt_core/api.py
+src/felt_core/api/app.py
 src/felt_core/brain/orchestrator.py
-src/felt_core/db.py
-src/felt_core/diary.py
-src/felt_core/events.py
+src/felt_core/core/diary.py
+src/felt_core/core/events.py
+src/felt_core/db/store.py

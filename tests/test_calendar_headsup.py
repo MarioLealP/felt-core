@@ -6,9 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from felt_core import calendar_headsup as ch
-from felt_core import db, local_llm
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
+from felt_core.core import calendar_headsup as ch
+from felt_core.db import store as db
 
 NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 

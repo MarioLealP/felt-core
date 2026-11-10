@@ -4,7 +4,7 @@ so this needs no credentials fixture at all, real or dummy."""
 
 import pytest
 
-from felt_core.lyrics_client import get_lyrics
+from felt_core.clients.lyrics_client import get_lyrics
 
 
 @pytest.mark.vcr

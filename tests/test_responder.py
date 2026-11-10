@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from felt_core import alert_lines, incidents, responder
-from felt_core.api import app
+from felt_core.api.app import app
+from felt_core.core import alert_lines, incidents, responder
 
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 REPORT = {
@@ -266,7 +266,7 @@ def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
 
 def test_one_mario_closed_himself_gets_no_line(tmp_path):
     db = str(tmp_path / "f.db")
-    from felt_core import systems
+    from felt_core.core import systems
 
     honeypot = _in(db, "HONEYPOT: ssh touched")
     responder.claim_next(db, _at(0))
@@ -276,7 +276,7 @@ def test_one_mario_closed_himself_gets_no_line(tmp_path):
 
 
 def test_the_kill_switch_stops_handing_over_and_she_says_why(tmp_path):
-    from felt_core import controls
+    from felt_core.core import controls
 
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")

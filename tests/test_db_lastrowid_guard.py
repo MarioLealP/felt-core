@@ -10,7 +10,7 @@ import sqlite3
 
 import pytest
 
-from felt_core.db import _require_lastrowid
+from felt_core.db.store import _require_lastrowid
 
 
 @pytest.fixture

@@ -6,9 +6,9 @@ import httpx2
 import pytest
 from conftest import load_plugin_module
 
+from felt_core.clients.ha_calendar import TZ
 from felt_core.config import FeltConfig
-from felt_core.ha_calendar import TZ
-from felt_core.plugin import ExecutionContext
+from felt_core.models.plugin import ExecutionContext
 
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=TZ)
 STORY = {

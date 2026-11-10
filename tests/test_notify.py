@@ -1,5 +1,5 @@
+from felt_core.clients.notify import notify
 from felt_core.config import FeltConfig
-from felt_core.notify import notify
 
 
 class _ExplodingClient:

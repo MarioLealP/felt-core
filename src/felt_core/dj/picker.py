@@ -14,8 +14,8 @@ import re
 
 import httpx2
 
-from felt_core import local_llm
-from felt_core import spotify_client as sp
+from felt_core.clients import local_llm
+from felt_core.clients import spotify_client as sp
 from felt_core.config import FeltConfig
 from felt_core.dj import learning, store
 from felt_core.dj.profile import build_profile

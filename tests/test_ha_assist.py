@@ -6,7 +6,7 @@ import json
 import httpx2
 import pytest
 
-from felt_core import ha_assist
+from felt_core.clients import ha_assist
 from felt_core.config import FeltConfig
 
 CONFIG = FeltConfig(ha_url="http://ha", ha_token="t", ha_assist_device="dev-felt")

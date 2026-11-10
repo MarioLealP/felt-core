@@ -6,7 +6,7 @@ circular import.
 
 from pydantic import BaseModel
 
-from felt_core.plugin import UIAction
+from felt_core.models.plugin import UIAction
 
 
 class ChatResult(BaseModel):

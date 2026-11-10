@@ -2,10 +2,10 @@
 
 from fastapi.testclient import TestClient
 
-import felt_core.app_api as app_api
-from felt_core.api import app
-from felt_core.app_history import history_page
-from felt_core.db import save_message
+import felt_core.api.app_api as app_api
+from felt_core.api.app import app
+from felt_core.core.app_history import history_page
+from felt_core.db.store import save_message
 
 SSO = {"X-Authentik-Username": "mario"}
 

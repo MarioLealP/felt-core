@@ -5,15 +5,15 @@ every container) rather than building a separate health-check path.
 
 import httpx2
 
-from felt_core.config import reveal
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
-from felt_core.zabbix_client import (
+from felt_core.clients.zabbix_client import (
     health_label,
     matching_containers,
     parse_container_items,
     unhealthy_containers,
 )
+from felt_core.config import reveal
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "get_container_status"
 description = "Whether a server service/container is running and healthy; with no name, which ones are failing."

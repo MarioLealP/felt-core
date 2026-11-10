@@ -9,9 +9,9 @@ import logging
 
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
-from felt_core.api import app
-from felt_core.local_llm import LocalLLMUnavailable
+import felt_core.api.app as api
+from felt_core.api.app import app
+from felt_core.clients.local_llm import LocalLLMUnavailable
 
 
 def test_chat_ws_happy_path_still_works(tmp_path, monkeypatch, fake_llm):
@@ -50,7 +50,7 @@ def test_chat_ws_logs_and_closes_on_an_unexpected_error(tmp_path, monkeypatch, c
     monkeypatch.setattr(api, "chat", broken_chat)
 
     with (
-        caplog.at_level(logging.ERROR, logger="felt_core.api"),
+        caplog.at_level(logging.ERROR, logger="felt_core.api.app"),
         TestClient(app) as client,
         client.websocket_connect("/v1/chat/ws") as ws,
     ):
@@ -70,7 +70,7 @@ def test_chat_ws_client_disconnect_is_logged_at_info_not_error(tmp_path, monkeyp
     fake_llm.default = "hi there"
 
     with (
-        caplog.at_level(logging.INFO, logger="felt_core.api"),
+        caplog.at_level(logging.INFO, logger="felt_core.api.app"),
         TestClient(app) as client,
         client.websocket_connect("/v1/chat/ws") as ws,
     ):

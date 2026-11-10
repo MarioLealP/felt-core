@@ -1,4 +1,4 @@
-from felt_core.speech import speech_chunks, tts_request_body
+from felt_core.core.speech import speech_chunks, tts_request_body
 
 
 def test_empty_text_has_no_chunks():

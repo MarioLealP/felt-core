@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
+import felt_core.api.app as api
 
 
 def test_v1_chat_carries_felt_presence_ui_action(tmp_path, monkeypatch, fake_llm):

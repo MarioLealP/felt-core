@@ -13,8 +13,8 @@ from felt_core.brain.lookup_claims import (
     refuses_a_tool_job,
 )
 from felt_core.config import FeltConfig
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.models.plugin import SkillResult
 
 
 @pytest.mark.parametrize(
@@ -265,7 +265,7 @@ async def test_forced_retry_without_a_tool_keeps_the_reply(tmp_path, monkeypatch
 
 
 async def test_forced_retry_error_keeps_the_reply(tmp_path, monkeypatch, fake_llm, caplog):
-    from felt_core import local_llm
+    from felt_core.clients import local_llm
 
     monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _registry([]))
     fake_llm.script = [

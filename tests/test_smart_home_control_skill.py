@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx2
 
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.models.plugin import ExecutionContext
 
 _spec = importlib.util.spec_from_file_location(
     "smart_home_control_skill", Path(__file__).parents[1] / "plugins/smart_home_control/skill.py"

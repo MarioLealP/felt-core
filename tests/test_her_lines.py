@@ -4,11 +4,13 @@ Margins and her own history even when the desktop never caught them."""
 
 from datetime import datetime, timedelta
 
-from felt_core import emails, local_llm
-from felt_core.alarms import _fire_at
-from felt_core.asides import current_asides
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.core import emails
+from felt_core.core.alarms import _fire_at
+from felt_core.core.asides import current_asides
+from felt_core.core.proactive import enqueue_proactive
+from felt_core.db.store import (
     ALARM,
     APP_SESSION,
     EMAIL,
@@ -17,7 +19,6 @@ from felt_core.db import (
     get_history,
     save_alarm,
 )
-from felt_core.proactive import enqueue_proactive
 
 
 def _config(tmp_path) -> FeltConfig:

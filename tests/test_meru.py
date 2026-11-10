@@ -1,4 +1,4 @@
-"""felt_core.meru (D127): her Meru certificate against a stand-in drive-rag that requires one, and
+"""felt_core.clients.meru (D127): her Meru certificate against a stand-in drive-rag that requires one, and
 the per-callee Authentik tokens (client credentials with her pod's own token as the assertion)."""
 
 import shutil
@@ -12,7 +12,7 @@ from urllib.parse import parse_qs
 import httpx2
 import pytest
 
-from felt_core import meru
+from felt_core.clients import meru
 
 pytestmark = pytest.mark.asyncio
 NAME = "drive-rag.drive-rag.svc"

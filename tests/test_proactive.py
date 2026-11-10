@@ -4,9 +4,9 @@ logic against a tmp db), and the four /v1/proactive/* endpoints."""
 import httpx2
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
+import felt_core.api.app as api
 from felt_core.config import FeltConfig
-from felt_core.proactive import clamp_timeout, enqueue_proactive, wait_for_next
+from felt_core.core.proactive import clamp_timeout, enqueue_proactive, wait_for_next
 
 
 def _config(tmp_path, **kwargs):
@@ -210,7 +210,7 @@ async def test_enqueue_inside_the_loop_presynthesises_and_audio_joins_it(tmp_pat
     import asyncio
     from types import SimpleNamespace
 
-    from felt_core import proactive, tts_cache
+    from felt_core.core import proactive, tts_cache
 
     calls = []
     gate = asyncio.Event()

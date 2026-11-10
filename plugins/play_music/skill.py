@@ -11,15 +11,15 @@ Mario 2026-10-18: "make it different things, add to queue or play").
 
 import httpx2
 
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
-from felt_core.spotify_client import (
+from felt_core.clients.spotify_client import (
     NoActivePlayer,
     add_to_queue,
     format_track_name,
     search_track,
     start_track,
 )
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "play_music"
 description = (

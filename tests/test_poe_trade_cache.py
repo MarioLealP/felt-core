@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from felt_core.poe_trade_cache import _build_name_index, seconds_until_next_refresh
+from felt_core.clients.poe_trade_cache import _build_name_index, seconds_until_next_refresh
 
 _TZ = ZoneInfo("Europe/Lisbon")
 

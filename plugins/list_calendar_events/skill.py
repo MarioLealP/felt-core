@@ -10,8 +10,7 @@ from datetime import datetime
 
 import httpx2
 
-from felt_core.date_resolution import resolve_date
-from felt_core.ha_calendar import (
+from felt_core.clients.ha_calendar import (
     TZ,
     connected,
     day_bounds,
@@ -19,8 +18,9 @@ from felt_core.ha_calendar import (
     list_events,
     summarize_events,
 )
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.core.date_resolution import resolve_date
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "list_calendar_events"
 description = "What's on Mario's calendars on a day (default today)."

@@ -9,8 +9,8 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
-from felt_core import ha_api, ha_auth
+import felt_core.api.app as api
+from felt_core.api import ha_api, ha_auth
 from felt_core.brain.result import ChatResult
 
 ISS = "https://auth.clockmost.com/application/o/ha-felt/"

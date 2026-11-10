@@ -1,5 +1,5 @@
 """WP-26: "what did I do yesterday?" / "how was my week?" - answered
-straight from the diary (felt_core.diary/db.py), not a fresh model guess.
+straight from the diary (felt_core.core.diary/db.py), not a fresh model guess.
 Smallest viable version: no LLM call of its own, just the stored entry/
 summary text handed back for the normal skill-phrasing step to voice
 naturally (plugins/skills.json marks this "public" - the diary text is
@@ -8,10 +8,10 @@ already cloud-safe by construction, WP-26's own privacy line).
 
 from datetime import UTC, datetime, timedelta
 
-from felt_core.db import get_diary, get_latest_diary_week
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
-from felt_core.self_memory import LISBON
+from felt_core.core.params import get_single_param
+from felt_core.core.self_memory import LISBON
+from felt_core.db.store import get_diary, get_latest_diary_week
+from felt_core.models.plugin import SkillResult
 
 name = "diary_recall"
 description = (

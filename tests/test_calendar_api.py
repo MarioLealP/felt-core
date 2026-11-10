@@ -1,7 +1,7 @@
 """The desktop agenda route (2026-10-15): pure shaping + who may call it."""
 
-from felt_core.calendar_api import agenda_items
-from felt_core.machine_auth import authorize
+from felt_core.api.calendar_api import agenda_items
+from felt_core.api.machine_auth import authorize
 
 _W = "spiffe://clockmost.internal/workload/"
 

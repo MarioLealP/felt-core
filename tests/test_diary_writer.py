@@ -6,10 +6,10 @@ Sunday's weekly compression."""
 import json
 from datetime import date, timedelta
 
-import felt_core.db as db
-import felt_core.diary as diary
+import felt_core.core.diary as diary
+import felt_core.db.store as db
+from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
-from felt_core.local_llm import LocalLLMUnavailable
 
 
 def _config(tmp_path, **kwargs):

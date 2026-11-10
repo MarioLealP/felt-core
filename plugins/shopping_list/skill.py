@@ -8,9 +8,9 @@ shopping list" fills `items`, one entry each - she splits them, not a rule
 here, so "mac and cheese" stays one thing.
 """
 
-from felt_core import shopping
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.clients import shopping
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "shopping_list"
 description = "The shopping list: add, remove or read items (not remember_fact)."

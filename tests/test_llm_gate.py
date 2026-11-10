@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from felt_core import llm_gate
+from felt_core.core import llm_gate
 
 
 @pytest.fixture(autouse=True)
@@ -90,8 +90,8 @@ async def test_unmarked_calls_are_chat_and_errors_pass_through():
 def test_a_skipped_screen_reaction_is_no_reaction_not_an_outage(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from felt_core import local_llm
-    from felt_core.api import app
+    from felt_core.api.app import app
+    from felt_core.clients import local_llm
 
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
 

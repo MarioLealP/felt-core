@@ -8,16 +8,16 @@ import random
 import httpx2
 import pytest
 
-from felt_core import local_llm
 from felt_core.brain import orchestrator
 from felt_core.brain.lookup_claims import claims_a_tool_use
 from felt_core.brain.result import ChatResult
 from felt_core.brain.streaming import ReplyMeta
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import get_history
-from felt_core.plugin import SkillResult, UIAction
-from felt_core.plugin_loader import LoadedSkill
-from felt_core.speech import SpeechChunker, speech_chunks
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.core.speech import SpeechChunker, speech_chunks
+from felt_core.db.store import get_history
+from felt_core.models.plugin import SkillResult, UIAction
 
 
 def _config(tmp_path, **kwargs):

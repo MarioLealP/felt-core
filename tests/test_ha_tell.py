@@ -3,8 +3,9 @@ desk and on the phone."""
 
 import pytest
 
-from felt_core import features, ha_tell, local_llm, phone
+from felt_core.clients import local_llm, phone
 from felt_core.config import FeltConfig
+from felt_core.core import features, ha_tell
 
 
 @pytest.fixture

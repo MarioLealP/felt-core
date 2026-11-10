@@ -28,8 +28,8 @@ touched.
 import httpx2
 
 from felt_core.config import reveal
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "smart_home_control"
 description = (

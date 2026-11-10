@@ -7,9 +7,9 @@ import httpx2
 import pytest
 from conftest import load_plugin_module
 
-from felt_core import shopping
+from felt_core.clients import shopping
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.models.plugin import ExecutionContext
 
 MILK = "0e2d6f2e8b764d4ebcef36de5d99d0ab"
 EGGS = "1f3e7a3f9c875e5fcdf047ef6eaae1bc"

@@ -23,8 +23,6 @@ from collections.abc import AsyncIterator, Callable
 
 import httpx2
 
-from felt_core import emails, features, ha_assist, local_llm, metrics
-from felt_core.animation import resolve_animation_tag
 from felt_core.brain import router
 from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
 from felt_core.brain.lookup_claims import claims_a_tool_use, claims_an_action
@@ -39,18 +37,21 @@ from felt_core.brain.replies import (
 )
 from felt_core.brain.result import ChatResult
 from felt_core.brain.streaming import ReplyMeta, ReplySpeaker, correction_note
+from felt_core.clients import ha_assist, local_llm
+from felt_core.clients.spotify_client import music_playing_cached
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.core import emails, features, metrics
+from felt_core.core.animation import resolve_animation_tag
+from felt_core.core.plugin_loader import LoadedSkill, load_plugins
+from felt_core.core.tools import run_skill
+from felt_core.db.store import (
     get_current_screen_description,
     get_her_recent_lines,
     get_history,
     save_message,
 )
 from felt_core.dj import control as dj_control
-from felt_core.plugin import ExecutionContext
-from felt_core.plugin_loader import LoadedSkill, load_plugins
-from felt_core.spotify_client import music_playing_cached
-from felt_core.tools import run_skill
+from felt_core.models.plugin import ExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -571,11 +572,11 @@ async def chat(
 
     save_message(config.db_path, session_id, "user", message)
     # any message from him, on any device, can start her day (diary.py)
-    from felt_core.diary import he_is_here
+    from felt_core.core.diary import he_is_here
 
     he_is_here(config)
 
-    from felt_core import appointment_hold
+    from felt_core.core import appointment_hold
 
     try:
         return await _chat_local(message, config, session_id, tone, registry, history, speaker)

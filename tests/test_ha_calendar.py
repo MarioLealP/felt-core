@@ -5,8 +5,7 @@ from datetime import date, datetime
 
 import httpx2
 
-from felt_core.config import FeltConfig
-from felt_core.ha_calendar import (
+from felt_core.clients.ha_calendar import (
     TZ,
     day_bounds,
     format_event_line,
@@ -18,6 +17,7 @@ from felt_core.ha_calendar import (
     summarize_events,
     writable,
 )
+from felt_core.config import FeltConfig
 
 CONFIG = FeltConfig(ha_url="http://ha", ha_token="t")
 

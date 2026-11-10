@@ -7,18 +7,17 @@ below are public on purpose). Every function here raises
 fallback, callers let it propagate (the API maps it to a 503).
 """
 
-from felt_core import local_llm
-
 # Re-exported (not just used internally) so callers that already hold
 # `felt_core.brain.replies` - tests, mainly - can read the constant from
 # here too, without a second import of .personality.
 from felt_core.brain.personality import PERSONALITY_PROMPT as PERSONALITY_PROMPT
 from felt_core.brain.personality import daily_persona, per_call_context, with_context
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import get_all_facts, get_music_taste_stats
-from felt_core.music_taste import summarize_taste
-from felt_core.plugin_loader import LoadedSkill
-from felt_core.self_memory import memory_block
+from felt_core.core.music_taste import summarize_taste
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.core.self_memory import memory_block
+from felt_core.db.store import get_all_facts, get_music_taste_stats
 
 # A safety ceiling, not a length budget (FELT-71, Mario 10-02: "It's self
 # hosted, we dont need token cap"). Her persona keeps replies short on its own

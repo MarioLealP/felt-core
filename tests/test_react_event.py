@@ -7,17 +7,17 @@ from urllib.parse import unquote
 import pytest
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
-import felt_core.events as events
+import felt_core.api.app as api
+import felt_core.core.events as events
+from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.db.store import (
     get_history,
     get_recent_observations,
     save_observation,
     seconds_since_last_spoken_reaction,
     set_observation_reply,
 )
-from felt_core.local_llm import LocalLLMUnavailable
 
 _TRACK = {"title": "Song A", "artist": "Artist A", "album": "Album A"}
 
@@ -338,7 +338,7 @@ async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_scr
 
 
 async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fake_llm):
-    import felt_core.db as db
+    import felt_core.db.store as db
 
     config = _config(tmp_path)
     fake_llm.script = ["Missed me already?", "missed me already!", "Freedom! Finally!"]
@@ -357,7 +357,7 @@ async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fak
 
 
 async def test_unhushed_gives_up_rather_than_repeat(tmp_path, fake_llm):
-    import felt_core.db as db
+    import felt_core.db.store as db
 
     config = _config(tmp_path)
     db.save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")

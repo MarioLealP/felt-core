@@ -5,7 +5,7 @@ herself less (remarks, events and pushes all see the same list)."""
 import asyncio
 
 from felt_core.brain import orchestrator
-from felt_core.db import (
+from felt_core.db.store import (
     ALARM,
     APP_SESSION,
     EMAIL,

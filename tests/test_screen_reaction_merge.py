@@ -11,7 +11,7 @@ import json
 
 import felt_core.brain.screen_reactions as screen_reactions
 from felt_core.config import FeltConfig
-from felt_core.db import save_observation, set_observation_reply
+from felt_core.db.store import save_observation, set_observation_reply
 
 # -- _on_cooldown: the pure(ish) truth table, isolated from either caller ---
 

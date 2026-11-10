@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from felt_core.api import app
+from felt_core.api.app import app
 
 
 def _client(tmp_path, monkeypatch, token=None):
@@ -70,7 +70,7 @@ def test_websocket_needs_the_token_too(tmp_path, monkeypatch):
 @pytest.fixture
 def fake_ha(monkeypatch):
     """The shopping list lives in Home Assistant (shopping.py): answer for it."""
-    from felt_core import shopping
+    from felt_core.clients import shopping
 
     async def ha(*_args, **_kwargs):
         return {}

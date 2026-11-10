@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
-from felt_core.date_resolution import (
+from felt_core.core.date_resolution import (
     day_only,
     fix_typos,
     has_clock,

@@ -5,9 +5,9 @@ cooldown), callback decay, and memory_block's hard budget."""
 import json
 from datetime import UTC, datetime, timedelta
 
-import felt_core.self_memory as self_memory
+import felt_core.core.self_memory as self_memory
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.db.store import (
     get_self_memories,
     insert_diary,
     insert_self_memory,

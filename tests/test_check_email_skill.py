@@ -1,8 +1,8 @@
 from conftest import load_plugin_module
 
-from felt_core import emails
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.core import emails
+from felt_core.models.plugin import ExecutionContext
 
 
 def _load_skill(name: str = "check_email"):

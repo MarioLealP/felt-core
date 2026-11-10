@@ -1,4 +1,4 @@
-"""felt_core.felt_tls.voice_client against a real test PKI shaped like
+"""felt_core.clients.felt_tls.voice_client against a real test PKI shaped like
 clockmost's (root -> name-constrained pki_felt-style intermediate -> leaves)
 and a stand-in felt-voice that requires a client cert (WP-62 M2b B5.1)."""
 
@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import httpx2
 import pytest
 
-from felt_core.felt_tls import voice_client
+from felt_core.clients.felt_tls import voice_client
 
 pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="needs the openssl CLI")
 NAME = "felt-voice.felt.internal"
@@ -221,7 +221,7 @@ def test_plain_http_unchanged():
 @pytest.mark.asyncio
 async def test_felt_client_for_another_peer(pki):
     """drive-rag (B5.2): the same mTLS for any Felt peer URL."""
-    from felt_core.felt_tls import felt_client
+    from felt_core.clients.felt_tls import felt_client
 
     port, seen = _server(pki, "voice", "feltint")  # any felt.internal server cert will do
     cfg = SimpleNamespace(voice_url=None, identity_dir=str(pki / "identity"))
@@ -232,7 +232,7 @@ async def test_felt_client_for_another_peer(pki):
 
 
 def test_felt_client_plain_url_unchanged():
-    from felt_core.felt_tls import felt_client
+    from felt_core.clients.felt_tls import felt_client
 
     c = felt_client(SimpleNamespace(identity_dir="/nope"), "http://drive-rag:8000")
     assert isinstance(c, httpx2.AsyncClient)

@@ -27,9 +27,9 @@ from urllib.parse import quote
 
 import httpx2
 
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
-from felt_core.poe_trade_cache import load_cache
+from felt_core.clients.poe_trade_cache import load_cache
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "poe_price_check"
 description = "Current market price of a Path of Exile 2 item or currency."

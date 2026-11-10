@@ -1,6 +1,6 @@
 """WP-25 db helpers: insert/claim/requeue/prune for the proactive queue."""
 
-from felt_core.db import (
+from felt_core.db.store import (
     claim_next_proactive,
     get_proactive_item,
     insert_proactive,

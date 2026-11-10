@@ -6,9 +6,9 @@ test_poe_price_check_skill.py."""
 import pytest
 from conftest import load_plugin_module
 
+from felt_core.clients.poe_trade_cache import refresh
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
-from felt_core.poe_trade_cache import refresh
+from felt_core.models.plugin import ExecutionContext
 
 skill = load_plugin_module("poe_price_check/skill.py")
 

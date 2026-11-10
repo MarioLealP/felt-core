@@ -110,7 +110,7 @@ def _no_morning_brief(request, monkeypatch):
     replies. Off everywhere but test_brief.py."""
     if request.module.__name__.endswith("test_brief"):
         return
-    from felt_core import brief
+    from felt_core.core import brief
 
     async def no_brief(*a, **k):
         return None
@@ -159,7 +159,7 @@ class FakeLLM:
         json_schema=None,
         config,
     ):
-        from felt_core import local_llm
+        from felt_core.clients import local_llm
 
         self.calls.append(
             {
@@ -175,7 +175,7 @@ class FakeLLM:
         return self._next()
 
     def _next(self):
-        from felt_core import local_llm
+        from felt_core.clients import local_llm
 
         item = self.script.pop(0) if self.script else self.default
         if isinstance(item, Exception):
@@ -191,7 +191,7 @@ class FakeLLM:
         `on_text` a few characters at a time (none for a tool call), with a
         yield to the event loop between pieces. `streaming` is True while
         pieces are still coming."""
-        from felt_core import local_llm
+        from felt_core.clients import local_llm
 
         self.calls.append(
             {
@@ -217,7 +217,7 @@ class FakeLLM:
 @pytest.fixture
 def fake_llm(monkeypatch):
     """Replaces felt-llm for the test; see FakeLLM."""
-    from felt_core import local_llm
+    from felt_core.clients import local_llm
 
     fake = FakeLLM()
     monkeypatch.setattr(local_llm, "chat", fake.chat)

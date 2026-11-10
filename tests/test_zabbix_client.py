@@ -1,4 +1,4 @@
-from felt_core.zabbix_client import (
+from felt_core.clients.zabbix_client import (
     health_label,
     matching_containers,
     parse_container_items,

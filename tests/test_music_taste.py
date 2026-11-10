@@ -1,4 +1,4 @@
-from felt_core.music_taste import is_skip, summarize_taste
+from felt_core.core.music_taste import is_skip, summarize_taste
 
 
 def test_is_skip_true_when_stopped_before_threshold():

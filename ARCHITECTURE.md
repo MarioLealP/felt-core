@@ -38,7 +38,7 @@ conversation/state persistence, and the local-vs-cloud routing policy.
 
 - `src/felt_core/__init__.py::main()` — CLI entry (`felt-core` script);
   thin wrapper, not used in the deployed container.
-- `src/felt_core/api.py::run()` — the deployed entry (`felt-core-serve`
+- `src/felt_core/api/app.py::run()` — the deployed entry (`felt-core-serve`
   script, and the `Dockerfile`'s `CMD`). Calls `uvicorn.run(app, …)`.
 - `api.py::app` (FastAPI instance) with `lifespan()` starting four
   background tasks on boot: `ntfy_listen`, `email_watch`,
@@ -125,7 +125,7 @@ to HA's todo list (`shopping.py`), like the voice skill.
 
 ## 5. Interfaces
 
-### HTTP/WS endpoints (all in `src/felt_core/api.py`)
+### HTTP/WS endpoints (all in `src/felt_core/api/app.py`)
 
 | method | path | handler |
 |---|---|---|

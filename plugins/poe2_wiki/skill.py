@@ -5,9 +5,9 @@ fully local, so this uses /api/search and hands the passages to her own
 model to answer from.
 """
 
-from felt_core.felt_tls import machine_client
-from felt_core.meru import auth_headers
-from felt_core.plugin import SkillResult
+from felt_core.clients.felt_tls import machine_client
+from felt_core.clients.meru import auth_headers
+from felt_core.models.plugin import SkillResult
 
 name = "poe2_wiki"
 description = (

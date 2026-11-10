@@ -1,6 +1,6 @@
-from felt_core.animation import resolve_animation_tag
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core.animation import resolve_animation_tag
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.models.plugin import SkillResult
 
 
 async def _unused_handle(params, ctx):

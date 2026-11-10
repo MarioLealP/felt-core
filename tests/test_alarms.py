@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta
 
-from felt_core.alarms import (
+from felt_core.config import FeltConfig
+from felt_core.core.alarms import (
     _fire_at,
     alarm_facts,
     plain_alarm,
     reschedule_pending_alarms,
     schedule_alarm,
 )
-from felt_core.config import FeltConfig
-from felt_core.db import get_pending_alarms, save_alarm
+from felt_core.db.store import get_pending_alarms, save_alarm
 
 
 def _config(tmp_path) -> FeltConfig:
@@ -44,7 +44,7 @@ async def test_reschedule_pending_alarms_schedules_one_task_per_pending_row(tmp_
     save_alarm(config.db_path, (datetime.now() + timedelta(hours=2)).isoformat(), "two")
 
     scheduled = []
-    monkeypatch.setattr("felt_core.alarms.asyncio.create_task", lambda coro: scheduled.append(coro))
+    monkeypatch.setattr("felt_core.core.alarms.asyncio.create_task", lambda coro: scheduled.append(coro))
 
     reschedule_pending_alarms(config)
 
@@ -74,7 +74,7 @@ async def test_alarm_in_her_words(tmp_path, monkeypatch, fake_llm):
         sent.append(text)
         return True
 
-    monkeypatch.setattr("felt_core.alarms.notify", fake_notify)
+    monkeypatch.setattr("felt_core.core.alarms.notify", fake_notify)
     fake_llm.script = ['"Up you get - stretch time!"']
     alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now(), "stretch")
@@ -83,7 +83,7 @@ async def test_alarm_in_her_words(tmp_path, monkeypatch, fake_llm):
 
 
 async def test_alarm_plain_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm):
-    from felt_core import local_llm
+    from felt_core.clients import local_llm
 
     config = _config(tmp_path)
     sent: list[str] = []
@@ -92,7 +92,7 @@ async def test_alarm_plain_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm
         sent.append(text)
         return True
 
-    monkeypatch.setattr("felt_core.alarms.notify", fake_notify)
+    monkeypatch.setattr("felt_core.core.alarms.notify", fake_notify)
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
     alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now(), "stretch")

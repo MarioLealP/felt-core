@@ -23,14 +23,15 @@ import json
 import logging
 import re
 
-from felt_core import features, local_llm, metrics, vision
-from felt_core.asides import schedule_pick
 from felt_core.brain import poe_reactions
 from felt_core.brain.personality import daily_persona, per_call_context, with_context
 from felt_core.brain.replies import EMOTIONS, local_reply
 from felt_core.brain.result import ChatResult
+from felt_core.clients import local_llm, vision
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.core import features, metrics
+from felt_core.core.asides import schedule_pick
+from felt_core.db.store import (
     REMARK,
     get_her_recent_lines,
     get_history,

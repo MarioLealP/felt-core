@@ -10,10 +10,10 @@ place and only then deletes the old one.
 
 from datetime import datetime
 
-from felt_core import appointment_hold
-from felt_core.ha_calendar import TZ, connected, last_created
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.clients.ha_calendar import TZ, connected, last_created
+from felt_core.core import appointment_hold
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "set_event_location"
 description = (

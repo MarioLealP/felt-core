@@ -11,10 +11,10 @@ instead of the 30/10-minute heads-ups.
 import re
 from datetime import datetime, timedelta
 
-from felt_core.date_resolution import has_clock, resolve_datetime
-from felt_core.ha_calendar import TZ, CalendarUnavailable, connected, create_event
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.clients.ha_calendar import TZ, CalendarUnavailable, connected, create_event
+from felt_core.core.date_resolution import has_clock, resolve_datetime
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "set_reminder"
 description = (

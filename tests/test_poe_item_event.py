@@ -2,8 +2,8 @@
 
 import asyncio
 
-from felt_core import events
 from felt_core.brain import poe_reactions
+from felt_core.core import events
 
 UNIQUE = """Item Class: Rings
 Rarity: Unique

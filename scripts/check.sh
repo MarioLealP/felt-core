@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Every check CI runs, runnable locally: lint, format, types, file size, layout, TLS checks, the lockfile, pip-audit, tests.
-# Meru/nuwa-python's check.sh, with one difference: felt-core predates the standard, so the file-size and layout checks
-# read a baseline (scripts/baseline/) of what failed on 2026-11-10. A file that fails and isn't listed fails the check,
-# and so does a listed file that no longer fails - fix a file, delete its line.
+# Meru/nuwa-python's check.sh, with one difference: felt-core predates the standard, so the file-size check reads a
+# baseline (scripts/baseline/) of what failed on 2026-11-10. A file that fails and isn't listed fails the check, and so
+# does a listed file that no longer fails - fix a file, delete its line.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # one sort order everywhere: comm needs both sides sorted the same way (a laptop locale sorts _ differently)
@@ -38,8 +38,10 @@ step "no source file over 500 lines"
 find src plugins -name '*.py' -exec awk 'FNR == 501 { print FILENAME }' {} + |
   against_baseline scripts/baseline/over-500.txt "source files over 500 lines"
 step "layout: only __init__, __main__ and config at the top of src/<app>"
-find src -mindepth 2 -maxdepth 2 -name '*.py' ! -name __init__.py ! -name __main__.py ! -name config.py |
-  against_baseline scripts/baseline/loose-modules.txt "modules at the top of src/felt_core - move them into a folder"
+if find src -mindepth 2 -maxdepth 2 -name '*.py' ! -name __init__.py ! -name __main__.py ! -name config.py | grep .; then
+  echo "modules at the top of src/felt_core - move them into a folder (STANDARDS.md, Layout)"
+  exit 1
+fi
 step "TLS checks stay on"
 # ruff's rule for this only knows requests and httpx by name, not httpx2.
 if grep -rn 'verify=False' src plugins; then

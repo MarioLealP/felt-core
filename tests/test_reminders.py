@@ -7,10 +7,10 @@ from datetime import UTC, datetime, timedelta
 
 from conftest import load_plugin_module
 
-from felt_core import calendar_headsup as ch
-from felt_core import ha_calendar
+from felt_core.clients import ha_calendar
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.core import calendar_headsup as ch
+from felt_core.models.plugin import ExecutionContext
 
 
 def _config(tmp_path):

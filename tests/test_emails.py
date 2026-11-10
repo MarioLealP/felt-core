@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from felt_core import emails, features, local_llm
 from felt_core.brain import orchestrator
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import EMAIL, _connect
+from felt_core.core import emails, features
+from felt_core.db.store import EMAIL, _connect
 
 _spec = importlib.util.spec_from_file_location(
     "felt_ha_mail", Path(__file__).parent.parent / "ha/custom_components/felt/mail.py"

@@ -12,10 +12,10 @@ later.
 
 import asyncio
 
-from felt_core.notify import notify
-from felt_core.params import get_single_param
-from felt_core.phone import PhoneUnavailable, start_timer
-from felt_core.plugin import SkillResult
+from felt_core.clients.notify import notify
+from felt_core.clients.phone import PhoneUnavailable, start_timer
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "set_timer"
 description = "Sets a countdown timer for N minutes on Mario's phone."

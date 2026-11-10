@@ -14,7 +14,6 @@ import time
 
 import httpx2
 
-from felt_core import features, llm_gate, local_llm, song_remarks, tts_cache
 from felt_core.brain.personality import PERSONALITY_PROMPT
 from felt_core.brain.replies import (
     _REPLY_MAX_TOKENS,
@@ -22,16 +21,18 @@ from felt_core.brain.replies import (
     local_turn_messages,
     skill_tools,
 )
+from felt_core.clients import local_llm
+from felt_core.clients.felt_tls import voice_client
+from felt_core.clients.spotify_client import felt_skipped, get_currently_playing
 from felt_core.config import FeltConfig
-from felt_core.db import record_music_play
+from felt_core.core import features, llm_gate, song_remarks, tts_cache
+from felt_core.core.music_taste import is_skip
+from felt_core.core.plugin_loader import load_plugins
+from felt_core.core.speech import strip_for_tts
+from felt_core.core.tools import run_skill
+from felt_core.db.store import record_music_play
 from felt_core.dj import control as dj_control
-from felt_core.felt_tls import voice_client
-from felt_core.music_taste import is_skip
-from felt_core.plugin import ExecutionContext
-from felt_core.plugin_loader import load_plugins
-from felt_core.speech import strip_for_tts
-from felt_core.spotify_client import felt_skipped, get_currently_playing
-from felt_core.tools import run_skill
+from felt_core.models.plugin import ExecutionContext
 
 logger = logging.getLogger(__name__)
 

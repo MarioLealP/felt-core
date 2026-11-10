@@ -5,9 +5,9 @@ Also "more like this" / "not this" about the current song.
 
 import httpx2
 
+from felt_core.core.params import get_single_param
 from felt_core.dj import control
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.models.plugin import SkillResult
 
 name = "dj_mode"
 description = (

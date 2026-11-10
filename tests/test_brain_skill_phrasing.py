@@ -5,9 +5,9 @@ import felt_core.brain.background as background
 import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
 from felt_core.config import FeltConfig
-from felt_core.db import save_fact
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.db.store import save_fact
+from felt_core.models.plugin import SkillResult
 
 
 def _config(tmp_path, **kwargs):

@@ -5,11 +5,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from felt_core import brief, db, features, local_llm, phone
+from felt_core.clients import local_llm, phone
 from felt_core.config import FeltConfig
-from felt_core.incidents import _connect, _ensure
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core import brief, features
+from felt_core.core.incidents import _connect, _ensure
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.db import store as db
+from felt_core.models.plugin import SkillResult
 
 MORNING = datetime(2026, 10, 23, 7, 30, tzinfo=UTC)  # 08:30 in Lisbon (WEST)
 

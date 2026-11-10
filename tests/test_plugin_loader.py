@@ -1,4 +1,4 @@
-from felt_core.plugin_loader import load_plugins
+from felt_core.core.plugin_loader import load_plugins
 
 _VALID_SKILL = """
 name = "example_skill"

@@ -3,8 +3,8 @@ per identity per route, deny by default, serial deny list."""
 
 from fastapi.testclient import TestClient
 
-from felt_core.api import app
-from felt_core.machine_auth import MACHINE_ROUTES, authorize
+from felt_core.api.app import app
+from felt_core.api.machine_auth import MACHINE_ROUTES, authorize
 
 W = "spiffe://clockmost.internal/workload/"
 

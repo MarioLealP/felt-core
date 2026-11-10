@@ -21,10 +21,10 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from felt_core import local_llm
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.plugin import UIAction
-from felt_core.speech import SpeechChunker
+from felt_core.core.speech import SpeechChunker
+from felt_core.models.plugin import UIAction
 
 logger = logging.getLogger(__name__)
 

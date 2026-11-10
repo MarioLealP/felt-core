@@ -29,11 +29,12 @@ from urllib.parse import parse_qs
 import httpx2
 from pydantic import BaseModel, Field
 
-from felt_core import appointment_hold, features, ha_calendar
 from felt_core.brain import router
 from felt_core.brain.orchestrator import chat, chat_streamed
 from felt_core.brain.result import ChatResult
+from felt_core.clients import ha_calendar
 from felt_core.config import load_config
+from felt_core.core import appointment_hold, features
 
 
 def _llm_hosts() -> set[str]:

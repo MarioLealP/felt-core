@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from felt_core import alert_lines, incidents, notices, responder
-from felt_core.api import app
+from felt_core.api.app import app
+from felt_core.core import alert_lines, incidents, notices, responder
 
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 

@@ -4,8 +4,8 @@ import json
 
 from felt_core.brain import poe_reactions, screen_reactions
 from felt_core.config import FeltConfig
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.models.plugin import SkillResult
 
 
 def _config(tmp_path, **kwargs):

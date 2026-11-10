@@ -2,8 +2,8 @@
 2026-10-18 - KDE Connect went with the Windows desktop agent).
 """
 
-from felt_core.phone import PhoneUnavailable, battery
-from felt_core.plugin import SkillResult
+from felt_core.clients.phone import PhoneUnavailable, battery
+from felt_core.models.plugin import SkillResult
 
 name = "get_phone_battery"
 description = "Mario's phone battery level."

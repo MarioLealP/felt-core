@@ -1,4 +1,4 @@
-from felt_core.params import get_single_param
+from felt_core.core.params import get_single_param
 
 
 def test_exact_key_match():

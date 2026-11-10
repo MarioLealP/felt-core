@@ -5,9 +5,9 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from felt_core import alert_lines, incidents, responder, systems
-from felt_core.api import app
-from felt_core.asides import remark_text
+from felt_core.api.app import app
+from felt_core.core import alert_lines, incidents, responder, systems
+from felt_core.core.asides import remark_text
 
 LINKS = {"zabbix": "https://zabbix.example", "wazuh": "https://wazuh.example"}
 

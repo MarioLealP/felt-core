@@ -7,7 +7,7 @@ import json
 
 import httpx2
 
-from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, parse_lrc
+from felt_core.clients.lyrics_client import current_line, find_chorus, get_lyrics, parse_lrc
 
 _SAMPLE_LRC = (
     "[ar:Test Artist]\n"
@@ -281,7 +281,7 @@ def test_find_chorus_merges_adjacent_chorus_lines_into_one_window():
 
 
 def test_with_end_times_uses_the_next_line_start():
-    from felt_core.lyrics_client import with_end_times
+    from felt_core.clients.lyrics_client import with_end_times
 
     timed = with_end_times([{"time_ms": 0, "text": "a"}, {"time_ms": 2500, "text": "b"}])
 
