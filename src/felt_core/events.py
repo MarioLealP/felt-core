@@ -24,10 +24,10 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from felt_core import local_llm, metrics
 from felt_core.asides import schedule_pick
@@ -45,8 +45,9 @@ from felt_core.db import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class EventPolicy:
+class EventPolicy(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     # Minimum seconds between two spoken lines for this event type.
     cooldown_s: int
     # Minimum seconds before the SAME thing (same track, same game) gets a
@@ -93,11 +94,12 @@ _EVENT_INSTRUCTION = (
 )
 
 
-@dataclass(frozen=True)
-class EventReaction:
+class EventReaction(BaseModel):
     """`line` empty = no reaction; `skipped` then says why (cooldown,
     unknown_event, ...).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     line: str = ""
     emotion: str | None = None
@@ -114,8 +116,11 @@ def policies(config: FeltConfig) -> dict[str, EventPolicy]:
             override = {}
         for event, fields in override.items():
             if event in table and isinstance(fields, dict):
-                known = {k: v for k, v in fields.items() if k in EventPolicy.__dataclass_fields__}
-                table[event] = EventPolicy(**{**table[event].__dict__, **known})
+                known = {k: v for k, v in fields.items() if k in EventPolicy.model_fields}
+                try:
+                    table[event] = EventPolicy.model_validate({**table[event].model_dump(), **known})
+                except ValidationError as error:
+                    logger.warning("FELT_EVENT_POLICIES[%s] ignored: %s", event, error)
     return table
 
 

@@ -4,13 +4,12 @@ orchestration, screen reactions, ...) can depend on it with no risk of a
 circular import.
 """
 
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 from felt_core.plugin import UIAction
 
 
-@dataclass
-class ChatResult:
+class ChatResult(BaseModel):
     """What chat() actually produces - a reply plus whatever side-channel
     output the triggered skill (if any) wants relayed: a UI action (e.g.
     a toast) and/or an animation tag for felt-overlay. A plain

@@ -8,7 +8,8 @@ the line later (step 2), it never decides what an alert is.
 """
 
 import re
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 # urgent = loud notification, high = normal, default = in Systems quietly,
 # low = history only (WP-42 8.5)
@@ -18,8 +19,9 @@ TIERS = ("urgent", "high", "default", "low")
 HANDLERS = ("felt", "claude", "drop")
 
 
-@dataclass(frozen=True)
-class AlertType:
+class AlertType(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     pattern: str  # searched in the alert title
     tier: str
@@ -43,84 +45,116 @@ _M = 60
 # Order matters: the first match wins.
 CATALOGUE: tuple[AlertType, ...] = (
     # security -> Claude
-    AlertType("wazuh-test", r"^Wazuh .*TEST", "low", "drop"),
-    AlertType("wazuh-oom", r"^Wazuh .*running out of memory", "default", "felt"),
-    AlertType("wazuh-fim", r"^Wazuh ", "high", "claude", fold_s=30 * _M, group=r"^Wazuh L\d+ \[[^\]]+\]"),
-    AlertType("honeypot", r"^HONEYPOT", "urgent", "claude"),
-    AlertType("authentik-bruteforce", r"authentication-flow execution spike", "high", "claude"),
-    AlertType("crowdsec", r"CrowdSec", "high", "claude", wait_s=10 * _M),
-    AlertType("trivy", r"^Trivy", "default", "claude"),
-    # backups and updates -> Claude handles, he's told
-    AlertType("updates-skipped", r"updates SKIPPED", "urgent", "claude", joins="backup-failed"),
-    AlertType("backup-failed", r"^backup .*FAILED", "urgent", "claude"),
-    AlertType("storage-check", r"storage/backup check", "urgent", "claude"),
-    AlertType("update-reverted", r"update reverted", "high", "claude", joins="update-reverting"),
-    AlertType("update-reverting", r"auto-reverting an update", "high", "claude"),
-    AlertType("ci-failed", r"CI failed|deploy pipeline failed", "high", "claude"),
-    # expected events -> told, not acted on
-    AlertType("update-deployed", r"update deployed", "default", "felt", expected=True, fold_s=60 * _M),
-    AlertType("pre-update-backup", r"pre-update backup", "low", "felt", expected=True),
-    AlertType("weekly-reboot", r"weekly reboot", "default", "felt", expected=True),
-    AlertType("ntfy-upgraded", r"ntfy upgraded", "default", "felt", expected=True),
+    AlertType(name="wazuh-test", pattern=r"^Wazuh .*TEST", tier="low", handler="drop"),
+    AlertType(name="wazuh-oom", pattern=r"^Wazuh .*running out of memory", tier="default", handler="felt"),
     AlertType(
-        "container-version",
-        r"Docker: Container .*Version has changed",
-        "default",
-        "felt",
+        name="wazuh-fim",
+        pattern=r"^Wazuh ",
+        tier="high",
+        handler="claude",
+        fold_s=30 * _M,
+        group=r"^Wazuh L\d+ \[[^\]]+\]",
+    ),
+    AlertType(name="honeypot", pattern=r"^HONEYPOT", tier="urgent", handler="claude"),
+    AlertType(
+        name="authentik-bruteforce", pattern=r"authentication-flow execution spike", tier="high", handler="claude"
+    ),
+    AlertType(name="crowdsec", pattern=r"CrowdSec", tier="high", handler="claude", wait_s=10 * _M),
+    AlertType(name="trivy", pattern=r"^Trivy", tier="default", handler="claude"),
+    # backups and updates -> Claude handles, he's told
+    AlertType(
+        name="updates-skipped", pattern=r"updates SKIPPED", tier="urgent", handler="claude", joins="backup-failed"
+    ),
+    AlertType(name="backup-failed", pattern=r"^backup .*FAILED", tier="urgent", handler="claude"),
+    AlertType(name="storage-check", pattern=r"storage/backup check", tier="urgent", handler="claude"),
+    AlertType(
+        name="update-reverted", pattern=r"update reverted", tier="high", handler="claude", joins="update-reverting"
+    ),
+    AlertType(name="update-reverting", pattern=r"auto-reverting an update", tier="high", handler="claude"),
+    AlertType(name="ci-failed", pattern=r"CI failed|deploy pipeline failed", tier="high", handler="claude"),
+    # expected events -> told, not acted on
+    AlertType(
+        name="update-deployed",
+        pattern=r"update deployed",
+        tier="default",
+        handler="felt",
+        expected=True,
+        fold_s=60 * _M,
+    ),
+    AlertType(name="pre-update-backup", pattern=r"pre-update backup", tier="low", handler="felt", expected=True),
+    AlertType(name="weekly-reboot", pattern=r"weekly reboot", tier="default", handler="felt", expected=True),
+    AlertType(name="ntfy-upgraded", pattern=r"ntfy upgraded", tier="default", handler="felt", expected=True),
+    AlertType(
+        name="container-version",
+        pattern=r"Docker: Container .*Version has changed",
+        tier="default",
+        handler="felt",
         expected=True,
     ),
-    AlertType("host-restarted", r"has been restarted", "default", "felt", expected=True),
+    AlertType(name="host-restarted", pattern=r"has been restarted", tier="default", handler="felt", expected=True),
     # dnf's own updates change the package count
-    AlertType("packages-changed", r"Number of installed packages", "low", "felt", expected=True),
+    AlertType(
+        name="packages-changed", pattern=r"Number of installed packages", tier="low", handler="felt", expected=True
+    ),
     # the desktop's agent goes quiet whenever the PC is off
     AlertType(
-        "pc-agent",
-        r"Windows: (Active checks are not available|Zabbix agent is not available)",
-        "low",
-        "felt",
+        name="pc-agent",
+        pattern=r"Windows: (Active checks are not available|Zabbix agent is not available)",
+        tier="low",
+        handler="felt",
         expected=True,
     ),
     # outages that mostly fix themselves -> wait, then Claude
     AlertType(
-        "authentik-outpost",
-        r"Authentik: (embedded outpost|no worker)",
-        "high",
-        "claude",
+        name="authentik-outpost",
+        pattern=r"Authentik: (embedded outpost|no worker)",
+        tier="high",
+        handler="claude",
         wait_s=15 * _M,
     ),
-    AlertType("caddy-upstream", r"Caddy: an upstream", "high", "claude", wait_s=10 * _M),
-    AlertType("route-check", r"route check failing", "high", "claude", wait_s=10 * _M),
-    AlertType("container-down", r"Docker: Container ", "high", "claude", wait_s=15 * _M),
-    AlertType("pihole-dns", r"Pi-hole", "high", "claude", wait_s=10 * _M),
-    AlertType("home-assistant-vm", r"Home Assistant VM", "high", "claude", wait_s=10 * _M),
+    AlertType(name="caddy-upstream", pattern=r"Caddy: an upstream", tier="high", handler="claude", wait_s=10 * _M),
+    AlertType(name="route-check", pattern=r"route check failing", tier="high", handler="claude", wait_s=10 * _M),
+    AlertType(name="container-down", pattern=r"Docker: Container ", tier="high", handler="claude", wait_s=15 * _M),
+    AlertType(name="pihole-dns", pattern=r"Pi-hole", tier="high", handler="claude", wait_s=10 * _M),
+    AlertType(name="home-assistant-vm", pattern=r"Home Assistant VM", tier="high", handler="claude", wait_s=10 * _M),
     # the rest: she reads and tells
     AlertType(
-        "zabbix-agent",
-        r"Active checks are not available|Zabbix agent is not available",
-        "low",
-        "felt",
+        name="zabbix-agent",
+        pattern=r"Active checks are not available|Zabbix agent is not available",
+        tier="low",
+        handler="felt",
         wait_s=30 * _M,
     ),
-    AlertType("windows-crash", r"unexpected shutdown|Critical-level System log", "high", "felt"),
-    AlertType("disk-space", r"FS \[.*Space is", "high", "felt", wait_s=15 * _M),
-    AlertType("nitro-ollama", r"Ollama service FAILED", "default", "felt"),
-    AlertType("nitro-gpu-hot", r"GPU overheating", "default", "felt"),
-    AlertType("smart", r"SMART:", "default", "felt", wait_s=15 * _M),
-    AlertType("health-check", r"health check: ", "default", "felt"),
-    AlertType("router-network", r"Network Generic Device|Interface Intel", "low", "felt", wait_s=15 * _M),
     AlertType(
-        "host-load",
-        r"(Windows|Linux): (The Memory Pages|High memory|High CPU|CPU privileged|"
-        r"Load average|High swap|nvme)",
-        "default",
-        "felt",
+        name="windows-crash", pattern=r"unexpected shutdown|Critical-level System log", tier="high", handler="felt"
+    ),
+    AlertType(name="disk-space", pattern=r"FS \[.*Space is", tier="high", handler="felt", wait_s=15 * _M),
+    AlertType(name="nitro-ollama", pattern=r"Ollama service FAILED", tier="default", handler="felt"),
+    AlertType(name="nitro-gpu-hot", pattern=r"GPU overheating", tier="default", handler="felt"),
+    AlertType(name="smart", pattern=r"SMART:", tier="default", handler="felt", wait_s=15 * _M),
+    AlertType(name="health-check", pattern=r"health check: ", tier="default", handler="felt"),
+    AlertType(
+        name="router-network",
+        pattern=r"Network Generic Device|Interface Intel",
+        tier="low",
+        handler="felt",
         wait_s=15 * _M,
     ),
-    AlertType("windows-service", r'Windows: ".*is not running', "low", "drop", wait_s=15 * _M),
+    AlertType(
+        name="host-load",
+        pattern=r"(Windows|Linux): (The Memory Pages|High memory|High CPU|CPU privileged|"
+        r"Load average|High swap|nvme)",
+        tier="default",
+        handler="felt",
+        wait_s=15 * _M,
+    ),
+    AlertType(
+        name="windows-service", pattern=r'Windows: ".*is not running', tier="low", handler="drop", wait_s=15 * _M
+    ),
 )
 
 # Anything not in the catalogue: a new kind of alert is worth a look.
-UNKNOWN = AlertType("unknown", "", "default", "claude")
+UNKNOWN = AlertType(name="unknown", pattern="", tier="default", handler="claude")
 
 _BY_NAME = {t.name: t for t in CATALOGUE}
 # Zabbix: "clockmost High: <subject>" ... "clockmost RESOLVED: <subject>"
@@ -139,8 +173,9 @@ def classify(title: str | None) -> AlertType:
     return UNKNOWN
 
 
-@dataclass(frozen=True)
-class Parsed:
+class Parsed(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: AlertType
     key: str  # what a repeat or a RESOLVED is matched on
     resolves: bool  # a RESOLVED, closing the alert it answers
@@ -157,4 +192,4 @@ def parse(title: str | None) -> Parsed:
     alert_type = classify(subject)
     grouped = re.match(alert_type.group, subject) if alert_type.group else None
     key = grouped.group(0) if grouped else subject
-    return Parsed(alert_type, key, bool(match and match.group(1) == "RESOLVED"))
+    return Parsed(type=alert_type, key=key, resolves=bool(match and match.group(1) == "RESOLVED"))

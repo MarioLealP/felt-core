@@ -19,9 +19,9 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 import httpx
+from pydantic import BaseModel, Field
 
 from felt_core import llm_gate
 from felt_core.config import FeltConfig
@@ -41,13 +41,12 @@ class AmbientSkipped(LocalLLMUnavailable):
     """
 
 
-@dataclass
-class LocalReply:
+class LocalReply(BaseModel):
     text: str
     # Raw OpenAI-shaped tool calls, e.g. [{"id": ..., "type": "function",
     # "function": {"name": ..., "arguments": "<json string>"}}]. Kept raw so
     # chat() can echo them back in the assistant message of the follow-up.
-    tool_calls: list[dict] = field(default_factory=list)
+    tool_calls: list[dict] = Field(default_factory=list)
     # True when the model hit max_tokens and the text was ended at its last
     # full sentence (FELT-71).
     truncated: bool = False

@@ -18,7 +18,8 @@ reply any more, so (Mario, 2026-10-20, "go with 1"):
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+
+from pydantic import BaseModel
 
 from felt_core import local_llm
 from felt_core.config import FeltConfig
@@ -28,8 +29,7 @@ from felt_core.speech import SpeechChunker
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ReplyMeta:
+class ReplyMeta(BaseModel):
     """What a reply does besides speak - known once the skill has run, before
     her answer streams: chat_streamed() yields it ahead of the first chunk, so
     the API can send it with chunk 0 (a hush or a reaction can't wait for the

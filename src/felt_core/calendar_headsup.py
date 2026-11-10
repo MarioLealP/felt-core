@@ -30,10 +30,10 @@ import asyncio
 import json
 import logging
 import math
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 
 from felt_core import db, features, ha_calendar, leave_by, llm_gate, local_llm, phone
 from felt_core.config import FeltConfig
@@ -52,24 +52,25 @@ _NORMAL_TTL_S = 15 * 60
 _GAME_CONTEXT_WINDOW = timedelta(hours=6)
 
 
-@dataclass(frozen=True)
-class Stage:
+class Stage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     lead_s: int
     kind: str
 
 
-NORMAL = Stage("30", 30 * 60, "calendar")
-URGENT = Stage("10", 10 * 60, "urgent")
+NORMAL = Stage(name="30", lead_s=30 * 60, kind="calendar")
+URGENT = Stage(name="10", lead_s=10 * 60, kind="urgent")
 STAGES = (NORMAL, URGENT)
 # set_reminder's events: one line at the time itself
-REMINDER = Stage("0", 0, "urgent")
+REMINDER = Stage(name="0", lead_s=0, kind="urgent")
 # a reminder still counts this long after its time (a slow poll, a restart)
 _REMINDER_GRACE_S = 5 * 60
 _REMINDER_TTL_S = 10 * 60
 # leave-by (lead_s unused - their time comes from the drive)
-LEAVE_SOON = Stage("leave15", 0, "urgent")
-LEAVE_NOW = Stage("leave", 0, "urgent")
+LEAVE_SOON = Stage(name="leave15", lead_s=0, kind="urgent")
+LEAVE_NOW = Stage(name="leave", lead_s=0, kind="urgent")
 LEAVE_STAGES = (LEAVE_SOON, LEAVE_NOW)
 _LEAVE_TTL_S = 15 * 60
 # a nudge whose leave time traffic pushed this much later waits for the new time

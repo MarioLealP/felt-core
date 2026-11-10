@@ -24,9 +24,10 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from felt_core import db, features, llm_gate, local_llm
 from felt_core.brain.persona import compile_persona
@@ -163,8 +164,9 @@ def _as_float(v: Any) -> float:
         return 0.0
 
 
-@dataclass(frozen=True)
-class RawMaterial:
+class RawMaterial(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     seen: list[dict]
     events: list[dict]
     chat_windows: list[str]

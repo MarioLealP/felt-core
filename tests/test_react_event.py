@@ -86,6 +86,13 @@ def test_policy_override_from_config(tmp_path):
     assert events.policies(config)["music_new_track"].dedupe_s == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
 
 
+def test_a_bad_policy_override_is_ignored(tmp_path, caplog):
+    # a value of the wrong type keeps the default (and says so); unknown keys were always dropped
+    config = _config(tmp_path, event_policies='{"music_new_track": {"cooldown_s": "soon", "nope": 1}}')
+    assert events.policies(config)["music_new_track"] == events.DEFAULT_POLICIES["music_new_track"]
+    assert "FELT_EVENT_POLICIES[music_new_track] ignored" in caplog.text
+
+
 # -- prompts: whitelisted fields only -------------------------------------
 
 
