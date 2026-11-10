@@ -5,7 +5,8 @@ skip/full-play listening history that feeds back into the chat prompt) and
 the felt-llm warm-up (WP-36 D'' - primes the persona+tools prompt cache
 whenever felt-llm comes up). Split out of brain.py (WP-40) since none has
 anything to do with per-request chat orchestration or reply phrasing -
-they're pure fire-and-forget asyncio tasks, module-level state and all."""
+they're pure fire-and-forget asyncio tasks, module-level state and all.
+"""
 
 import asyncio
 import logging
@@ -60,7 +61,8 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
     it (felt-llm, same as a live request would), pre-render its TTS, and warm
     the TTS cache with that exact text - so chat()'s fast path and
     api._synthesize_reply's cache lookup are naturally consistent (both
-    key off the identical `line` string, no separate coordination)."""
+    key off the identical `line` string, no separate coordination).
+    """
     global _weather_precompute
 
     registry = load_plugins(config.plugins_dir)
@@ -109,9 +111,7 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
             # (09-23 22:30 -> 09-24 17:45), not a felt-core bug. One line,
             # not a full traceback every 15 minutes; a live request just
             # renders TTS itself on a cache miss.
-            logger.warning(
-                "weather precompute: TTS pre-render skipped, felt-voice unavailable (%r)", e
-            )
+            logger.warning("weather precompute: TTS pre-render skipped, felt-voice unavailable (%r)", e)
         except Exception:
             logger.exception("weather precompute: TTS pre-render failed")
 
@@ -128,16 +128,13 @@ def current_weather() -> dict:
     umbrella when it rains, sunglasses when it's sunny) - "rain" / "sun" /
     "snow" / "storm" from the get_weather condition tag, None when the
     code has no mapping or nothing fresh is cached. No text, just the
-    condition."""
+    condition.
+    """
     fresh = _weather_precompute_fresh()
     if fresh is None:
         return {"condition": None, "animation_tag": None, "age_s": None}
     tag = fresh.get("animation_tag")
-    condition = (
-        tag.rsplit("/", 1)[-1]
-        if isinstance(tag, str) and tag.startswith("reaction/weather/")
-        else None
-    )
+    condition = tag.rsplit("/", 1)[-1] if isinstance(tag, str) and tag.startswith("reaction/weather/") else None
     return {
         "condition": condition,
         "animation_tag": tag,
@@ -164,7 +161,8 @@ async def warm_up_llm(config: FeltConfig) -> None:
     every skill's tool declaration, dummy message), so felt-llm's prompt
     cache holds the ~5K-token prefix before Mario's first turn - the first
     turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailable;
-    deliberately not wrapped in metrics.timed (it isn't a user turn)."""
+    deliberately not wrapped in metrics.timed (it isn't a user turn).
+    """
     registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     prefix = local_turn_messages("hello", [], config, None)
     await local_llm.chat(prefix, max_tokens=1, tools=skill_tools(registry), config=config)
@@ -173,7 +171,8 @@ async def warm_up_llm(config: FeltConfig) -> None:
 async def llm_warmup_loop(config: FeltConfig) -> None:
     """Checks `GET /health` every 60 s; on startup and whenever felt-llm
     comes back after being unreachable, runs the warm-up. Never raises: a
-    failure is logged and retried next minute."""
+    failure is logged and retried next minute.
+    """
     warm = False
     while True:
         try:
@@ -188,9 +187,7 @@ async def llm_warmup_loop(config: FeltConfig) -> None:
                     logger.info("felt-llm went offline, will warm it up again when it's back")
                 warm = False
         except local_llm.LocalLLMUnavailable:
-            logger.info(
-                "felt-llm warm-up failed (unavailable), retrying in %ds", _WARMUP_INTERVAL_S
-            )
+            logger.info("felt-llm warm-up failed (unavailable), retrying in %ds", _WARMUP_INTERVAL_S)
         except Exception:
             logger.exception("felt-llm warm-up failed, retrying in %ds", _WARMUP_INTERVAL_S)
         await asyncio.sleep(_WARMUP_INTERVAL_S)
@@ -205,7 +202,8 @@ def _track_key(track: dict | None) -> str | None:
     `uri` ("spotify:local:..."), so that's the fallback key. None means
     the item can't be keyed at all and is simply not tracked - the
     music_taste table's track_id is NOT NULL, and a null id there wedged
-    music_taste_loop on one item every 15 s (audit 2026-09-24)."""
+    music_taste_loop on one item every 15 s (audit 2026-09-24).
+    """
     if not track:
         return None
     return track.get("id") or track.get("uri") or None
@@ -219,7 +217,8 @@ def _finished_play_from_transition(previous: dict | None, current: dict | None) 
     None when the same track is still playing, or there was nothing
     playing before to finish. `played_ms` is `previous`'s last-seen
     progress, not a precise stop time - it can undercount actual listen
-    time by up to one poll interval, an accepted approximation."""
+    time by up to one poll interval, an accepted approximation.
+    """
     if previous is None:
         return None
     prev_track = previous["track"]
@@ -247,7 +246,8 @@ async def music_taste_loop(config: FeltConfig) -> None:
     skip/full-play history per track (see music_taste.summarize_taste for
     how it's surfaced back into the prompt), and since 10-03 her remark on
     a new song (song_remarks.py). felt-tray still polls /v1/music/now, but
-    only for mouthing along to a chorus on the desktop."""
+    only for mouthing along to a chorus on the desktop.
+    """
     previous: dict | None = None
     async with httpx.AsyncClient(timeout=20) as client:
         while True:

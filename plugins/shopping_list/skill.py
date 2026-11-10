@@ -46,8 +46,7 @@ async def _handle(params, config):
     # read the list back. An item being present at all is a much stronger
     # signal than an unset action string, so that's checked first.
     action = str(
-        get_single_param(params, "action", "command", ignore_keys=("item", "items", "text", "name"))
-        or ""
+        get_single_param(params, "action", "command", ignore_keys=("item", "items", "text", "name")) or ""
     ).lower()
     things = _things(params)
 
@@ -73,9 +72,7 @@ async def _handle(params, config):
 
 def _things(params) -> list[str]:
     """Pure: every item asked about - `items`, plus a lone `item` - once each."""
-    item = get_single_param(
-        params, "item", "text", "name", ignore_keys=("action", "command", "items")
-    )
+    item = get_single_param(params, "item", "text", "name", ignore_keys=("action", "command", "items"))
     listed = params.get("items")
     raw = (listed if isinstance(listed, list) else []) + ([item] if item else [])
     things: list[str] = []

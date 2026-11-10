@@ -22,11 +22,10 @@ def test_tap_is_on_until_turned_off_and_a_slide_is_a_timer(tmp_path):
     }
     controls.set_control(db, "hide", True, now=T0)  # tap
     later = controls.state(db, T0 + timedelta(days=3))
-    assert later["hide"] == {"on": True, "until": None} and later["version"] == 1
+    assert later["hide"] == {"on": True, "until": None}
+    assert later["version"] == 1
     controls.set_control(db, "quiet", True, 30, now=T0)  # slide to 30 min
-    assert (
-        controls.state(db, T0 + timedelta(minutes=29))["quiet"]["until"] == "2026-10-03T21:30:00Z"
-    )
+    assert controls.state(db, T0 + timedelta(minutes=29))["quiet"]["until"] == "2026-10-03T21:30:00Z"
     assert controls.quiet(db, T0 + timedelta(minutes=29))
     assert not controls.quiet(db, T0 + timedelta(minutes=31))  # ran out
     controls.set_control(db, "hide", False, now=T0)
@@ -38,11 +37,11 @@ def test_tap_is_on_until_turned_off_and_a_slide_is_a_timer(tmp_path):
 def test_the_desktop_counts_while_it_keeps_reporting(tmp_path):
     db = str(tmp_path / "f.db")
     assert controls.desktop(db, T0) is None
-    controls.report_desktop(
-        db, {"presence": "hidden", "hushed": True, "mood": "sleepy", "animation": True, "x": 1}, T0
-    )
+    controls.report_desktop(db, {"presence": "hidden", "hushed": True, "mood": "sleepy", "animation": True, "x": 1}, T0)
     seen = controls.desktop(db, T0 + timedelta(seconds=20))
-    assert seen is not None and seen["presence"] == "hidden" and seen["mood"] == "sleepy"
+    assert seen is not None
+    assert seen["presence"] == "hidden"
+    assert seen["mood"] == "sleepy"
     assert "x" not in seen
     assert controls.desktop(db, T0 + timedelta(minutes=2)) is None  # PC off / tray gone
 
@@ -60,7 +59,8 @@ def test_the_routes(tmp_path, monkeypatch):
     with TestClient(app) as c:
         assert c.get("/v1/app/controls").status_code == 401
         page = c.get("/v1/app/controls", headers=SSO).json()
-        assert page["timers"] == [15, 30, 60, 480] and page["desktop"] is None
+        assert page["timers"] == [15, 30, 60, 480]
+        assert page["desktop"] is None
         assert page["parts"] == {
             "brain": True,
             "model": True,
@@ -78,4 +78,5 @@ def test_the_routes(tmp_path, monkeypatch):
         report = {"presence": "hidden", "hushed": True, "mood": "ok", "animation": True}
         assert c.post("/v1/controls/desktop", headers=token, json=report).json() == {"ok": True}
         page = c.get("/v1/app/controls", headers=SSO).json()
-        assert page["parts"]["desktop"] and page["mood"] == "ok"
+        assert page["parts"]["desktop"]
+        assert page["mood"] == "ok"

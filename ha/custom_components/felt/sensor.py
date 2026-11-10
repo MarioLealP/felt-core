@@ -1,6 +1,7 @@
 """The Systems summary as sensors: one per area (state = status, like the
 Felt app's dots), "needs you" in total, and the latest incidents. Plus today's
-brief (state = when she gave it, the text as an attribute)."""
+brief (state = when she gave it, the text as an attribute).
+"""
 
 from __future__ import annotations
 
@@ -26,9 +27,7 @@ AREAS = {
 STATUSES = ["needs-you", "looking", "watching", "fine"]
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: FeltCoordinator = entry.runtime_data.coordinator
     async_add_entities(
         [AreaSensor(coordinator, entry, key, *meta) for key, meta in AREAS.items()]
@@ -53,9 +52,7 @@ class AreaSensor(_Base):
     _attr_device_class = "enum"
     _attr_options = STATUSES
 
-    def __init__(
-        self, coordinator: FeltCoordinator, entry: ConfigEntry, key: str, name: str, icon: str
-    ) -> None:
+    def __init__(self, coordinator: FeltCoordinator, entry: ConfigEntry, key: str, name: str, icon: str) -> None:
         super().__init__(coordinator, entry, key)
         self._key = key
         self._attr_name = name

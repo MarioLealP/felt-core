@@ -1,6 +1,7 @@
 """Find-my-phone: a loud notification on the phone's alarm stream, via the
 Home Assistant app (phone.py, 2026-10-18 - KDE Connect went with the
-Windows desktop agent). A real-world side effect, not just information."""
+Windows desktop agent). A real-world side effect, not just information.
+"""
 
 from felt_core.phone import PhoneUnavailable, ring
 from felt_core.plugin import SkillResult

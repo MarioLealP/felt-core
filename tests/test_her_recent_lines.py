@@ -46,9 +46,7 @@ def test_old_lines_are_left_out(tmp_path):
     _say(db, "Fresh one.", REMARK)
     conn = _connect(db)
     with conn:
-        conn.execute(
-            "UPDATE messages SET created_at = datetime('now', '-7 hours') WHERE id = ?", (old,)
-        )
+        conn.execute("UPDATE messages SET created_at = datetime('now', '-7 hours') WHERE id = ?", (old,))
     conn.close()
     assert [r["content"] for r in get_her_recent_lines(db, APP_SESSION)] == ["Fresh one."]
 
@@ -78,6 +76,7 @@ def test_chat_context_is_the_conversation_plus_a_note_of_her_lines(tmp_path, mon
         {"role": "assistant", "content": "not much"},
     ]
     note = history[2]
-    assert note["role"] == "system" and len(history) == 3
+    assert note["role"] == "system"
+    assert len(history) == 3
     listed = [line for line in note["content"].splitlines() if line.startswith("- ")]
     assert listed == [f"- remark {i}" for i in range(24, 30)]

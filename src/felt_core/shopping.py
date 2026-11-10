@@ -65,7 +65,8 @@ async def clear_checked(config: FeltConfig) -> None:
 
 async def version(config: FeltConfig) -> str:
     """Changes when the list does (the entity's state is the unchecked count),
-    for the app's live "lists changed" notice. Empty when HA can't be asked."""
+    for the app's live "lists changed" notice. Empty when HA can't be asked.
+    """
     if not (config.ha_url and config.ha_token and config.ha_shopping_list):
         return ""
     headers = {"Authorization": f"Bearer {config.ha_token}"}

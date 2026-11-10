@@ -27,9 +27,7 @@ def _config(tmp_path) -> FeltConfig:
 
 def _lines(db: str) -> list[tuple]:
     conn = _connect(db)
-    rows = conn.execute(
-        "SELECT session_id, role, content, kind, source_ref FROM messages ORDER BY id"
-    ).fetchall()
+    rows = conn.execute("SELECT session_id, role, content, kind, source_ref FROM messages ORDER BY id").fetchall()
     conn.close()
     return rows
 
@@ -66,7 +64,5 @@ async def test_an_alarm_is_a_line_but_never_an_aside(tmp_path):
     config = _config(tmp_path)
     alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now() - timedelta(seconds=1), "stretch")
-    assert _lines(config.db_path) == [
-        (APP_SESSION, "assistant", "Alarm: stretch", ALARM, f"alarm:{alarm_id}")
-    ]
+    assert _lines(config.db_path) == [(APP_SESSION, "assistant", "Alarm: stretch", ALARM, f"alarm:{alarm_id}")]
     assert current_asides(config.db_path)["asides"] == []

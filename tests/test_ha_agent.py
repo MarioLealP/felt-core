@@ -63,7 +63,8 @@ def _post(client, token, **headers):
 
 def test_a_valid_token_reaches_felt(client):
     r = _post(client, _token())
-    assert r.status_code == 200 and r.json() == {"reply": "shelf's off."}
+    assert r.status_code == 200
+    assert r.json() == {"reply": "shelf's off."}
     assert client.said == [("turn off the shelf", "ha")]
 
 
@@ -170,7 +171,8 @@ def test_dj_switch_starts_and_stops_the_set(client, monkeypatch):
     monkeypatch.setattr(ha_api.dj_control, "start", start)
     monkeypatch.setattr(ha_api.dj_control, "stop", lambda why: calls.append(f"stop: {why}"))
     on = _ctl(client, "post", name="dj", on=True).json()
-    assert on["dj"] is True and on["message"].startswith("DJ mode on")
+    assert on["dj"] is True
+    assert on["message"].startswith("DJ mode on")
     _ctl(client, "post", name="dj", on=False)
     assert calls == ["start", "stop: turned off in Home Assistant"]
     ha_api.dj_control.SESSION.on = False

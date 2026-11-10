@@ -2,7 +2,8 @@
 listening-history loop's poll - no second one). She keeps AHEAD picks queued
 in Spotify, says a line as each of her picks comes on, records how each went,
 and steps back when Mario takes over (plays something that isn't hers) or
-leaves it paused."""
+leaves it paused.
+"""
 
 import asyncio
 import logging
@@ -44,14 +45,14 @@ def is_on() -> bool:
 
 def same_track(pick: dict, snapshot: dict | None) -> bool:
     """Pure: is `snapshot` (a currently-playing poll) her `pick`? By uri, or
-    by title + artist (Spotify can relink a track to another uri)."""
+    by title + artist (Spotify can relink a track to another uri).
+    """
     track = (snapshot or {}).get("track") or {}
     if track.get("uri") == pick["uri"]:
         return True
     artists = sp.norm_name(" ".join(a.get("name", "") for a in track.get("artists", [])))
     return bool(sp.norm_name(track.get("name", ""))) and (
-        sp.norm_name(track.get("name", "")) == sp.norm_name(pick["title"])
-        and sp.norm_name(pick["artist"]) in artists
+        sp.norm_name(track.get("name", "")) == sp.norm_name(pick["title"]) and sp.norm_name(pick["artist"]) in artists
     )
 
 
@@ -103,12 +104,7 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
     if _uri(previous) == _uri(current):
         return
     cur = SESSION.current
-    if (
-        cur is not None
-        and previous is not None
-        and same_track(cur, previous)
-        and not sp.felt_skipped(_uri(previous))
-    ):
+    if cur is not None and previous is not None and same_track(cur, previous) and not sp.felt_skipped(_uri(previous)):
         store.set_outcome(
             config.db_path,
             cur["uri"],
@@ -140,7 +136,8 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
 
 async def feedback(config: FeltConfig, liked: bool) -> str:
     """ "more like this" / "not this": remembered for her next picks; "not
-    this" also skips it."""
+    this" also skips it.
+    """
     async with httpx.AsyncClient(timeout=20) as client:
         now = await sp.get_currently_playing(client, config)
         if now is None:
@@ -209,9 +206,7 @@ async def _say(config: FeltConfig, pick: dict) -> None:
         logger.warning("dj: no line for %s", pick["title"], exc_info=True)
         return
     if result.line:
-        enqueue_proactive(
-            config, "music", result.line, emotion=result.emotion, ttl_s=_LINE_TTL_S, record=False
-        )
+        enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=_LINE_TTL_S, record=False)
 
 
 def _spawn(coro) -> None:

@@ -126,7 +126,8 @@ def intake(
     ntfy_event_id: int | None = None,
 ) -> int | None:
     """Files one alert; returns the incident it landed in (None for a
-    RESOLVED that matched nothing - the problem it answers predates us)."""
+    RESOLVED that matched nothing - the problem it answers predates us).
+    """
     now = at or datetime.now(UTC)
     parsed = parse(title)
     conn = _connect(db_path)
@@ -134,9 +135,7 @@ def intake(
         _ensure(conn)
         with conn:
             incident_id = (
-                _resolve(conn, parsed, now)
-                if parsed.resolves
-                else _file(conn, parsed, title or "", message, now)
+                _resolve(conn, parsed, now) if parsed.resolves else _file(conn, parsed, title or "", message, now)
             )
             if incident_id is not None:
                 conn.execute(
@@ -229,17 +228,15 @@ def _resolve(conn, parsed: Parsed, now: datetime) -> int | None:
 
 def promote_due(db_path: str, now: datetime | None = None) -> list[int]:
     """Pending incidents whose wait ran out without a RESOLVED become open;
-    returns their ids (step 2 tells him about them)."""
+    returns their ids (step 2 tells him about them).
+    """
     stamp = _ts(now or datetime.now(UTC))
     conn = _connect(db_path)
     try:
         _ensure(conn)
         with conn:
             ids = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT id FROM incidents WHERE state = 'pending' AND due_at <= ?", (stamp,)
-                )
+                r[0] for r in conn.execute("SELECT id FROM incidents WHERE state = 'pending' AND due_at <= ?", (stamp,))
             ]
             if ids:
                 q = ",".join("?" * len(ids))
@@ -263,7 +260,8 @@ _ATTACK_TITLE = re.compile(r"prob(e|ing)|brute|intrusion|attack|unexpected|\bdue
 def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
     """Open incidents that only wait on Mario by default - Claude missed them,
     or they're hers to tell - and haven't recurred in EXPIRE_UNSEEN_H expire.
-    Claude's own "needs Mario" / "unknown" reports never expire."""
+    Claude's own "needs Mario" / "unknown" reports never expire.
+    """
     at = now or datetime.now(UTC)
     cutoff = _ts(at - timedelta(hours=EXPIRE_UNSEEN_H))
     q_types = ",".join("?" * len(_ATTACK_TYPES))
@@ -281,8 +279,7 @@ def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
             if ids:
                 q = ",".join("?" * len(ids))
                 conn.execute(
-                    "UPDATE incidents SET state = 'expired', handled_at = ?,"
-                    f" handled_by = 'expiry' WHERE id IN ({q})",
+                    f"UPDATE incidents SET state = 'expired', handled_at = ?, handled_by = 'expiry' WHERE id IN ({q})",
                     [_ts(at), *ids],
                 )
     finally:
@@ -316,7 +313,8 @@ PROMOTE_EVERY_S = 60.0
 async def watch(config) -> None:
     """Background task: turns pending incidents whose wait ran out into
     open ones, marks the ones Claude didn't get to (responder.py), then
-    writes the lines she owes (alert_lines.py)."""
+    writes the lines she owes (alert_lines.py).
+    """
     from felt_core import alert_lines, responder
 
     while True:

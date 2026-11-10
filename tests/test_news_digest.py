@@ -40,9 +40,7 @@ def ha(monkeypatch, skill):
         return httpx.Response(200, json={"attributes": {"stories": HA.sensors[topic]}})
 
     real = httpx.AsyncClient
-    monkeypatch.setattr(
-        skill.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw)
-    )
+    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
     HA.sensors, HA.asked = {}, []
     return HA
 
@@ -76,7 +74,8 @@ async def test_one_topic(skill, ha, tmp_path):
     ha.sensors = {"porto": [STORY], "world": []}
     text = (await skill.handle({"topic": "porto"}, _ctx(tmp_path))).text
     assert ha.asked == ["porto"]
-    assert "Metro do Porto abre nova linha" in text and "World" not in text
+    assert "Metro do Porto abre nova linha" in text
+    assert "World" not in text
 
 
 async def test_all_topics_skip_missing_sensors(skill, ha, tmp_path):
@@ -84,7 +83,9 @@ async def test_all_topics_skip_missing_sensors(skill, ha, tmp_path):
     text = (await skill.handle({}, _ctx(tmp_path))).text
     assert "Second story" not in text  # all topics: the top story of each
     assert ha.asked == list(skill.TOPICS)
-    assert "Greater Porto:" in text and "World: nothing new." in text and "Tech" not in text
+    assert "Greater Porto:" in text
+    assert "World: nothing new." in text
+    assert "Tech" not in text
 
 
 async def test_no_sensors_at_all(skill, ha, tmp_path):

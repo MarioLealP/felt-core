@@ -47,7 +47,8 @@ def _build_name_index(items_data: dict) -> dict[str, dict]:
     Taming"}) — base types, gems, and currency have no name to look up
     by, and are deliberately excluded rather than kept as noise. The
     original-case name is kept alongside the lookup key so callers can
-    display "The Taming" rather than whatever case the user typed."""
+    display "The Taming" rather than whatever case the user typed.
+    """
     index: dict[str, dict] = {}
     for group in items_data.get("result", []):
         for entry in group.get("entries", []):
@@ -92,7 +93,8 @@ def load_cache(config: FeltConfig) -> dict | None:
     """Returns None if there's no cache yet (first run before the
     initial refresh has completed) or it's unreadable — callers fall
     back to poe.ninja-only behavior in that case, same "degrade, don't
-    crash" convention as everything else in this project."""
+    crash" convention as everything else in this project.
+    """
     path = Path(config.poe_trade_cache_path)
     if not path.exists():
         return None
@@ -104,11 +106,10 @@ def load_cache(config: FeltConfig) -> dict | None:
 
 def seconds_until_next_refresh(now: datetime) -> float:
     """Pure, unit-testable: seconds from `now` (tz-aware, Europe/Lisbon)
-    until the next Friday 23:00 in that timezone."""
+    until the next Friday 23:00 in that timezone.
+    """
     days_ahead = (_REFRESH_WEEKDAY - now.weekday()) % 7
-    target = (now + timedelta(days=days_ahead)).replace(
-        hour=_REFRESH_HOUR, minute=0, second=0, microsecond=0
-    )
+    target = (now + timedelta(days=days_ahead)).replace(hour=_REFRESH_HOUR, minute=0, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=7)
     return (target - now).total_seconds()

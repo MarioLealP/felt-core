@@ -112,9 +112,7 @@ async def test_skill_adds_reads_and_removes(tmp_path, ha):
     assert await _say(tmp_path, {"item": "bread"}) == "Added bread to the shopping list."
     assert ha.calls[-1][2] == {"entity_id": "todo.shopping_list", "item": "bread"}
     assert await _say(tmp_path, {}) == "Shopping list: milk"
-    assert await _say(tmp_path, {"action": "remove", "item": "MILK"}) == (
-        "Removed milk from the shopping list."
-    )
+    assert await _say(tmp_path, {"action": "remove", "item": "MILK"}) == ("Removed milk from the shopping list.")
     assert ha.calls[-1][1:] == (
         "/api/services/todo/remove_item",
         {"entity_id": "todo.shopping_list", "item": MILK},
@@ -126,9 +124,7 @@ async def test_skill_adds_reads_and_removes(tmp_path, ha):
 
 async def test_skill_says_so_when_ha_is_down(tmp_path, ha):
     ha.status = 503
-    assert await _say(tmp_path, {"item": "bread"}) == (
-        "Couldn't reach the shopping list in Home Assistant right now."
-    )
+    assert await _say(tmp_path, {"item": "bread"}) == ("Couldn't reach the shopping list in Home Assistant right now.")
 
 
 async def test_several_items_are_added_one_by_one(tmp_path, ha):
@@ -151,6 +147,4 @@ async def test_items_alone_is_not_mistaken_for_an_action(tmp_path, ha):
 
 async def test_several_removed(tmp_path, ha):
     text = await _say(tmp_path, {"action": "remove", "items": ["milk", "cheese"]})
-    assert text == (
-        "Removed milk from the shopping list. I don't see 'cheese' on the shopping list."
-    )
+    assert text == ("Removed milk from the shopping list. I don't see 'cheese' on the shopping list.")

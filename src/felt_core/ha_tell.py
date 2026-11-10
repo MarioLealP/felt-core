@@ -29,7 +29,8 @@ def facts(text: str) -> str:
 
 async def tell(config: FeltConfig, text: str, title: str, tag: str) -> str | None:
     """Her line for `text`, said at the desk and on the phone. None when the
-    feature is off."""
+    feature is off.
+    """
     if not features.enabled(config.db_path, FEATURE):
         return None
     with llm_gate.timely("ha-tell"):

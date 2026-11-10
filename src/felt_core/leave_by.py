@@ -31,7 +31,8 @@ _FRESH = timedelta(minutes=30)  # a phone location older than this isn't "where 
 
 def has_address(event: dict) -> bool:
     """Pure: a location that looks like an address (a number or a comma),
-    not "Mom's place" or "online"."""
+    not "Mom's place" or "online".
+    """
     loc = (event.get("location") or "").strip()
     return bool(loc) and (any(ch.isdigit() for ch in loc) or "," in loc)
 
@@ -55,9 +56,7 @@ async def _origin(client: httpx.AsyncClient, config: FeltConfig, now: datetime) 
     return "zone.home"
 
 
-async def drive_minutes(
-    config: FeltConfig, destination: str, now: datetime | None = None
-) -> float | None:
+async def drive_minutes(config: FeltConfig, destination: str, now: datetime | None = None) -> float | None:
     """Fastest car route right now, in minutes; None if HA/Waze can't say."""
     if not (config.ha_url and config.ha_token):
         return None

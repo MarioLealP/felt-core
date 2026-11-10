@@ -32,9 +32,7 @@ def test_is_poe():
 
 
 def test_snap_unique_name_fixes_misreads(monkeypatch, tmp_path):
-    cache = {
-        "items_by_name": {"headhunter": {"display_name": "Headhunter", "type": "Leather Belt"}}
-    }
+    cache = {"items_by_name": {"headhunter": {"display_name": "Headhunter", "type": "Leather Belt"}}}
     monkeypatch.setattr(poe_reactions, "load_cache", lambda _c: cache)
     config = _config(tmp_path)
     assert poe_reactions.snap_unique_name("Headhuntr", config) == "Headhunter"
@@ -81,14 +79,8 @@ async def test_poe_screen_reaction_speaks_the_price(monkeypatch, tmp_path, fake_
 
 async def test_poe_reaction_without_items_is_one_call(monkeypatch, tmp_path, fake_llm):
     _fake_price_skill(monkeypatch, {})
-    fake_llm.script = [
-        json.dumps(
-            {"seen": "a boss fight", "line": "don't die!", "emotion": "excited", "items": []}
-        )
-    ]
-    result = await screen_reactions.react_to_screen(
-        b"jpeg", "pathofexilesteam.exe", "", _config(tmp_path)
-    )
+    fake_llm.script = [json.dumps({"seen": "a boss fight", "line": "don't die!", "emotion": "excited", "items": []})]
+    result = await screen_reactions.react_to_screen(b"jpeg", "pathofexilesteam.exe", "", _config(tmp_path))
     assert result.reply == "don't die!"
     assert len(fake_llm.calls) == 1
 

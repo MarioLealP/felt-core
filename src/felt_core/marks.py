@@ -97,7 +97,7 @@ def _ensure(conn: sqlite3.Connection) -> None:
 
 
 def marks_for(db_path: str, message_ids: list[int]) -> dict[int, list[dict]]:
-    """message id -> its marks, for the app's history page."""
+    """Message id -> its marks, for the app's history page."""
     if not message_ids:
         return {}
     conn = _connect(db_path)
@@ -105,8 +105,7 @@ def marks_for(db_path: str, message_ids: list[int]) -> dict[int, list[dict]]:
         _ensure(conn)
         q = ",".join("?" * len(message_ids))
         rows = conn.execute(
-            "SELECT id, message_id, type, quote, note, seen_at FROM message_marks"
-            f" WHERE message_id IN ({q})",
+            f"SELECT id, message_id, type, quote, note, seen_at FROM message_marks WHERE message_id IN ({q})",
             message_ids,
         ).fetchall()
     finally:
@@ -129,8 +128,7 @@ def mark_seen(db_path: str, mark_ids: list[str]) -> int:
         q = ",".join("?" * len(mark_ids))
         with conn:
             cursor = conn.execute(
-                "UPDATE message_marks SET seen_at = datetime('now')"
-                f" WHERE seen_at IS NULL AND id IN ({q})",
+                f"UPDATE message_marks SET seen_at = datetime('now') WHERE seen_at IS NULL AND id IN ({q})",
                 mark_ids,
             )
     finally:
@@ -140,7 +138,8 @@ def mark_seen(db_path: str, mark_ids: list[str]) -> int:
 
 def _since_last(conn: sqlite3.Connection, session_id: str) -> int | None:
     """How many of his lines since her last mark (None: she never marked);
-    0 means this exchange already carries one."""
+    0 means this exchange already carries one.
+    """
     last = conn.execute(
         "SELECT mm.message_id FROM message_marks mm"
         " JOIN messages m ON m.id = mm.message_id WHERE m.session_id = ?"
@@ -167,12 +166,12 @@ def pacing_line(since: int | None) -> str:
 
 def latest_exchange(db_path: str, session_id: str) -> dict[str, tuple[int, str]]:
     """His latest line and her reply to it, as {"his": (id, text), "mine": ...};
-    "mine" is missing when she hasn't answered (yet)."""
+    "mine" is missing when she hasn't answered (yet).
+    """
     conn = _connect(db_path)
     try:
         his = conn.execute(
-            "SELECT id, content FROM messages WHERE session_id = ? AND role = 'user'"
-            " ORDER BY id DESC LIMIT 1",
+            "SELECT id, content FROM messages WHERE session_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1",
             (session_id,),
         ).fetchone()
         if his is None:
@@ -201,7 +200,8 @@ def wants_to_mark(text: str) -> bool:
 def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
     """The model's JSON -> a mark to keep (with "line": his/mine), or None (bad
     JSON, an unknown type, a quote that isn't in either line, or one too long for
-    its shape). A real quote filed under the wrong line is moved to the right one."""
+    its shape). A real quote filed under the wrong line is moved to the right one.
+    """
     try:
         d = json.loads(text)
     except (ValueError, TypeError):
@@ -223,7 +223,8 @@ def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
 
 async def decide(config: FeltConfig, lines: dict[str, str], since: int | None) -> dict | None:
     """Ask her about one exchange ({"his": text, "mine": text}); writes nothing.
-    Returns the mark she wants (with "line"), or None."""
+    Returns the mark she wants (with "line"), or None.
+    """
     shown = f"His line: {lines['his']}"
     if "mine" in lines:
         shown += f"\nYour answer: {lines['mine']}"
@@ -282,13 +283,10 @@ async def maybe_mark(config: FeltConfig, session_id: str) -> dict | None:
         _ensure(conn)
         with conn:
             conn.execute(
-                "INSERT INTO message_marks (id, message_id, type, quote, note)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO message_marks (id, message_id, type, quote, note) VALUES (?, ?, ?, ?, ?)",
                 (mark["id"], message_id, mark["type"], mark["quote"], mark["note"]),
             )
     finally:
         conn.close()
-    logger.info(
-        "marks: %s on message %d (%.1fs)", mark["type"], message_id, time.monotonic() - started
-    )
+    logger.info("marks: %s on message %d (%.1fs)", mark["type"], message_id, time.monotonic() - started)
     return mark

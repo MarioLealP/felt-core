@@ -77,9 +77,7 @@ async def test_react_to_screen_carries_tone_on_the_user_turn(tmp_path, fake_llm)
 async def test_process_screen_context_carries_tone(tmp_path, fake_llm):
     config = _config(tmp_path)
 
-    await screen_reactions.process_screen_context(
-        "a cat", config, session_id="wp15-test", tone="Cozy, relaxed."
-    )
+    await screen_reactions.process_screen_context("a cat", config, session_id="wp15-test", tone="Cozy, relaxed.")
 
     messages = fake_llm.calls[0]["messages"]
     assert "Cozy, relaxed." not in messages[0]["content"]

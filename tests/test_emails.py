@@ -14,7 +14,8 @@ from felt_core.db import EMAIL, _connect
 _spec = importlib.util.spec_from_file_location(
     "felt_ha_mail", Path(__file__).parent.parent / "ha/custom_components/felt/mail.py"
 )
-assert _spec and _spec.loader
+assert _spec
+assert _spec.loader
 ha_mail = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ha_mail)
 
@@ -49,9 +50,7 @@ def _ana(db: str, key: str = "<1@x>", subject: str = "Dinner") -> int | None:
 
 
 def _patreon(db: str, key: str = "<2@x>", subject: str = "New post") -> int | None:
-    return emails.add(
-        db, key, "Patreon <bingo@mail.patreon.com>", subject, "<p>A new post!</p>", True
-    )
+    return emails.add(db, key, "Patreon <bingo@mail.patreon.com>", subject, "<p>A new post!</p>", True)
 
 
 # pure parts
@@ -112,10 +111,10 @@ def test_the_ha_side_forwards_message_id_and_list_mail():
         "text": "hi",
         "bulk": True,
     }
-    plain = ha_mail.payload(
-        {"sender": "a@b.c", "uid": "4", "username": "u", "folder": "INBOX", "headers": {}}
-    )
-    assert plain is not None and plain["key"] == "u:INBOX:4" and plain["bulk"] is False
+    plain = ha_mail.payload({"sender": "a@b.c", "uid": "4", "username": "u", "folder": "INBOX", "headers": {}})
+    assert plain is not None
+    assert plain["key"] == "u:INBOX:4"
+    assert plain["bulk"] is False
     assert ha_mail.payload({"subject": "no sender"}) is None
 
 

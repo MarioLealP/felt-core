@@ -37,8 +37,7 @@ from felt_core.plugin import SkillResult
 
 name = "generate_image"
 description = (
-    "Draws a new image from a description ('draw / generate an image of...'). Not for "
-    "finding real photos (web_search)."
+    "Draws a new image from a description ('draw / generate an image of...'). Not for finding real photos (web_search)."
 )
 parameters_schema = {
     "type": "object",
@@ -70,7 +69,8 @@ def _apply_prompt(template: dict, prompt: str) -> dict:
     tag suffix around it intact, e.g. animexld's) and a random seed — the
     saved templates carry a fixed seed (42) for their own reproducible
     testing, but every real generation needs its own, or every call with
-    the same prompt would return the same image."""
+    the same prompt would return the same image.
+    """
     workflow = copy.deepcopy(template)
     text_template = workflow[_POSITIVE_PROMPT_NODE]["inputs"]["text"]
     workflow[_POSITIVE_PROMPT_NODE]["inputs"]["text"] = text_template.replace("{prompt}", prompt)
@@ -81,7 +81,8 @@ def _apply_prompt(template: dict, prompt: str) -> dict:
 def _extract_first_image(history_entry: dict) -> dict | None:
     """Pure: pick the first output image out of one /history/{id} entry's
     `outputs` block. Returns {"filename", "subfolder", "type"} or None if
-    the run hasn't produced an image (yet, or at all)."""
+    the run hasn't produced an image (yet, or at all).
+    """
     outputs = history_entry.get("outputs", {})
     images = outputs.get(_SAVE_IMAGE_NODE, {}).get("images", [])
     return images[0] if images else None
@@ -89,7 +90,8 @@ def _extract_first_image(history_entry: dict) -> dict | None:
 
 def _build_image_url(display_base: str, image: dict) -> str:
     """Pure: the browsable link Mario's own browser (already SSO'd
-    against comfy.clockmost.com) can open directly."""
+    against comfy.clockmost.com) can open directly.
+    """
     params = f"filename={image['filename']}&subfolder={image.get('subfolder', '')}&type={image.get('type', 'output')}"
     return f"{display_base.rstrip('/')}/view?{params}"
 
@@ -98,7 +100,8 @@ async def _submit_and_wait(comfyui_url: str, workflow: dict) -> dict | None:
     """Submits the workflow, polls /history until it completes. Returns
     the first output image's info, or None on timeout. sdxl takes ~90s
     for a single image on the Nitro5's RTX 3060 — poll generously rather
-    than risk giving up on a run that's still legitimately in progress."""
+    than risk giving up on a run that's still legitimately in progress.
+    """
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.post(f"{comfyui_url}/prompt", json={"prompt": workflow})
         response.raise_for_status()

@@ -12,7 +12,8 @@ from felt_core.plugin import ExecutionContext
 _spec = importlib.util.spec_from_file_location(
     "media_control_skill", Path(__file__).parents[1] / "plugins/media_control/skill.py"
 )
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
@@ -42,9 +43,7 @@ def _mock(monkeypatch, calls, playing=True, volume=40, player=True):
         return httpx.Response(200)
 
     transport = httpx.MockTransport(handler)
-    monkeypatch.setattr(
-        skill.httpx, "AsyncClient", lambda **kw: _REAL_CLIENT(transport=transport, **kw)
-    )
+    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: _REAL_CLIENT(transport=transport, **kw))
 
 
 async def _do(monkeypatch, params, **state):
@@ -81,7 +80,8 @@ async def test_volume_takes_a_fraction_or_percent(monkeypatch):
 
 async def test_pause_when_paused_does_nothing(monkeypatch):
     text, calls = await _do(monkeypatch, {"action": "pause"}, playing=False)
-    assert calls == [] and text == "It's already paused."
+    assert calls == []
+    assert text == "It's already paused."
 
 
 async def test_play_pause_toggles(monkeypatch):
@@ -93,7 +93,8 @@ async def test_play_pause_toggles(monkeypatch):
 
 async def test_no_active_player(monkeypatch):
     text, calls = await _do(monkeypatch, {"action": "next"}, player=False)
-    assert calls == [] and text == "Nothing's playing on Spotify right now."
+    assert calls == []
+    assert text == "Nothing's playing on Spotify right now."
 
 
 async def test_restart_seeks_to_zero(monkeypatch):

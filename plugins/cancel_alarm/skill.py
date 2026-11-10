@@ -1,5 +1,6 @@
 """Cancels a pending alarm — set_alarm had no way to undo one, so a
-mis-set or no-longer-needed alarm could only be waited out."""
+mis-set or no-longer-needed alarm could only be waited out.
+"""
 
 from datetime import datetime
 
@@ -12,9 +13,7 @@ name = "cancel_alarm"
 description = "Cancels an alarm that hasn't rung yet."
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "which": {"type": "string", "description": "Its label or time, if more than one is set"}
-    },
+    "properties": {"which": {"type": "string", "description": "Its label or time, if more than one is set"}},
 }
 
 

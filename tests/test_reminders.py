@@ -31,13 +31,13 @@ async def _run(monkeypatch, tmp_path, params):
 
 
 async def test_a_one_off_reminder(monkeypatch, tmp_path):
-    created, text = await _run(
-        monkeypatch, tmp_path, {"what": "call the dentist", "when": "in 20 minutes"}
-    )
+    created, text = await _run(monkeypatch, tmp_path, {"what": "call the dentist", "when": "in 20 minutes"})
     [event] = created
     assert event["summary"] == "call the dentist"
-    assert event["calendar"] == "calendar.felt_reminders" and event["rrule"] is None
-    assert text.startswith("Reminder set") and "call the dentist" in text
+    assert event["calendar"] == "calendar.felt_reminders"
+    assert event["rrule"] is None
+    assert text.startswith("Reminder set")
+    assert "call the dentist" in text
 
 
 async def test_a_weekly_reminder(monkeypatch, tmp_path):
@@ -52,9 +52,7 @@ async def test_a_weekly_reminder(monkeypatch, tmp_path):
 
 async def test_a_time_from_elsewhere_is_said_in_his_time(monkeypatch, tmp_path):
     # cm-p6a: WoW Forever launches 3pm PST - an hour before is 22:00 in Portugal
-    created, text = await _run(
-        monkeypatch, tmp_path, {"what": "WoW Forever", "when": "November 4, 2027 at 2pm PST"}
-    )
+    created, text = await _run(monkeypatch, tmp_path, {"what": "WoW Forever", "when": "November 4, 2027 at 2pm PST"})
     assert created[0]["start"].astimezone(UTC).hour == 22
     assert "Thursday 4 November 10:00 PM in Mario's time (Portugal)" in text
     assert "Tell him his time, not the other zone's (2:00 PM PST at the source)" in text
@@ -83,13 +81,12 @@ def test_a_one_off_says_today_or_the_date():
 
 async def test_a_past_one_off_is_refused(monkeypatch, tmp_path):
     created, text = await _run(monkeypatch, tmp_path, {"what": "x", "when": "yesterday at 9am"})
-    assert created == [] and "past" in text
+    assert created == []
+    assert "past" in text
 
 
 async def test_an_unknown_repeat_is_once(monkeypatch, tmp_path):
-    created, _ = await _run(
-        monkeypatch, tmp_path, {"what": "x", "when": "in 1 hour", "repeat": "fortnightly"}
-    )
+    created, _ = await _run(monkeypatch, tmp_path, {"what": "x", "when": "in 1 hour", "repeat": "fortnightly"})
     assert created[0]["rrule"] is None
 
 
@@ -143,9 +140,7 @@ def test_a_reminder_gets_one_on_time_stage():
 
 def test_a_plain_event_keeps_its_heads_ups():
     now = datetime(2026, 10, 19, 14, 0, tzinfo=UTC)
-    planned = ch.plan(
-        [("cal", _event(now + timedelta(minutes=40), reminder=False))], now, 3600, lambda k: False
-    )
+    planned = ch.plan([("cal", _event(now + timedelta(minutes=40), reminder=False))], now, 3600, lambda k: False)
     assert [stage for _, _, _, stage in planned] == [ch.NORMAL, ch.URGENT]
 
 
@@ -164,9 +159,7 @@ def test_reminder_prompt_and_fallback():
 
 async def test_a_day_without_a_time_is_nine_am(monkeypatch, tmp_path):
     # live 2026-10-18: "set an reminder for 21th to check on teh semantic router"
-    created, _ = await _run(
-        monkeypatch, tmp_path, {"what": "check on the semantic router", "when": "the 21st"}
-    )
+    created, _ = await _run(monkeypatch, tmp_path, {"what": "check on the semantic router", "when": "the 21st"})
     start = created[0]["start"]
     assert (start.day, start.hour, start.minute) == (21, 9, 0)
 

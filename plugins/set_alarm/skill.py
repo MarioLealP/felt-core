@@ -28,8 +28,7 @@ from felt_core.plugin import SkillResult
 
 name = "set_alarm"
 description = (
-    "Sets an alarm for a time of day ('7:30am', 'tomorrow at 9') on Mario's phone. Not a "
-    "countdown (set_timer)."
+    "Sets an alarm for a time of day ('7:30am', 'tomorrow at 9') on Mario's phone. Not a countdown (set_timer)."
 )
 parameters_schema = {
     "type": "object",
@@ -49,7 +48,8 @@ def _format(fire_at: datetime, label: str) -> str:
 
 def _is_next_occurrence(fire_at: datetime, now: datetime) -> bool:
     """True if `fire_at` is just "the next time it's this o'clock" from
-    `now` — the only thing a phone-native alarm can actually express."""
+    `now` — the only thing a phone-native alarm can actually express.
+    """
     next_occurrence = now.replace(hour=fire_at.hour, minute=fire_at.minute, second=0, microsecond=0)
     if next_occurrence <= now:
         next_occurrence += timedelta(days=1)

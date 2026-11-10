@@ -50,8 +50,7 @@ async def handle(params, ctx):
         return SkillResult(text=f"'{last['summary']}' stays without a place.")
     if last is None:
         return SkillResult(
-            text="There's no appointment I just added - tell Mario to say the whole thing again "
-            "with the place in it."
+            text="There's no appointment I just added - tell Mario to say the whole thing again with the place in it."
         )
 
     return SkillResult(text=await appointment_hold.change_place(config, last, str(place)))

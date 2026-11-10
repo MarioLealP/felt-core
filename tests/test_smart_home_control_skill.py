@@ -12,7 +12,8 @@ from felt_core.plugin import ExecutionContext
 _spec = importlib.util.spec_from_file_location(
     "smart_home_control_skill", Path(__file__).parents[1] / "plugins/smart_home_control/skill.py"
 )
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
@@ -31,9 +32,7 @@ ALLOWED = [e for e in STATES if not e.startswith("lock.")]
 ONOFF = {"light.shelf"}
 # 2026-10-25: the Chandelure and the Yeelights take colours (HA: color_temp, hs, rgb)
 COLOUR = {"light.chandelure", "light.front_left"}
-DIM_STATES = {k: v for k, v in STATES.items() if k != "switch.shelf"} | {
-    "light.shelf": ("Shelf", "on")
-}
+DIM_STATES = {k: v for k, v in STATES.items() if k != "switch.shelf"} | {"light.shelf": ("Shelf", "on")}
 
 
 def _mock(monkeypatch, calls, states=STATES):
@@ -45,11 +44,7 @@ def _mock(monkeypatch, calls, states=STATES):
             attributes = {"friendly_name": name}
             if eid.startswith("light."):
                 attributes["supported_color_modes"] = (
-                    ["onoff"]
-                    if eid in ONOFF
-                    else ["color_temp", "hs", "rgb"]
-                    if eid in COLOUR
-                    else ["brightness"]
+                    ["onoff"] if eid in ONOFF else ["color_temp", "hs", "rgb"] if eid in COLOUR else ["brightness"]
                 )
             return httpx.Response(200, json={"state": state, "attributes": attributes})
         if path.startswith("/api/services/"):
@@ -100,7 +95,8 @@ async def test_group_status_names_the_ones_on(monkeypatch):
 
 async def test_one_light_is_ambiguous(monkeypatch):
     text = await _ask(monkeypatch, "light", "on")
-    assert text.startswith("Multiple devices match 'light'") and text.endswith("Which one?")
+    assert text.startswith("Multiple devices match 'light'")
+    assert text.endswith("Which one?")
 
 
 async def test_name_beside_a_kind_word(monkeypatch):
@@ -109,9 +105,7 @@ async def test_name_beside_a_kind_word(monkeypatch):
 
 async def test_off_the_allowlist_is_refused(monkeypatch):
     calls = []
-    assert await _ask(monkeypatch, "front door", "on", calls) == (
-        "I don't see a device matching 'front door'."
-    )
+    assert await _ask(monkeypatch, "front door", "on", calls) == ("I don't see a device matching 'front door'.")
     assert calls == []
 
 
@@ -129,9 +123,7 @@ async def _dim(monkeypatch, device, calls, **params):
 async def test_dim_without_a_number_uses_the_usual_level(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "chandelure", calls, action="dim")
-    assert calls == [
-        ("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "brightness_pct": 30})
-    ]
+    assert calls == [("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "brightness_pct": 30})]
     assert text == "Chandelure dimmed to 30%."
 
 
@@ -152,14 +144,17 @@ async def test_dim_the_lights_skips_the_ones_that_cant(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "the lights", calls, action="dim")
     [(path, body)] = calls
-    assert path == "/api/services/light/turn_on" and "light.shelf" not in body["entity_id"]
-    assert len(body["entity_id"]) == 3 and "Shelf can't dim" in text
+    assert path == "/api/services/light/turn_on"
+    assert "light.shelf" not in body["entity_id"]
+    assert len(body["entity_id"]) == 3
+    assert "Shelf can't dim" in text
 
 
 async def test_a_plug_cant_dim(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "shelf", calls, action="dim")
-    assert calls == [] and "can't be dimmed" in text
+    assert calls == []
+    assert "can't be dimmed" in text
 
 
 # --- colour (cm-7gf) ---
@@ -168,9 +163,7 @@ async def test_a_plug_cant_dim(monkeypatch):
 async def test_a_colour_by_name(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "chandelure", calls, color="Blue")
-    assert calls == [
-        ("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "color_name": "blue"})
-    ]
+    assert calls == [("/api/services/light/turn_on", {"entity_id": ["light.chandelure"], "color_name": "blue"})]
     assert text == "Chandelure set to blue."
 
 
@@ -201,17 +194,20 @@ async def test_the_lights_colour_skips_the_ones_that_cant(monkeypatch):
     text = await _dim(monkeypatch, "the lights", calls, color="blue", action="on")
     [(_, body)] = calls
     assert sorted(body["entity_id"]) == ["light.chandelure", "light.front_left"]
-    assert text.startswith("2 lights set to blue") and "Shelf" in text
+    assert text.startswith("2 lights set to blue")
+    assert "Shelf" in text
 
 
 async def test_a_light_that_only_dims_cant_change_colour(monkeypatch):
     calls = []
     text = await _dim(monkeypatch, "backright", calls, color="blue")
-    assert calls == [] and "can't change colour" in text
+    assert calls == []
+    assert "can't change colour" in text
 
 
 async def test_an_unknown_colour_says_so(monkeypatch):
     calls = []
     # HA itself answers 200 to an unknown name (checked live 2026-10-25)
     text = await _dim(monkeypatch, "chandelure", calls, color="sparkly")
-    assert calls == [] and text == "Home Assistant doesn't know the colour 'sparkly'."
+    assert calls == []
+    assert text == "Home Assistant doesn't know the colour 'sparkly'."

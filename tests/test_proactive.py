@@ -168,9 +168,7 @@ def test_audio_endpoint_404_for_unknown_item(tmp_path, monkeypatch):
 def test_audio_endpoint_returns_wav_from_the_tts_cache(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch, debug=True)
     monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
-    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()[
-        "id"
-    ]
+    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]
 
     response = client.get(f"/v1/proactive/{item_id}/audio")
 
@@ -188,21 +186,18 @@ def test_audio_endpoint_503_when_felt_voice_is_off(tmp_path, monkeypatch):
         raise httpx.ConnectError("All connection attempts failed")
 
     monkeypatch.setattr(api, "proactive_audio", unreachable)
-    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()[
-        "id"
-    ]
+    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]
 
     response = client.get(f"/v1/proactive/{item_id}/audio")
 
-    assert response.status_code == 503 and response.json()["detail"] == "voice_unavailable"
+    assert response.status_code == 503
+    assert response.json()["detail"] == "voice_unavailable"
 
 
 def test_audio_endpoint_503_without_voice_url(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch, debug=True)
     monkeypatch.delenv("FELT_VOICE_URL", raising=False)
-    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()[
-        "id"
-    ]
+    item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]
 
     response = client.get(f"/v1/proactive/{item_id}/audio")
 

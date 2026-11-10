@@ -1,5 +1,6 @@
 """WP-42.5: the tray's routes for desktop pop-ups (bearer token, like every
-desktop client): her alert lines to pop, and "handled" from a pop-up."""
+desktop client): her alert lines to pop, and "handled" from a pop-up.
+"""
 
 import asyncio
 
@@ -12,9 +13,7 @@ router = APIRouter()
 
 
 @router.get("/v1/notices")
-async def notice_lines(
-    after: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50)
-) -> list[dict]:
+async def notice_lines(after: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50)) -> list[dict]:
     return await asyncio.to_thread(notices.after, load_config().db_path, after, limit)
 
 

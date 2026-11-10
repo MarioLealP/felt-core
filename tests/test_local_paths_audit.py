@@ -25,9 +25,7 @@ async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, fake_
     save_fact(config.db_path, "likes pizza")
     fake_llm.script = ["local reply"]
 
-    reply = await brain.phrase_skill_result(
-        "find my notes", "found 3 notes", [], config, tone="tired"
-    )
+    reply = await brain.phrase_skill_result("find my notes", "found 3 notes", [], config, tone="tired")
 
     call = fake_llm.calls[0]
     assert reply == "local reply"
@@ -70,7 +68,8 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     await screen_reactions.process_screen_context("new thing", config, session_id="s")
 
     contents = [m["content"] for m in fake_llm.calls[0]["messages"]]
-    assert "real question" in contents and "real answer" in contents
+    assert "real question" in contents
+    assert "real answer" in contents
     assert "old screen remark" not in contents
     # and the new remark is itself stored as one (WP-42.3: kind, not text matching)
     chat = [m["content"] for m in get_history(config.db_path, "s", exclude_remarks=True)]

@@ -19,9 +19,7 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "search_documents"
-description = (
-    "Searches Mario's own documents (Google Drive, Obsidian vault): find a file or answer from it."
-)
+description = "Searches Mario's own documents (Google Drive, Obsidian vault): find a file or answer from it."
 parameters_schema = {
     "type": "object",
     "properties": {"question": {"type": "string", "description": "What to find or ask"}},
@@ -41,9 +39,7 @@ async def handle(params, ctx):
     # so 60 s was too tight.
     headers = await auth_headers(config, "drive-rag")
     async with meru_client(config, config.drive_rag_url, timeout=120) as client:
-        response = await client.post(
-            f"{config.drive_rag_url}/api/ask", json={"question": question}, headers=headers
-        )
+        response = await client.post(f"{config.drive_rag_url}/api/ask", json={"question": question}, headers=headers)
         response.raise_for_status()
         body = response.json()
 

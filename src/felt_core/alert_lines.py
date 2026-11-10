@@ -37,8 +37,7 @@ MEANINGS: dict[str, tuple[str, str]] = {
     "wazuh-fim": ("Wazuh saw protected files or settings change on a machine", ""),
     "honeypot": ("something on the network touched the honeypot trap", ""),
     "authentik-bruteforce": (
-        "a lot of login attempts on the SSO in a few minutes, either an attack or "
-        "Mario logging in a lot",
+        "a lot of login attempts on the SSO in a few minutes, either an attack or Mario logging in a lot",
         "",
     ),
     "crowdsec": ("CrowdSec, the server's firewall blocker, stopped enforcing", ""),
@@ -132,8 +131,7 @@ _VERDICTS = {
 _WHO = {
     "claude": ("Claude", "Claude"),
     "checks": (
-        "the automatic checks (no AI needed - they matched it to a package update or"
-        " one of our own commits)",
+        "the automatic checks (no AI needed - they matched it to a package update or one of our own commits)",
         "Checks",
     ),
     "felt": (
@@ -216,7 +214,8 @@ def followup_facts(incident: dict) -> str:
 def plain_line(incident: dict, kind: str) -> str:
     """Her line without her model, when felt-llm is down: the same fixed
     facts, plainly put. Only for the levels that pop, so a felt-llm outage
-    never silences an urgent alert (WP-42.5)."""
+    never silences an urgent alert (WP-42.5).
+    """
     about, todo = MEANINGS.get(incident["type"], MEANINGS["unknown"])
     report = json.loads(incident["report"]) if incident.get("report") else None
     if kind in ("followup", "both") and report:
@@ -262,7 +261,8 @@ def due(db_path: str, now: datetime | None = None) -> list[tuple[int, str]]:
     and have since resolved, "followup" once Claude reported or was missed
     (always after her first line), and "both" when Claude's report came in
     before her first line - pushed to him at once, he can finish before her
-    loop comes round, and she must still say something: one line with both."""
+    loop comes round, and she must still say something: one line with both.
+    """
     settled = ((now or datetime.now(UTC)) - SETTLE).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
     try:
@@ -313,7 +313,8 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
 
 async def write_due(config: FeltConfig) -> int:
     """Writes every line that's owed; stops at the first felt-llm outage
-    (the next round retries). Returns how many it wrote."""
+    (the next round retries). Returns how many it wrote.
+    """
     from felt_core.incidents import get
 
     written = 0

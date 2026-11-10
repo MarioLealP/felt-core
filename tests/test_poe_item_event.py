@@ -40,9 +40,12 @@ def test_parse_unique_currency_rare():
     }
     cur = poe_reactions.parse_item_text(CURRENCY.replace("\n", "\r\n"))
     assert cur is not None
-    assert cur["name"] == "Exalted Orb" and cur["kind"] == "currency" and cur["base"] == ""
+    assert cur["name"] == "Exalted Orb"
+    assert cur["kind"] == "currency"
+    assert cur["base"] == ""
     rare = poe_reactions.parse_item_text(RARE)
-    assert rare is not None and rare["kind"] == "other"
+    assert rare is not None
+    assert rare["kind"] == "other"
     assert poe_reactions.parse_item_text("hello there") is None
     assert poe_reactions.parse_item_text("") is None
 
@@ -58,11 +61,9 @@ def test_prompt_needs_a_real_price():
         },
     )
     assert priced is not None
-    assert "40 divine" in priced and "Death Rush" in priced
-    assert (
-        events.build_prompt("poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []})
-        is None
-    )
+    assert "40 divine" in priced
+    assert "Death Rush" in priced
+    assert events.build_prompt("poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []}) is None
     assert events.build_prompt("poe_item", {}) is None
 
 
@@ -75,11 +76,13 @@ def test_details_are_parsed_and_priced(monkeypatch):
 
     monkeypatch.setattr(poe_reactions, "price_items", fake_price)
     out = asyncio.run(events._poe_item_details({"text": CURRENCY}, config=None))  # ty: ignore[invalid-argument-type]
-    assert out["name"] == "Exalted Orb" and out["prices"] == ["Exalted Orb: 0.01 divine"]
+    assert out["name"] == "Exalted Orb"
+    assert out["prices"] == ["Exalted Orb: 0.01 divine"]
     assert seen["items"][0]["kind"] == "currency"
     assert asyncio.run(events._poe_item_details({"text": "not an item"}, config=None)) == {}  # ty: ignore[invalid-argument-type]
 
 
 def test_poe_item_policy_skips_the_chatter_gap():
     p = events.DEFAULT_POLICIES["poe_item"]
-    assert p.bypass_min_gap and p.cooldown_s <= 5
+    assert p.bypass_min_gap
+    assert p.cooldown_s <= 5

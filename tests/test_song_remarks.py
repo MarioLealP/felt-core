@@ -47,7 +47,9 @@ def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch
     monkeypatch.setattr(events, "react_to_event", fake_react)
     asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
     item = db.claim_next_proactive(Config.db_path)
-    assert item is not None and item["text"] == "Oh, this one." and item["kind"] == "music"
+    assert item is not None
+    assert item["text"] == "Oh, this one."
+    assert item["kind"] == "music"
     conn = db._connect(Config.db_path)
     lines = conn.execute("SELECT kind FROM messages").fetchall()
     conn.close()

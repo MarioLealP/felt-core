@@ -1,6 +1,7 @@
 """WP-48 DJ mode: Felt runs Mario's Spotify queue - her picks from his taste,
 about a third new to him, a line as each comes on, learning from his skips.
-Also "more like this" / "not this" about the current song."""
+Also "more like this" / "not this" about the current song.
+"""
 
 import httpx
 

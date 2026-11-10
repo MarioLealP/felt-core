@@ -41,7 +41,8 @@ def meru_client_context(tls_dir: str) -> ssl.SSLContext:
 def meru_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
     """A client for an in-cluster peer that checks certificates (drive-rag): her Meru certificate
     when FELT_MERU_TLS_DIR is set and the URL is https://, else felt_tls's Felt-cert client
-    (compose)."""
+    (compose).
+    """
     tls_dir = getattr(config, "meru_tls_dir", None)
     if (url or "").startswith("https://") and tls_dir:
         return httpx.AsyncClient(verify=meru_client_context(tls_dir), **kwargs)
@@ -65,7 +66,8 @@ _locks: dict[tuple[str, str], asyncio.Lock] = {}
 async def access_token(config: Any, audience: str) -> str | None:
     """A valid Authentik token for ``audience`` (= the callee's client id), or None when there's
     no Authentik login (compose). Cached until a minute before it expires; one fetch at a time per
-    audience."""
+    audience.
+    """
     token_file = getattr(config, "authentik_token_file", None)
     if not token_file:
         return None

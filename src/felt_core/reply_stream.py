@@ -32,7 +32,8 @@ _clock: Callable[[], float] = time.monotonic
 
 class ChunkFailed(Exception):
     """The chunk's TTS failed (or an earlier chunk's did - a stream stops at
-    the first failure, the tray can't play past a gap)."""
+    the first failure, the tray can't play past a gap).
+    """
 
 
 class ReplyStream:
@@ -70,7 +71,8 @@ class ReplyStream:
 
     def append(self, text: str) -> int:
         """An open stream's next chunk (its audio still to come); its index.
-        Past a failure it's failed straight away."""
+        Past a failure it's failed straight away.
+        """
         n = len(self.texts)
         self.texts.append(text)
         self._audio.append(None)
@@ -95,7 +97,8 @@ class ReplyStream:
 
     async def wait_for_chunk_slot(self, n: int, timeout: float) -> bool:
         """Waits up to `timeout` s for chunk n to exist (an open stream
-        grows); False if it doesn't by then or the stream ended before it."""
+        grows); False if it doesn't by then or the stream ended before it.
+        """
         try:
             async with asyncio.timeout(timeout):
                 while n >= len(self) and not self.done:
@@ -106,7 +109,8 @@ class ReplyStream:
 
     async def wait_chunk(self, n: int, timeout: float) -> bytes | None:
         """The chunk's WAV, waiting up to `timeout` s for it; None if it's
-        still not ready by then. Raises ChunkFailed. `n` must be < len."""
+        still not ready by then. Raises ChunkFailed. `n` must be < len.
+        """
         if not self._events[n].is_set():
             try:
                 await asyncio.wait_for(self._events[n].wait(), timeout)
@@ -134,7 +138,8 @@ def _drop(stream_id: str) -> None:
 
 def create(texts: list[str], first_wav: bytes) -> ReplyStream:
     """Registers a new stream whose chunk 0 (`texts[0]`) is already
-    synthesised. The caller starts `run` on it for the rest."""
+    synthesised. The caller starts `run` on it for the rest.
+    """
     _purge()
     stream = ReplyStream(uuid.uuid4().hex, texts)
     stream.set_chunk(0, first_wav)
@@ -169,7 +174,8 @@ def clear() -> None:
 
 async def run(stream: ReplyStream, synthesize: Callable[[int, str], Awaitable[bytes]]) -> None:
     """Fills chunks 1..N-1 in order. The first failure fails the rest of
-    the stream (see ChunkFailed)."""
+    the stream (see ChunkFailed).
+    """
     for n in range(1, len(stream)):
         try:
             stream.set_chunk(n, await synthesize(n, stream.texts[n]))

@@ -61,11 +61,7 @@ def _leaf(d, name, issuer, ext):
 
 
 def _bundle(d, name, issuer):
-    return (
-        (d / f"{name}.key").read_text()
-        + (d / f"{name}.pem").read_text()
-        + (d / f"{issuer}.pem").read_text()
-    )
+    return (d / f"{name}.key").read_text() + (d / f"{name}.pem").read_text() + (d / f"{issuer}.pem").read_text()
 
 
 @pytest.fixture(scope="module")
@@ -117,8 +113,7 @@ def pki(tmp_path_factory):
             d,
             n,
             "feltint",
-            cli
-            + "DNS:felt-core.felt.internal,URI:spiffe://clockmost.internal/workload/felt-core\n",
+            cli + "DNS:felt-core.felt.internal,URI:spiffe://clockmost.internal/workload/felt-core\n",
         )
     ident = d / "identity"
     (ident / "client" / "current").mkdir(parents=True)
@@ -149,13 +144,9 @@ def _server(pki, cert_name, issuer):
                     p = s.getpeercert()
                     if p is None:  # CERT_REQUIRED: can't happen, but don't guess
                         continue
-                    seen.append(
-                        ([v for k, v in p["subjectAltName"] if k == "URI"], p["serialNumber"])
-                    )
+                    seen.append(([v for k, v in p["subjectAltName"] if k == "URI"], p["serialNumber"]))
                     s.recv(4096)
-                    s.sendall(
-                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
-                    )
+                    s.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
             except (ssl.SSLError, OSError):
                 pass
 
@@ -164,9 +155,7 @@ def _server(pki, cert_name, issuer):
 
 
 def _cfg(pki, port, identity=True):
-    return SimpleNamespace(
-        voice_url=f"https://{NAME}:{port}", identity_dir=str(pki / "identity") if identity else None
-    )
+    return SimpleNamespace(voice_url=f"https://{NAME}:{port}", identity_dir=str(pki / "identity") if identity else None)
 
 
 async def _get(cfg):
@@ -194,14 +183,10 @@ async def test_renewed_client_cert_used_next_call(pki):
     port, seen = _server(pki, "voice", "feltint")
     await _get(_cfg(pki, port))
     first = seen[-1][1]
-    (pki / "identity" / "client" / "current" / "bundle.pem").write_text(
-        _bundle(pki, "core2", "feltint")
-    )
+    (pki / "identity" / "client" / "current" / "bundle.pem").write_text(_bundle(pki, "core2", "feltint"))
     await _get(_cfg(pki, port))
     assert seen[-1][1] != first  # no restart needed (D5)
-    (pki / "identity" / "client" / "current" / "bundle.pem").write_text(
-        _bundle(pki, "core", "feltint")
-    )
+    (pki / "identity" / "client" / "current" / "bundle.pem").write_text(_bundle(pki, "core", "feltint"))
 
 
 @pytest.mark.asyncio

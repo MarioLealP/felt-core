@@ -53,9 +53,7 @@ async def _synthesize(config: Any, tts_text: str, emotion: str | None = None) ->
         voice_client(config, timeout=60) as client,
         metrics.timed("tts", chars=len(tts_text)),
     ):
-        resp = await client.post(
-            f"{config.voice_url}/v1/tts", json=tts_request_body(tts_text, emotion)
-        )
+        resp = await client.post(f"{config.voice_url}/v1/tts", json=tts_request_body(tts_text, emotion))
         resp.raise_for_status()
     tts_cache.put(tts_text, resp.content, emotion)
     return resp.content
@@ -63,7 +61,8 @@ async def _synthesize(config: Any, tts_text: str, emotion: str | None = None) ->
 
 async def proactive_audio(config: Any, text: str, emotion: str | None = None) -> bytes:
     """The item's WAV via the shared WP-06 TTS cache, joining an in-flight
-    pre-synthesis if there is one."""
+    pre-synthesis if there is one.
+    """
     tts_text = strip_for_tts(text)
     cached = tts_cache.get(tts_text, emotion)
     if cached is not None:
@@ -78,7 +77,8 @@ def _prewarm_audio(config: Any, text: str, emotion: str | None = None) -> None:
     """Best-effort: start synthesis now if we're inside the server's event
     loop and felt-voice is configured. Enqueueing from sync code with no
     running loop (scripts, tests) just skips it, and /audio synthesises on
-    demand as before."""
+    demand as before.
+    """
     if not getattr(config, "voice_url", None):
         return
     try:
@@ -98,9 +98,7 @@ def _prewarm_audio(config: Any, text: str, emotion: str | None = None) -> None:
 
     task = loop.create_task(_run())
     task.add_done_callback(
-        lambda t: (
-            t.exception() and logger.warning("proactive pre-synthesis failed: %r", t.exception())
-        )
+        lambda t: t.exception() and logger.warning("proactive pre-synthesis failed: %r", t.exception())
     )
     _inflight[key] = task
 
@@ -108,7 +106,8 @@ def _prewarm_audio(config: Any, text: str, emotion: str | None = None) -> None:
 def clamp_timeout(timeout_s: float) -> float:
     """The long-poll endpoint's own `?timeout=` clamped to a sane band -
     long enough to actually long-poll, short enough a client's HTTP
-    timeout/connection never has to outlive it by much."""
+    timeout/connection never has to outlive it by much.
+    """
     return max(_MIN_TIMEOUT_S, min(_MAX_TIMEOUT_S, timeout_s))
 
 
@@ -128,7 +127,8 @@ def enqueue_proactive(
     already started is useless") - past that, `claim_next_proactive`/the
     accept test's "an expired one never is [spoken]" guarantee kicks in.
     `record=False` when the line is already in her log (an event line), so
-    this only asks the desktop to say it."""
+    this only asks the desktop to say it.
+    """
     payload: dict[str, str] = {}
     if animation_tag is not None:
         payload["animation_tag"] = animation_tag
@@ -167,7 +167,8 @@ async def wait_for_next(config: Any, timeout_s: float) -> dict | None:
     """Long-poll: returns the oldest undelivered, unexpired item (already
     marked delivered by `claim_next_proactive`) as soon as one exists, or
     None once `timeout_s` (already clamped by the caller) elapses without
-    one."""
+    one.
+    """
     deadline = time.monotonic() + timeout_s
     while True:
         row = db.claim_next_proactive(config.db_path)

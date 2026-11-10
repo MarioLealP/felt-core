@@ -58,9 +58,7 @@ def world(monkeypatch):
         return World.reply
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", reply)
-    monkeypatch.setattr(
-        brief, "enqueue_proactive", lambda config, kind, text, **kw: World.said.append(text)
-    )
+    monkeypatch.setattr(brief, "enqueue_proactive", lambda config, kind, text, **kw: World.said.append(text))
 
     async def notify(config, title, message, tag):
         World.phone.append(message)
@@ -78,9 +76,12 @@ def test_due():
 async def test_the_brief_goes_out_once(tmp_path, world):
     config = _config(tmp_path)
     assert await brief.maybe_brief(config, MORNING) == world.reply
-    assert world.said == [world.reply] and world.phone == [world.reply]
+    assert world.said == [world.reply]
+    assert world.phone == [world.reply]
     facts = world.prompts[0]
-    assert "Dentist at 15:00" in facts and "Cloudy" in facts and "Metro do Porto" in facts
+    assert "Dentist at 15:00" in facts
+    assert "Cloudy" in facts
+    assert "Metro do Porto" in facts
     assert await brief.maybe_brief(config, MORNING) is None  # once a day
     assert len(world.said) == 1
 
@@ -88,14 +89,16 @@ async def test_the_brief_goes_out_once(tmp_path, world):
 async def test_a_part_that_fails_is_left_out(tmp_path, world):
     world.texts = {**world.texts, "get_weather": None}
     await brief.maybe_brief(_config(tmp_path), MORNING)
-    assert "Weather" not in world.prompts[0] and "Dentist" in world.prompts[0]
+    assert "Weather" not in world.prompts[0]
+    assert "Dentist" in world.prompts[0]
 
 
 async def test_felt_llm_down_says_the_facts(tmp_path, world):
     world.reply = None
     line = await brief.maybe_brief(_config(tmp_path), MORNING)
     assert line is not None
-    assert line.startswith("Good morning. Here's today:") and "Dentist at 15:00" in line
+    assert line.startswith("Good morning. Here's today:")
+    assert "Dentist at 15:00" in line
 
 
 async def test_the_diary_greeting_opens_it(tmp_path, world):
@@ -110,7 +113,8 @@ async def test_switched_off(tmp_path, world):
     config = _config(tmp_path)
     features.set_enabled(config.db_path, brief.FEATURE, False)
     assert not brief.will_open_with(config, MORNING)
-    assert await brief.maybe_brief(config, MORNING) is None and world.said == []
+    assert await brief.maybe_brief(config, MORNING) is None
+    assert world.said == []
 
 
 def test_overnight(tmp_path):

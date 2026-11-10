@@ -89,11 +89,7 @@ def snap_unique_name(name: str, config: FeltConfig) -> str:
 
 async def price_items(items: list[dict], config: FeltConfig) -> list[str]:
     """Price up to MAX_PRICED unique/currency items; one text per found price."""
-    wanted = [
-        i
-        for i in items
-        if i.get("kind") in ("unique", "currency") and str(i.get("name", "")).strip()
-    ]
+    wanted = [i for i in items if i.get("kind") in ("unique", "currency") and str(i.get("name", "")).strip()]
     if not wanted:
         return []
     skill = load_plugins(config.plugins_dir).get("poe_price_check")
@@ -106,9 +102,7 @@ async def price_items(items: list[dict], config: FeltConfig) -> list[str]:
         if item["kind"] == "unique":
             name = snap_unique_name(name, config)
         try:
-            result = await skill.handle(
-                {"item_name": name}, ExecutionContext(config=config, original_message=name)
-            )
+            result = await skill.handle({"item_name": name}, ExecutionContext(config=config, original_message=name))
         except Exception:
             logger.exception("poe reaction: price check failed for %r", name)
             continue
@@ -149,7 +143,8 @@ _KINDS = {"unique": "unique", "currency": "currency"}
 def parse_item_text(text: str) -> dict | None:
     """PoE2's copied item text -> {"name", "base", "rarity", "kind", "item_class"},
     or None if it isn't one. The header is: "Item Class: X", "Rarity: Y",
-    then the name, then (uniques, rares) the base type."""
+    then the name, then (uniques, rares) the base type.
+    """
     lines = [ln.strip() for ln in text.replace("\r", "").split("\n")]
     header = []
     for ln in lines:
@@ -157,11 +152,7 @@ def parse_item_text(text: str) -> dict | None:
             break
         if ln:
             header.append(ln)
-    fields = dict(
-        ln.split(": ", 1)
-        for ln in header
-        if ": " in ln and ln.split(": ", 1)[0] in ("Item Class", "Rarity")
-    )
+    fields = dict(ln.split(": ", 1) for ln in header if ": " in ln and ln.split(": ", 1)[0] in ("Item Class", "Rarity"))
     rarity = fields.get("Rarity", "").strip()
     if not rarity:
         return None

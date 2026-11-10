@@ -14,9 +14,7 @@ def _config(tmp_path) -> FeltConfig:
 
 
 def _decision(**kw) -> str:
-    return json.dumps(
-        {"mark": True, "line": "his", "type": "circle", "quote": "bin bags", "note": "again?"} | kw
-    )
+    return json.dumps({"mark": True, "line": "his", "type": "circle", "quote": "bin bags", "note": "again?"} | kw)
 
 
 def test_parse_keeps_only_real_quotes():
@@ -28,7 +26,8 @@ def test_parse_keeps_only_real_quotes():
         "note": "again?",
     }
     assert marks.parse_decision(_decision(quote="cat food"), line) is None
-    assert marks.wants_to_mark(_decision()) and not marks.wants_to_mark(_decision(mark=False))
+    assert marks.wants_to_mark(_decision())
+    assert not marks.wants_to_mark(_decision(mark=False))
     assert marks.parse_decision(_decision(type="squiggle"), line) is None
     assert marks.parse_decision("not json", line) is None
 
@@ -50,8 +49,10 @@ async def test_mark_is_saved_and_shows_in_history(tmp_path, monkeypatch):
 
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
     mark = await marks.maybe_mark(config, "dashboard")
-    assert mark is not None and mark["quote"] == "bin bags"
-    assert "never marked" in seen["prompt"] and "rare" in seen["prompt"]
+    assert mark is not None
+    assert mark["quote"] == "bin bags"
+    assert "never marked" in seen["prompt"]
+    assert "rare" in seen["prompt"]
     page = history_page(config.db_path, "dashboard")
     assert page[0]["marks"][0]["type"] == "circle"
     assert page[1]["marks"] == []
@@ -80,15 +81,14 @@ def test_parse_allows_her_own_line_long_quotes_and_strikes():
         "his": "add oat milk and bin bags",
         "mine": "Added. I'm not going to remind you about the bin bags a third time, I promise.",
     }
-    struck = marks.parse_decision(
-        _decision(line="mine", type="strike-through", quote="I promise", note=""), lines
-    )
+    struck = marks.parse_decision(_decision(line="mine", type="strike-through", quote="I promise", note=""), lines)
     assert struck == {"line": "mine", "type": "strike-through", "quote": "I promise", "note": ""}
     sentence = "I'm not going to remind you about the bin bags a third time"
     assert marks.parse_decision(_decision(line="mine", type="underline", quote=sentence), lines)
     # a real quote filed under the wrong line goes to the line it's in
     moved = marks.parse_decision(_decision(line="his", quote="I promise"), lines)
-    assert moved is not None and moved["line"] == "mine"
+    assert moved is not None
+    assert moved["line"] == "mine"
     assert marks.parse_decision(_decision(quote="cat food"), lines) is None
 
 
@@ -113,7 +113,8 @@ async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
     assert await marks.maybe_mark(config, "dashboard") is not None
     assert "Your answer: Done, bin bags again." in seen["prompt"]
     page = history_page(config.db_path, "dashboard")
-    assert page[0]["marks"] == [] and page[1]["marks"][0]["quote"] == "again"
+    assert page[0]["marks"] == []
+    assert page[1]["marks"][0]["quote"] == "again"
     # one mark per exchange: a mark on her reply also closes it
     assert await marks.maybe_mark(config, "dashboard") is None
 
@@ -152,8 +153,7 @@ def test_ink_is_seen_once_across_devices(tmp_path):
     marks._ensure(conn)
     with conn:
         conn.execute(
-            "INSERT INTO message_marks (id, message_id, type, quote)"
-            " VALUES ('mk1', ?, 'circle', 'bin')",
+            "INSERT INTO message_marks (id, message_id, type, quote) VALUES ('mk1', ?, 'circle', 'bin')",
             (msg,),
         )
     conn.close()

@@ -164,9 +164,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
             elif cls == AMBIENT:
                 gate.ambient_runs.append((ended, ended - started))
             gate.cond.notify_all()
-        logger.info(
-            "llm gate: %s ran %.1f s (waited %.1f s)", name, ended - started, started - queued
-        )
+        logger.info("llm gate: %s ran %.1f s (waited %.1f s)", name, ended - started, started - queued)
 
 
 def _cancelling() -> bool:

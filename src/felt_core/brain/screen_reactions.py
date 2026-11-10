@@ -67,7 +67,8 @@ def recent_lines_block(lines: list[str]) -> str:
     (personality plan P3, B-1). It goes LAST, in the per-glance
     instruction, not in `system`: models weight what they read last most
     (the SillyTavern post-history lesson), and "don't repeat" loses to a
-    long persona block otherwise."""
+    long persona block otherwise.
+    """
     if not lines:
         return ""
     listed = "\n".join(f"- {line}" for line in lines)
@@ -89,7 +90,8 @@ def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
     react_to_screen use - previously each inlined an identical copy of
     this exact seconds_since_last_spoken_reaction + logging + early-return
     block. True means "don't call a model, we're on cooldown" (already
-    logged when true)."""
+    logged when true).
+    """
     seconds_since = seconds_since_last_spoken_reaction(config.db_path, session_id)
     if seconds_since is not None and seconds_since < config.screen_reaction_cooldown_s:
         logger.info(
@@ -130,9 +132,7 @@ async def process_screen_context(
     if _on_cooldown(config, session_id):
         return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(
-        get_recent_observations(config.db_path, session_id, limit=3)
-    )
+    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
     instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(_recent_lines(config, session_id))
 
     async def _attempt() -> str:
@@ -226,7 +226,8 @@ async def _react_to_screen_local(
     replies. LocalLLMUnavailable propagates (the API answers 503).
 
     `seen` is a description felt-tray already got from the desktop's own
-    felt-vision (cm-qplv) - then nobody here looks at an image."""
+    felt-vision (cm-qplv) - then nobody here looks at an image.
+    """
     if seen is not None or config.vision_url:
         # felt-vision reads the image; Bonsai gets its words (vision spike 2026-10-21)
         if seen is None:
@@ -286,16 +287,15 @@ async def react_to_screen(
 
     `trigger="manual"` (WP-10's future "look at this" key) bypasses the
     cooldown - every other trigger respects it, checked BEFORE any model
-    call, same as process_screen_context."""
+    call, same as process_screen_context.
+    """
     if trigger != "manual" and _on_cooldown(config, session_id):
         return ChatResult(reply="", animation_tag=None)
     switch = "ambient.poe_reactions" if poe_reactions.is_poe(app) else "ambient.screen_reactions"
     if trigger != "manual" and not features.enabled(config.db_path, switch):
         return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(
-        get_recent_observations(config.db_path, session_id, limit=3)
-    )
+    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
     system = daily_persona()
     context = per_call_context(tone, f"{app} {title}", config)
     context_line = f'App: {app} — "{title}"'
@@ -308,9 +308,7 @@ async def react_to_screen(
         parsed = await _react_to_screen_local(
             jpeg_bytes,
             system,
-            with_context(
-                context, f"{observations_block}\n\n{context_line}\n\n{instruction}{recent}"
-            ),
+            with_context(context, f"{observations_block}\n\n{context_line}\n\n{instruction}{recent}"),
             config,
             schema=poe_reactions.POE_SCHEMA if poe else None,
             app=app,
@@ -343,8 +341,6 @@ async def react_to_screen(
         return ChatResult(reply="", animation_tag=None)
 
     set_observation_reply(config.db_path, obs_id, line)
-    save_message(
-        config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}"
-    )
+    save_message(config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}")
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=line, animation_tag=None, emotion=emotion)

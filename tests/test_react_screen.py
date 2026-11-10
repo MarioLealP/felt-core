@@ -25,14 +25,10 @@ def _json_response(seen="a game", line="Nice!", emotion="excited") -> str:
 
 async def test_react_to_screen_happy_path(tmp_path, fake_llm):
     config = _config(tmp_path)
-    fake_llm.script = [
-        _json_response(seen="a boss fight", line="Ooh, tough boss!", emotion="excited")
-    ]
+    fake_llm.script = [_json_response(seen="a boss fight", line="Ooh, tough boss!", emotion="excited")]
 
     jpeg_bytes = b"fake-jpeg-bytes"
-    result = await brain.react_to_screen(
-        jpeg_bytes, "game.exe", "My Game", config, session_id="wp07-test"
-    )
+    result = await brain.react_to_screen(jpeg_bytes, "game.exe", "My Game", config, session_id="wp07-test")
 
     assert result.reply == "Ooh, tough boss!"
     assert result.emotion == "excited"
@@ -51,9 +47,7 @@ async def test_unknown_emotion_folds_to_neutral(tmp_path, fake_llm):
     config = _config(tmp_path)
     fake_llm.script = [_json_response(emotion="ecstatic")]  # not in the fixed set
 
-    result = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-test2"
-    )
+    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-test2")
 
     assert result.emotion == "neutral"
 
@@ -65,15 +59,11 @@ async def test_cooldown_blocks_a_second_call_with_zero_model_calls(tmp_path, fak
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
     fake_llm.default = _json_response()
 
-    first = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown"
-    )
+    first = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown")
     assert first.reply
     assert len(fake_llm.calls) == 1
 
-    second = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown"
-    )
+    second = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-cooldown")
     assert second.reply == ""
     assert len(fake_llm.calls) == 1  # no new model call while on cooldown
 
@@ -82,9 +72,7 @@ async def test_manual_trigger_bypasses_cooldown(tmp_path, fake_llm):
     config = _config(tmp_path, screen_reaction_cooldown_s=90)
     fake_llm.default = _json_response()
 
-    await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-manual", trigger="focus"
-    )
+    await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-manual", trigger="focus")
     assert len(fake_llm.calls) == 1
 
     # Still well within the 90s cooldown, but trigger="manual" skips it.
@@ -102,9 +90,7 @@ async def test_json_parse_failure_retries_once(tmp_path, fake_llm):
     config = _config(tmp_path)
     fake_llm.script = ["not json at all", _json_response(line="recovered")]
 
-    result = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-retry"
-    )
+    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-retry")
 
     assert result.reply == "recovered"
     assert len(fake_llm.calls) == 2
@@ -114,9 +100,7 @@ async def test_json_parse_failure_twice_gives_up_silently(tmp_path, fake_llm):
     config = _config(tmp_path)
     fake_llm.default = "still not json"
 
-    result = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-giveup"
-    )
+    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-giveup")
 
     assert result.reply == ""
     assert len(fake_llm.calls) == 2  # first attempt + exactly one retry, no more
@@ -126,9 +110,7 @@ async def test_lenient_extraction_of_json_block_from_extra_text(tmp_path, fake_l
     config = _config(tmp_path)
     fake_llm.script = ["Sure! " + _json_response(line="extracted fine") + " Hope that helps!"]
 
-    result = await brain.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="wp07-lenient"
-    )
+    result = await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-lenient")
 
     assert result.reply == "extracted fine"
 
@@ -141,9 +123,7 @@ async def test_felt_llm_unavailable_propagates_uncaught(tmp_path, fake_llm):
     fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
 
     with pytest.raises(LocalLLMUnavailable):
-        await brain.react_to_screen(
-            b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable"
-        )
+        await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable")
 
 
 # -- the endpoint maps it to a real 503 ---------------------------------------

@@ -11,7 +11,8 @@ def is_skip(played_ms: int, duration_ms: int) -> bool:
     """A track counts as skipped if it changed before _SKIP_THRESHOLD of
     its duration played. An unknown/zero duration can't be classified as a
     skip (there's nothing to compare against), so it's counted as a full
-    play rather than silently dropped."""
+    play rather than silently dropped.
+    """
     if duration_ms <= 0:
         return False
     return played_ms < duration_ms * _SKIP_THRESHOLD
@@ -46,9 +47,7 @@ def summarize_taste(rows: list[dict]) -> str:
         most_replayed["track_name"] != skip_note_track
         and most_replayed["plays"] - most_replayed["skips"] >= _MIN_PLAYS_TO_MENTION
     ):
-        notes.append(
-            f'often plays "{most_replayed["track_name"]}" by {most_replayed["artists"]} all the way through'
-        )
+        notes.append(f'often plays "{most_replayed["track_name"]}" by {most_replayed["artists"]} all the way through')
 
     if not notes:
         return ""

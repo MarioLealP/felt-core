@@ -1,5 +1,6 @@
 """WP-42.5: the controls' routes - the app's (SSO) and the desktop tray's
-(bearer token). The switches themselves live in controls.py."""
+(bearer token). The switches themselves live in controls.py.
+"""
 
 import asyncio
 from typing import Literal

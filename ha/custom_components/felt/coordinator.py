@@ -1,7 +1,8 @@
 """Polls felt-core: her switches (quiet, hide, DJ mode), the Systems
 summary (Zabbix/Wazuh/ntfy as triaged incidents) and today's brief, as
 {"controls", "systems", "brief"}. The brief is looked up every 5 minutes, not
-every poll (it pages through her Margins)."""
+every poll (it pages through her Margins).
+"""
 
 from __future__ import annotations
 

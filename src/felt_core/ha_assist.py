@@ -42,14 +42,16 @@ _SEVERAL_ON_A_LIST = re.compile(r"(\band\b|,|&).*\blist\b", re.IGNORECASE)
 def clean(message: str) -> str:
     """Pure: the command without the pleasantries HA's sentences don't
     allow - "Felt, can you turn the shelf light on please :)" -> "turn the
-    shelf light on"."""
+    shelf light on".
+    """
     text = _OPENING.sub("", message, count=1)
     return _CLOSING.sub("", text).strip()
 
 
 async def handle(config: FeltConfig, message: str) -> str | None:
     """HA's answer ("Turned off the light", "Yes", "5") when it matched and
-    did it; None to leave the message to her model."""
+    did it; None to leave the message to her model.
+    """
     if not (config.ha_url and config.ha_token):
         return None
     text = clean(message)

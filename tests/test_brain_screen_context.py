@@ -19,7 +19,8 @@ async def test_screen_context_makes_one_plain_local_call(tmp_path, fake_llm):
     assert result.reply == "nice reaction"
     assert len(fake_llm.calls) == 1
     call = fake_llm.calls[0]
-    assert call["tools"] is None and call["json_schema"] is None
+    assert call["tools"] is None
+    assert call["json_schema"] is None
     # The observation rides in the (merged) system message, the prompt is the last user turn.
     assert "a cat on the desk" in call["messages"][0]["content"]
     assert call["messages"][-1] == {"role": "user", "content": brain._SCREEN_REACTION_PROMPT}
@@ -70,9 +71,7 @@ async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_p
     config = _config(tmp_path)
     fake_llm.default = "look at that"
 
-    result = await brain.process_screen_context(
-        "something interesting", config, session_id="wp02-test"
-    )
+    result = await brain.process_screen_context("something interesting", config, session_id="wp02-test")
 
     assert result.reply == "look at that"
     history = get_history(config.db_path, "wp02-test")

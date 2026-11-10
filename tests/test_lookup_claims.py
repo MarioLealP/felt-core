@@ -293,7 +293,8 @@ async def test_a_skill_whose_service_is_down_says_so(tmp_path, monkeypatch):
         ("poe2_wiki", {"query": "chaos orb"}), {}, _config(tmp_path), "what does the chaos orb do"
     )
     assert result is None
-    assert "couldn't reach" in output and "poe2_wiki" in output
+    assert "couldn't reach" in output
+    assert "poe2_wiki" in output
 
 
 # cm-p6a: tools chained in one message (search, then set the reminder)
@@ -336,7 +337,8 @@ async def test_a_second_tool_call_runs(tmp_path, monkeypatch, fake_llm):
     assert [name for name, _ in handled] == ["web_search", "set_reminder"]
     assert result.reply == "It launches at 11 tonight - you'll get a nudge at 10."
     tool_results = [m for m in fake_llm.calls[2]["messages"] if m["role"] == "tool"]
-    assert len(tool_results) == 2 and "Reminder set" in tool_results[1]["content"]
+    assert len(tool_results) == 2
+    assert "Reminder set" in tool_results[1]["content"]
 
 
 async def test_a_claimed_reminder_after_a_search_is_retried(tmp_path, monkeypatch, fake_llm):

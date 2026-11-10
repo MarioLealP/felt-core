@@ -63,7 +63,8 @@ def _age(column: str) -> str:
 
 def wake(db_path: str) -> bool:
     """Rings the responder's doorbell if anything waits for Claude: rewrites
-    a marker file next to the database, which the host's path unit watches."""
+    a marker file next to the database, which the host's path unit watches.
+    """
     if not waiting(db_path):
         return False
     Path(db_path).with_name(WAKE_FILE).write_text(datetime.now(UTC).isoformat())
@@ -72,7 +73,8 @@ def wake(db_path: str) -> bool:
 
 def waiting(db_path: str) -> int:
     """How many incidents are waiting for Claude - so the runner only checks
-    the usage limits when there's work. None while he's switched off."""
+    the usage limits when there's work. None while he's switched off.
+    """
     if not claude_alerts(db_path):
         return 0
     conn = _connect(db_path)
@@ -85,7 +87,8 @@ def waiting(db_path: str) -> int:
 
 def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:
     """The next incident for Claude (most urgent, then oldest), marked as
-    handed over; None when there's none or today's cap is spent."""
+    handed over; None when there's none or today's cap is spent.
+    """
     if not claude_alerts(db_path):
         return None  # the kill switch: nothing is handed over
     now = now or datetime.now(UTC)
@@ -94,14 +97,10 @@ def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) 
     try:
         _ensure(conn)
         with conn:
-            today = conn.execute(
-                "SELECT COUNT(*) FROM incidents WHERE handed_at >= ?", (day,)
-            ).fetchone()[0]
+            today = conn.execute("SELECT COUNT(*) FROM incidents WHERE handed_at >= ?", (day,)).fetchone()[0]
             if today >= cap:
                 return None
-            row = conn.execute(
-                f"SELECT id FROM incidents WHERE {_WAITING} ORDER BY {_TIERS}, id LIMIT 1"
-            ).fetchone()
+            row = conn.execute(f"SELECT id FROM incidents WHERE {_WAITING} ORDER BY {_TIERS}, id LIMIT 1").fetchone()
             if row is None:
                 return None
             conn.execute("UPDATE incidents SET handed_at = ? WHERE id = ?", (_ts(now), row[0]))
@@ -112,7 +111,8 @@ def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) 
 
 def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -> bool:
     """Stores Claude's report on a claimed incident; False if it wasn't his
-    (unknown, never handed over, or already reported)."""
+    (unknown, never handed over, or already reported).
+    """
     verdict = report.get("verdict")
     conn = _connect(db_path)
     try:
@@ -131,7 +131,8 @@ def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -
 
 def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> bool:
     """The responder hands a claimed incident to her own model: her report deadline
-    starts now. False if it isn't a claimed one still waiting for its report."""
+    starts now. False if it isn't a claimed one still waiting for its report.
+    """
     conn = _connect(db_path)
     try:
         _ensure(conn)
@@ -149,7 +150,8 @@ def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> b
 def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
     """Incidents Claude didn't get to in time, by tier: never claimed within
     CLAIM_WITHIN of opening, or claimed with no report within REPORT_WITHIN.
-    While he's switched off, every waiting one is missed at once ("off")."""
+    While he's switched off, every waiting one is missed at once ("off").
+    """
     stamp = _ts(now or datetime.now(UTC))
     switched_off = not claude_alerts(db_path)
     off: list[int] = []

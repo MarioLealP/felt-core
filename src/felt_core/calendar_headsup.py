@@ -84,7 +84,8 @@ _tasks: set[asyncio.Task] = set()
 
 def event_start(event: dict) -> datetime | None:
     """Pure: the event's start as an aware datetime, or None for an
-    all-day event (those have a `date`, not a `dateTime`)."""
+    all-day event (those have a `date`, not a `dateTime`).
+    """
     raw = event.get("start", {}).get("dateTime")
     return datetime.fromisoformat(raw) if raw else None
 
@@ -96,7 +97,8 @@ def is_relevant(event: dict) -> bool:
 
 def is_reminder(event: dict) -> bool:
     """Pure: one of set_reminder's events (fetch_upcoming marks the ones from
-    the reminders calendar)."""
+    the reminders calendar).
+    """
     return event.get("_reminder") is True
 
 
@@ -115,7 +117,8 @@ def due_stage(start: datetime, now: datetime, reminder: bool = False) -> Stage |
     """Pure: which heads-up is right for `now` - URGENT inside the last
     10 min, NORMAL between 30 and 10 min out, else none. A late first
     sight (8 min out) skips the 30-min one rather than sending both.
-    A reminder: REMINDER from a minute before its time to a few after."""
+    A reminder: REMINDER from a minute before its time to a few after.
+    """
     left = (start - now).total_seconds()
     if reminder:
         return REMINDER if -_REMINDER_GRACE_S <= left <= 60 else None
@@ -148,7 +151,8 @@ def plan(
     (delay_s, calendar_id, event, stage) - every stage whose fire time is
     before the next poll (`horizon_s`) and that isn't sent or pending.
     A fire time already past gets delay 0; `deliver` then re-checks with
-    `due_stage`, so a stale stage is dropped rather than sent late."""
+    `due_stage`, so a stale stage is dropped rather than sent late.
+    """
     out: list[tuple[float, str, dict, Stage]] = []
     for calendar_id, event in events:
         if not is_relevant(event):
@@ -187,7 +191,8 @@ def fallback_line(title: str, minutes: int, reminder: bool = False) -> str:
 
 def current_game(config: FeltConfig, now: datetime) -> str | None:
     """The game Mario's in right now per felt-animation's event log (the
-    latest game_start with no game_stop after it), else None."""
+    latest game_start with no game_stop after it), else None.
+    """
     fmt = "%Y-%m-%d %H:%M:%S"
     rows = db.get_events_between(
         config.db_path,
@@ -206,9 +211,7 @@ def current_game(config: FeltConfig, now: datetime) -> str | None:
     return None
 
 
-def build_prompt(
-    title: str, minutes: int, location: str | None, game: str | None, reminder: bool = False
-) -> str:
+def build_prompt(title: str, minutes: int, location: str | None, game: str | None, reminder: bool = False) -> str:
     where = f" at {location}" if location else ""
     context = f" He's in the middle of {game} right now." if game else ""
     if reminder:
@@ -251,11 +254,10 @@ async def _fresh(config: FeltConfig, calendar_id: str, event: dict) -> dict | No
         return await ha_calendar.get_event(client, config, calendar_id, event["id"], start)
 
 
-async def deliver(
-    config: FeltConfig, calendar_id: str, event: dict, stage: Stage, now: datetime | None = None
-) -> bool:
+async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stage, now: datetime | None = None) -> bool:
     """Re-check the event, then phrase and enqueue one heads-up. Returns
-    whether it was enqueued."""
+    whether it was enqueued.
+    """
     key = dedupe_key(event, stage)
     try:
         fresh = await _fresh(config, calendar_id, event)
@@ -265,9 +267,7 @@ async def deliver(
             return False
         start = event_start(fresh)
         if start != event_start(event):
-            logger.info(
-                "calendar heads-up: %s moved, the next poll reschedules it", event.get("id")
-            )
+            logger.info("calendar heads-up: %s moved, the next poll reschedules it", event.get("id"))
             return False
         assert start is not None
         reminder = is_reminder(event)
@@ -276,26 +276,20 @@ async def deliver(
         db.set_setting(config.db_path, key, now.isoformat())
         minutes = minutes_left(start, now)
         title = str(fresh.get("summary") or "something on your calendar")
-        line = await phrase(
-            config, title, minutes, fresh.get("location"), current_game(config, now), reminder
-        )
+        line = await phrase(config, title, minutes, fresh.get("location"), current_game(config, now), reminder)
         ttl = (start - now).total_seconds()
         if stage is NORMAL:
             ttl = min(ttl, _NORMAL_TTL_S)
         elif stage is REMINDER:
             ttl = _REMINDER_TTL_S
         enqueue_proactive(config, stage.kind, line, ttl_s=ttl)
-        logger.info(
-            "calendar heads-up: %s-min for %r enqueued as %s", stage.name, title, stage.kind
-        )
+        logger.info("calendar heads-up: %s-min for %r enqueued as %s", stage.name, title, stage.kind)
         return True
     finally:
         _pending.discard(key)
 
 
-def build_leave_prompt(
-    title: str, at: str, drive_min: int, leave_in: int, now: bool, game: str | None
-) -> str:
+def build_leave_prompt(title: str, at: str, drive_min: int, leave_in: int, now: bool, game: str | None) -> str:
     context = f" He's in the middle of {game} right now." if game else ""
     if now:
         ask = (
@@ -321,7 +315,8 @@ async def deliver_leave(
 ) -> bool:
     """A leave-by nudge: re-check the event and the traffic, then say it at
     the desk and on the phone. A leave time that traffic pushed later waits
-    for the next poll; one pushed earlier goes out at once."""
+    for the next poll; one pushed earlier goes out at once.
+    """
     key = dedupe_key(event, stage)
     try:
         fresh = await _fresh(config, calendar_id, event)
@@ -352,20 +347,14 @@ async def deliver_leave(
         from felt_core.brain.replies import local_reply
 
         try:
-            prompt = build_leave_prompt(
-                title, at, drive_min, leave_in, go, current_game(config, now)
+            prompt = build_leave_prompt(title, at, drive_min, leave_in, go, current_game(config, now))
+            line = (await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)).strip(
+                " \n\"'"
             )
-            line = (
-                await local_reply(
-                    [{"role": "user", "content": prompt}], config, include_facts=False
-                )
-            ).strip(" \n\"'")
         except local_llm.LocalLLMUnavailable:
             line = ""
         line = line or fallback_leave_line(title, at, drive_min, leave_in, go)
-        enqueue_proactive(
-            config, stage.kind, line, ttl_s=min(_LEAVE_TTL_S, (start - now).total_seconds())
-        )
+        enqueue_proactive(config, stage.kind, line, ttl_s=min(_LEAVE_TTL_S, (start - now).total_seconds()))
         try:
             await phone.notify(config, title, line, tag=f"felt-leave-{event['id']}")
         except phone.PhoneUnavailable:
@@ -376,18 +365,12 @@ async def deliver_leave(
         _pending.discard(key)
 
 
-async def _drive_times(
-    config: FeltConfig, events: list[tuple[str, dict]], now: datetime
-) -> dict[str, float]:
+async def _drive_times(config: FeltConfig, events: list[tuple[str, dict]], now: datetime) -> dict[str, float]:
     """Drive minutes per event with an address that still has a leave nudge to send."""
     out: dict[str, float] = {}
     for _, event in events:
         start = event_start(event)
-        if (
-            not (is_relevant(event) and leave_by.has_address(event))
-            or start is None
-            or start <= now
-        ):
+        if not (is_relevant(event) and leave_by.has_address(event)) or start is None or start <= now:
             continue
         if all(already_sent(config, dedupe_key(event, st)) for st in LEAVE_STAGES):
             continue
@@ -397,9 +380,7 @@ async def _drive_times(
     return out
 
 
-async def _deliver_later(
-    config: FeltConfig, delay_s: float, calendar_id: str, event: dict, stage: Stage
-) -> None:
+async def _deliver_later(config: FeltConfig, delay_s: float, calendar_id: str, event: dict, stage: Stage) -> None:
     await asyncio.sleep(delay_s)
     if not features.enabled(config.db_path, "calendar.headsup"):
         return
@@ -429,9 +410,7 @@ async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, d
         seen: set[tuple] = set()
         for cal in calendars:
             reminders = cal["id"] == config.ha_calendar_reminders
-            for event in await ha_calendar.list_events(
-                client, config, cal["id"], now, now + LOOKAHEAD
-            ):
+            for event in await ha_calendar.list_events(client, config, cal["id"], now, now + LOOKAHEAD):
                 # 2026-10-18: Tuesday's appointment was in the calendar twice -
                 # every nudge would have come twice, desk and phone
                 key = same_event_key(event)
@@ -444,16 +423,13 @@ async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, d
 
 async def poll_once(config: FeltConfig, now: datetime | None = None) -> int:
     """One poll: fetch the next 4 h and schedule what's due before the
-    next poll. Returns how many heads-ups it scheduled."""
+    next poll. Returns how many heads-ups it scheduled.
+    """
     now = now or datetime.now(UTC)
     events = await fetch_upcoming(config, now)
     drive = await _drive_times(config, events, now)
-    events = [
-        (c, {**e, "_drive_min": drive[e["id"]]} if e.get("id") in drive else e) for c, e in events
-    ]
-    scheduled = plan(
-        events, now, POLL_INTERVAL_S + 30, lambda key: already_sent(config, key), drive
-    )
+    events = [(c, {**e, "_drive_min": drive[e["id"]]} if e.get("id") in drive else e) for c, e in events]
+    scheduled = plan(events, now, POLL_INTERVAL_S + 30, lambda key: already_sent(config, key), drive)
     for delay, calendar_id, event, stage in scheduled:
         _pending.add(dedupe_key(event, stage))
         task = asyncio.create_task(_deliver_later(config, delay, calendar_id, event, stage))

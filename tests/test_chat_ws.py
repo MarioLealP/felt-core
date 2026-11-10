@@ -64,9 +64,7 @@ def test_chat_ws_logs_and_closes_on_an_unexpected_error(tmp_path, monkeypatch, c
     assert any("chat_ws" in record.message for record in caplog.records)
 
 
-def test_chat_ws_client_disconnect_is_logged_at_info_not_error(
-    tmp_path, monkeypatch, caplog, fake_llm
-):
+def test_chat_ws_client_disconnect_is_logged_at_info_not_error(tmp_path, monkeypatch, caplog, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
 
     fake_llm.default = "hi there"

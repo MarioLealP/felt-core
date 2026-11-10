@@ -96,7 +96,8 @@ _EVENT_INSTRUCTION = (
 @dataclass(frozen=True)
 class EventReaction:
     """`line` empty = no reaction; `skipped` then says why (cooldown,
-    unknown_event, ...)."""
+    unknown_event, ...).
+    """
 
     line: str = ""
     emotion: str | None = None
@@ -191,7 +192,8 @@ def decide(
 ) -> str | None:
     """Pure: None = speak, otherwise the reason not to. The `since_*` ages
     are seconds since the last spoken remark of any kind / of this event /
-    about this same thing (None = never)."""
+    about this same thing (None = never).
+    """
     policy = table.get(event)
     if policy is None:
         return "unknown_event"
@@ -228,11 +230,7 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
         )
     else:
         situation = "Mario just let you talk again after hushing you. Tease him about it."
-    avoid = (
-        f' Your last line when unhushed was "{previous}" - say something different.'
-        if previous
-        else ""
-    )
+    avoid = f' Your last line when unhushed was "{previous}" - say something different.' if previous else ""
     return (
         f"{situation}{avoid} Say ONE short, snappy, teasing line (max {UNHUSHED_MAX_WORDS} words), "
         "in character. No questions that need an answer. Plain spoken words only: no *actions*, "
@@ -242,7 +240,8 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
 
 def cap_words(line: str, max_words: int) -> str:
     """Pure: keep a line within max_words - its first sentence if that
-    fits, otherwise the first max_words words."""
+    fits, otherwise the first max_words words.
+    """
     words = line.split()
     if len(words) <= max_words:
         return line
@@ -256,20 +255,17 @@ def same_line(a: str | None, b: str | None) -> bool:
     """Pure: the same line, ignoring case and punctuation."""
 
     def norm(text: str | None) -> str:
-        return " ".join(
-            "".join(c for c in (text or "").lower() if c.isalnum() or c.isspace()).split()
-        )
+        return " ".join("".join(c for c in (text or "").lower() if c.isalnum() or c.isspace()).split())
 
     return bool(norm(a)) and norm(a) == norm(b)
 
 
-def build_prompt(
-    event: str, details: dict, lyric: str | None = None, previous: str | None = None
-) -> str | None:
+def build_prompt(event: str, details: dict, lyric: str | None = None, previous: str | None = None) -> str | None:
     """Pure: the user-turn text for an event, from whitelisted fields
     only. None if the details are too thin to say anything real about.
     `previous` is this event's last spoken line (unhushed uses it so the
-    same line never plays twice in a row)."""
+    same line never plays twice in a row).
+    """
     if event == "unhushed":
         return _unhushed_prompt(details, previous)
     if event == "music_new_track":
@@ -280,11 +276,7 @@ def build_prompt(
         )
         if not title:
             return None
-        song = (
-            f'"{title}"'
-            + (f" by {artist}" if artist else "")
-            + (f" (from {album})" if album else "")
-        )
+        song = f'"{title}"' + (f" by {artist}" if artist else "") + (f" (from {album})" if album else "")
         lyric_part = f' A line from it: "{lyric}". You may quote it if it fits.' if lyric else ""
         return f"Mario just started playing {song}.{lyric_part} {_EVENT_INSTRUCTION}"
     if event == "dj_track":
@@ -312,9 +304,7 @@ def build_prompt(
         what = f"{name}" if name else "his game"
         duration = _number(details, "duration_s")
         took = f" after {_spoken_duration(duration)}" if duration else ""
-        return (
-            f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
-        )
+        return f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
     if event == "afk_end":
         duration = _number(details, "duration_s") or 0
         hobbies = _hobbies_phrase(details)
@@ -342,15 +332,14 @@ def build_prompt(
 def _poe_item_prompt(details: dict) -> str | None:
     """Mario price-checked an item (details filled by react_to_event from the
     item text: name, base, rarity, prices). Only with a real price - she
-    never invents one; rares stay Exiled Exchange's job for now (WP-57)."""
+    never invents one; rares stay Exiled Exchange's job for now (WP-57).
+    """
     name = _text(details, "name")
     if not name:
         return None
     rarity = _text(details, "rarity").lower()
     base = _text(details, "base")
-    what = f"{name}" + (
-        f" ({rarity} {base})" if base and base != name else f" ({rarity})" if rarity else ""
-    )
+    what = f"{name}" + (f" ({rarity} {base})" if base and base != name else f" ({rarity})" if rarity else "")
     prices = [str(p) for p in details.get("prices") or [] if str(p).strip()][:2]
     if prices:
         return (
@@ -365,7 +354,8 @@ def _poe_item_prompt(details: dict) -> str | None:
 async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
     """Best-effort quotable lyric for a new track: the current line if one
     is active, else the chorus line. Only when Spotify is actually playing
-    that same title (so the id/duration LRCLIB needs are real)."""
+    that same title (so the id/duration LRCLIB needs are real).
+    """
     if not config.spotify_refresh_token:
         return None
     from felt_core.lyrics_client import current_line, find_chorus, get_lyrics
@@ -402,7 +392,8 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
 
 async def _poe_item_details(details: dict, config: FeltConfig) -> dict:
     """The forwarded item text -> the whitelisted fields build_prompt reads,
-    priced (uniques and currency) with poe_price_check."""
+    priced (uniques and currency) with poe_price_check.
+    """
     from felt_core.brain import poe_reactions
 
     # Raw, not _text(): that collapses whitespace, and the item text's lines matter.
@@ -432,16 +423,15 @@ def _emotion_note(emotions: frozenset[str]) -> str:
 
 def _line_and_emotion(text: str, emotions: frozenset[str]) -> tuple[str, str | None]:
     """Her "[feeling] line" reply; without a known tag it's all line, with no
-    emotion of her own."""
+    emotion of her own.
+    """
     tag = _EMOTION_TAG.match(text)
     emotion = tag.group(1).lower() if tag else None
     line = text[tag.end() :] if tag else text
     return line.strip(" \n\"'"), emotion if emotion in emotions else None
 
 
-async def _generate_line(
-    event: str, prompt: str, config: FeltConfig, tone: str | None
-) -> tuple[str, str | None]:
+async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str | None) -> tuple[str, str | None]:
     # WP-40: brain.replies is felt-core's small public surface for reply
     # generation - this used to reach straight into brain.py's
     # underscore-prefixed (private-by-convention) internals instead.
@@ -483,9 +473,7 @@ async def react_to_event(
         table,
         min_gap_s=config.event_reaction_min_gap_s,
         since_any_remark=since_any,
-        since_event=seconds_since_last_event_reaction(config.db_path, event)
-        if event in table
-        else None,
+        since_event=seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
         since_same=seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
     )
     if reason is not None:
@@ -503,9 +491,7 @@ async def react_to_event(
             return EventReaction(skipped="unpriced")
     prompt = build_prompt(event, details, lyric, previous)
     if prompt is None:
-        logger.info(
-            "event reaction %s: details too thin to say anything (%s)", event, sorted(details)
-        )
+        logger.info("event reaction %s: details too thin to say anything (%s)", event, sorted(details))
         return EventReaction(skipped="missing_details")
     # Mario 10-03: she knows what she already said on her own, so a song
     # line doesn't echo the remark she made a minute ago
@@ -535,9 +521,7 @@ async def react_to_event(
     # Cooldown state + chat history (her line shows in the chat window,
     # like a screen remark does) - but never a screen observation.
     save_event_reaction(config.db_path, session_id, event, key, line)
-    save_message(
-        config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}"
-    )
+    save_message(config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}")
     schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     logger.info("event reaction %s (%s): %r", event, emotion or "policy", line)
     return EventReaction(line=line, emotion=emotion or table[event].emotion)

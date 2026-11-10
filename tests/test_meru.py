@@ -40,8 +40,7 @@ def _leaf(d, name, issuer, dns):
         cwd=d,
     )  # fmt: skip
     (d / f"{name}.ext").write_text(
-        "basicConstraints=critical,CA:false\nextendedKeyUsage=serverAuth,clientAuth\n"
-        f"subjectAltName=DNS:{dns}\n"
+        f"basicConstraints=critical,CA:false\nextendedKeyUsage=serverAuth,clientAuth\nsubjectAltName=DNS:{dns}\n"
     )
     _openssl(
         "x509", "-req", "-in", f"{name}.csr", "-CA", f"{issuer}.crt", "-CAkey", f"{issuer}.key",
@@ -86,9 +85,7 @@ def _server(pki, cert):
                     p = s.getpeercert() or {}
                     seen.append([v for k, v in p.get("subjectAltName", ()) if k == "DNS"])
                     s.recv(4096)
-                    s.sendall(
-                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
-                    )
+                    s.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
             except (ssl.SSLError, OSError):
                 pass
 
@@ -140,14 +137,10 @@ def authentik(monkeypatch, tmp_path):
         return httpx.Response(200, json={"access_token": f"tok-{len(seen)}", "expires_in": 600})
 
     orig = httpx.AsyncClient
-    monkeypatch.setattr(
-        meru.httpx, "AsyncClient", lambda **kw: orig(transport=httpx.MockTransport(handler), **kw)
-    )
+    monkeypatch.setattr(meru.httpx, "AsyncClient", lambda **kw: orig(transport=httpx.MockTransport(handler), **kw))
     login = tmp_path / "token"
     login.write_text("sa-token-1\n")
-    cfg = SimpleNamespace(
-        authentik_token_file=str(login), authentik_token_url="https://auth.test/token/"
-    )
+    cfg = SimpleNamespace(authentik_token_file=str(login), authentik_token_url="https://auth.test/token/")
     return cfg, seen, login
 
 

@@ -45,16 +45,14 @@ _cache: dict[tuple, tuple[dict, float]] = {}
 
 name = "get_weather"
 description = (
-    "Weather at home: now, or the forecast for a day up to two weeks out. For any weather"
-    " question (not web_search)."
+    "Weather at home: now, or the forecast for a day up to two weeks out. For any weather question (not web_search)."
 )
 parameters_schema = {
     "type": "object",
     "properties": {
         "day": {
             "type": "string",
-            "description": "'now' (default), 'today', 'tomorrow', 'weekend', "
-            "a weekday, 'in 3 days' or a date",
+            "description": "'now' (default), 'today', 'tomorrow', 'weekend', a weekday, 'in 3 days' or a date",
         }
     },
 }
@@ -132,7 +130,8 @@ def _describe_day(daily: dict, index: int) -> str:
 
 def _location_today(data: dict) -> date | None:
     """Today's date at the forecast location, from the response's own
-    utc_offset_seconds (timezone=auto) - None if the response doesn't say."""
+    utc_offset_seconds (timezone=auto) - None if the response doesn't say.
+    """
     offset = data.get("utc_offset_seconds")
     if offset is None:
         return None

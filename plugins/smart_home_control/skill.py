@@ -62,7 +62,8 @@ async def _fetch_allowed_states(client: httpx.AsyncClient, config) -> dict[str, 
     """entity_id -> {"friendly_name": ..., "state": ...} for just the
     allowlisted entities — one call per entity rather than fetching HA's
     entire state list and filtering, so a large HA instance elsewhere
-    doesn't cost more here than the handful of entities actually allowed."""
+    doesn't cost more here than the handful of entities actually allowed.
+    """
     states = {}
     for entity_id in config.ha_entities_list():
         response = await client.get(f"{config.ha_url}/api/states/{entity_id}")
@@ -111,7 +112,8 @@ def _match(query: str, states: dict[str, dict]) -> tuple[list[str], bool]:
     keeps one beside it ("shelf plug" for "Shelf"). Then by kind (2026-10-17:
     HA's names are things like "Core 300S Series" and "FrontLeft", so "the
     fan" found nothing): a kind word picks that domain's entities, and a
-    plural or "all" ("the lights", "all plugs") means every one of them."""
+    plural or "all" ("the lights", "all plugs") means every one of them.
+    """
     words = [w for w in query.lower().split() if w not in _FILLER]
     group = "all" in query.lower().split() or any(w in _PLURALS for w in words)
     q = _norm(" ".join(words))
@@ -231,9 +233,7 @@ async def _colour(client, config, params, states, matches, label) -> SkillResult
 async def handle(params, ctx):
     config = ctx.config
     if not config.ha_url or not config.ha_token or not config.ha_entities_list():
-        return SkillResult(
-            text="Smart home control isn't configured (no Home Assistant entities allowed)."
-        )
+        return SkillResult(text="Smart home control isn't configured (no Home Assistant entities allowed).")
 
     device = get_single_param(params, "device", "name", "entity", ignore_keys=("action", "command"))
     if not device:
@@ -255,8 +255,7 @@ async def handle(params, ctx):
 
         label = states[matches[0]]["friendly_name"] if len(matches) == 1 else f"all {len(matches)}"
         action = str(
-            get_single_param(params, "action", "command", ignore_keys=("device", "name", "entity"))
-            or "status"
+            get_single_param(params, "action", "command", ignore_keys=("device", "name", "entity")) or "status"
         ).lower()
 
         if params.get("color"):

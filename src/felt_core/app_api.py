@@ -120,9 +120,7 @@ async def me(user: str = Depends(sso_user)) -> Me:
 
 
 @router.get("/history", response_model=list[Message])
-async def history(
-    before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)
-) -> list[dict]:
+async def history(before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)) -> list[dict]:
     return history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
@@ -165,9 +163,7 @@ class MarkResult(BaseModel):
 
 
 @router.get("/margins", response_model=list[MarginLine])
-async def margins_page(
-    before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)
-) -> list[dict]:
+async def margins_page(before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)) -> list[dict]:
     return margins.page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
@@ -197,7 +193,8 @@ async def marks_seen(req: SeenRequest, _user: str = Depends(sso_user)) -> MarkRe
 @router.get("/stream")
 async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingResponse:
     """Live notices for the open app (app_stream.py). An app window opening
-    is a sign of him, so it can start her day (diary.py)."""
+    is a sign of him, so it can start her day (diary.py).
+    """
     config = load_config()
     he_is_here(config)
     return StreamingResponse(

@@ -30,13 +30,13 @@ def test_every_catalogue_type_has_plain_words():
 
 def test_facts_carry_expected_todo_and_whos_on_it(tmp_path):
     db = str(tmp_path / "f.db")
-    update = alert_lines.facts(
-        _incident(db, "clockmost: update deployed", "immich — verified + healthy", at=_at(0))
-    )
-    assert "Expected: yes" in update and "to do: nothing" in update
+    update = alert_lines.facts(_incident(db, "clockmost: update deployed", "immich — verified + healthy", at=_at(0)))
+    assert "Expected: yes" in update
+    assert "to do: nothing" in update
     assert "immich — verified + healthy" in update
     disk = alert_lines.facts(_incident(db, "clockmost: storage/backup check", at=_at(0)))
-    assert "Claude is looking into it" in disk and "plugged in" in disk
+    assert "Claude is looking into it" in disk
+    assert "plugged in" in disk
     caddy = _incident(db, "clockmost High: Caddy: an upstream is unhealthy", at=_at(0))
     incidents.promote_due(db, _at(11))
     caddy = incidents.get(db, caddy["id"])
@@ -70,9 +70,11 @@ def test_lines_go_to_her_log_as_alerts_not_the_margins(tmp_path):
     rows = conn.execute("SELECT kind, source_ref, content FROM messages").fetchall()
     conn.close()
     assert rows == [(ALERT, f"incident:{backup}", "Backup failed, Claude's on it.")]
-    assert margins.page(db) == [] and margins.unread(db) == 0
+    assert margins.page(db) == []
+    assert margins.unread(db) == 0
     stored = incidents.get(db, backup)
-    assert stored is not None and stored["line"] == "Backup failed, Claude's on it."
+    assert stored is not None
+    assert stored["line"] == "Backup failed, Claude's on it."
 
 
 def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_path, monkeypatch):

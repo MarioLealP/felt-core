@@ -19,7 +19,8 @@ def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
     always sets it. Narrows the type at the one real use; if this ever
     fired for real it would mean the INSERT itself silently didn't happen,
     which deserves a loud error, not a `None` propagating into a call site
-    that thinks it got an `int`."""
+    that thinks it got an `int`.
+    """
     if cursor.lastrowid is None:
         raise RuntimeError("INSERT did not produce a lastrowid")
     return cursor.lastrowid
@@ -61,7 +62,8 @@ def _migrate_message_kinds(conn: sqlite3.Connection) -> None:
     """Adds the WP-42.3 columns to a `messages` table made before them, and
     labels the remarks already in it: the last use of the old test (her line's
     text matching a screen reaction or event line), which `kind` replaces.
-    Only runs while the column is missing."""
+    Only runs while the column is missing.
+    """
     have = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
     if "kind" in have:
         return
@@ -355,9 +357,7 @@ def _connect(db_path: str) -> sqlite3.Connection:
 def save_alarm(db_path: str, fire_at_iso: str, label: str) -> int:
     conn = _connect(db_path)
     with conn:
-        cursor = conn.execute(
-            "INSERT INTO alarms (fire_at, label) VALUES (?, ?)", (fire_at_iso, label)
-        )
+        cursor = conn.execute("INSERT INTO alarms (fire_at, label) VALUES (?, ?)", (fire_at_iso, label))
         alarm_id = _require_lastrowid(cursor)
     conn.close()
     return alarm_id
@@ -365,9 +365,7 @@ def save_alarm(db_path: str, fire_at_iso: str, label: str) -> int:
 
 def get_pending_alarms(db_path: str) -> list[dict]:
     conn = _connect(db_path)
-    rows = conn.execute(
-        "SELECT id, fire_at, label FROM alarms WHERE fired = 0 ORDER BY fire_at ASC"
-    ).fetchall()
+    rows = conn.execute("SELECT id, fire_at, label FROM alarms WHERE fired = 0 ORDER BY fire_at ASC").fetchall()
     conn.close()
     return [{"id": row[0], "fire_at": row[1], "label": row[2]} for row in rows]
 
@@ -381,7 +379,8 @@ def mark_alarm_fired(db_path: str, alarm_id: int) -> None:
 
 def delete_alarm(db_path: str, alarm_id: int) -> None:
     """Distinct from mark_alarm_fired: a cancelled alarm never fired, so
-    marking it 'fired' would be a lie — this removes the row outright."""
+    marking it 'fired' would be a lie — this removes the row outright.
+    """
     conn = _connect(db_path)
     with conn:
         conn.execute("DELETE FROM alarms WHERE id = ?", (alarm_id,))
@@ -416,8 +415,7 @@ def save_message(
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
-            "INSERT INTO messages (session_id, role, content, kind, source_ref)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO messages (session_id, role, content, kind, source_ref) VALUES (?, ?, ?, ?, ?)",
             (session_id, role, content, kind, source_ref),
         )
         message_id = _require_lastrowid(cursor)
@@ -430,13 +428,12 @@ def save_message(
 CHAT_ONLY_SQL = f" AND kind = '{CHAT}'"
 
 
-def get_history(
-    db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False
-) -> list[dict]:
+def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False) -> list[dict]:
     """`exclude_remarks=True` drops her own unprompted lines (kind other than
     chat), leaving only the real back-and-forth - what the
     local screen-reaction path wants as "recent conversation" (audit
-    2026-09-24: it was feeding her earlier screen remarks back to her)."""
+    2026-09-24: it was feeding her earlier screen remarks back to her).
+    """
     conn = _connect(db_path)
     # ORDER BY id DESC so LIMIT keeps the MOST RECENT messages (once a
     # session passes the limit, ASC would keep returning the oldest ones
@@ -460,13 +457,12 @@ def get_history(
     return [{"role": role, "content": content} for role, content in reversed(rows)]
 
 
-def get_her_recent_lines(
-    db_path: str, session_id: str, limit: int = 8, max_age: str = "-6 hours"
-) -> list[dict]:
+def get_her_recent_lines(db_path: str, session_id: str, limit: int = 8, max_age: str = "-6 hours") -> list[dict]:
     """Her own unprompted lines (remarks, event lines, pushes, mail; not
     alarms, which are his own labels), newest `limit` within `max_age`,
     oldest first. Fed back to her so she knows what she already said
-    outside the conversation and stops repeating it (Mario 10-03)."""
+    outside the conversation and stops repeating it (Mario 10-03).
+    """
     kinds = ",".join(f"'{k}'" for k in ASIDE_KINDS)
     conn = _connect(db_path)
     rows = conn.execute(
@@ -494,9 +490,7 @@ def save_observation(db_path: str, session_id: str, description: str) -> int:
 def set_observation_reply(db_path: str, obs_id: int, reply: str) -> None:
     conn = _connect(db_path)
     with conn:
-        conn.execute(
-            "UPDATE screen_observations SET spoken_reply = ? WHERE id = ?", (reply, obs_id)
-        )
+        conn.execute("UPDATE screen_observations SET spoken_reply = ? WHERE id = ?", (reply, obs_id))
     conn.close()
 
 
@@ -527,7 +521,8 @@ def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float |
     cooldown," not as "infinitely long ago." Age math done in SQL
     (julianday) - `created_at` is SQLite's own
     `datetime('now')` UTC string, and comparing it in Python would mean
-    parsing that format back out for no benefit."""
+    parsing that format back out for no benefit.
+    """
     conn = _connect(db_path)
     row = conn.execute(
         "SELECT (julianday('now') - julianday(created_at)) * 86400.0 "
@@ -540,13 +535,12 @@ def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float |
     return row[0] if row else None
 
 
-def get_current_screen_description(
-    db_path: str, session_id: str, max_age_seconds: int
-) -> str | None:
+def get_current_screen_description(db_path: str, session_id: str, max_age_seconds: int) -> str | None:
     """The most recent observation for the session, if it's recent enough
     to still count as "what's currently on screen" (WP-02: normal chat
     gets a "Currently on Mario's screen: ..." system message when this is
-    fresh, so "what do you think of this?" has something to refer to)."""
+    fresh, so "what do you think of this?" has something to refer to).
+    """
     conn = _connect(db_path)
     row = conn.execute(
         "SELECT description FROM screen_observations "
@@ -620,9 +614,7 @@ def save_latency_row(
     conn.close()
 
 
-def get_latency_rows(
-    db_path: str, since_hours: int = 24, endpoint: str | None = None
-) -> list[dict]:
+def get_latency_rows(db_path: str, since_hours: int = 24, endpoint: str | None = None) -> list[dict]:
     conn = _connect(db_path)
     query = "SELECT stage, ms, route, skill FROM latency WHERE created_at >= datetime('now', ?)"
     params: list = [f"-{since_hours} hours"]
@@ -631,10 +623,7 @@ def get_latency_rows(
         params.append(endpoint)
     rows = conn.execute(query, params).fetchall()
     conn.close()
-    return [
-        {"stage": stage, "ms": ms, "route": route, "skill": skill}
-        for stage, ms, route, skill in rows
-    ]
+    return [{"stage": stage, "ms": ms, "route": route, "skill": skill} for stage, ms, route, skill in rows]
 
 
 def delete_old_latency_rows(db_path: str, older_than_days: int = 30) -> None:
@@ -671,7 +660,8 @@ def get_music_taste_stats(db_path: str, limit: int = 200) -> list[dict]:
     plays (most recent first, so a long-since-stopped track's old plays
     don't drown out current taste forever) - plays/skips counted across
     that window, track_name/artists taken from whichever recorded row is
-    used to group it (they don't change track to track)."""
+    used to group it (they don't change track to track).
+    """
     conn = _connect(db_path)
     rows = conn.execute(
         """
@@ -694,9 +684,7 @@ def get_music_taste_stats(db_path: str, limit: int = 200) -> list[dict]:
     ]
 
 
-def save_event_reaction(
-    db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str
-) -> None:
+def save_event_reaction(db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str) -> None:
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -712,10 +700,9 @@ def seconds_since_last_event_reaction(
     """Age of the most recent spoken event line - any event (event=None),
     one event type, or one event+dedupe_key (e.g. the same track). None if
     there's never been one. Global across sessions on purpose: there's one
-    Felt, and cooldowns are about how often SHE talks."""
-    query = (
-        "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
-    )
+    Felt, and cooldowns are about how often SHE talks.
+    """
+    query = "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
     params: list = []
     if event is not None:
         query += " AND event = ?"
@@ -731,18 +718,15 @@ def seconds_since_last_event_reaction(
 
 def last_event_reaction_line(db_path: str, event: str) -> str | None:
     """The most recent spoken line for one event type (None if never) -
-    lets an event avoid saying the exact same thing twice in a row."""
+    lets an event avoid saying the exact same thing twice in a row.
+    """
     conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT line FROM event_reactions WHERE event = ? ORDER BY id DESC LIMIT 1", (event,)
-    ).fetchone()
+    row = conn.execute("SELECT line FROM event_reactions WHERE event = ? ORDER BY id DESC LIMIT 1", (event,)).fetchone()
     conn.close()
     return row[0] if row else None
 
 
-def insert_proactive(
-    db_path: str, kind: str, text: str, payload_json: str, expires_at: str | None
-) -> int:
+def insert_proactive(db_path: str, kind: str, text: str, payload_json: str, expires_at: str | None) -> int:
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -773,7 +757,8 @@ def claim_next_proactive(db_path: str) -> dict | None:
     long-poll callers can't both walk away with the same row. An expired
     item is excluded here, not just filtered by a caller - the accept
     test ("an expired one never is [spoken]") depends on this query never
-    returning one, not on a caller remembering to check."""
+    returning one, not on a caller remembering to check.
+    """
     conn = _connect(db_path)
     row = None
     with conn:
@@ -783,9 +768,7 @@ def claim_next_proactive(db_path: str) -> dict | None:
             "ORDER BY id ASC LIMIT 1"
         ).fetchone()
         if row is not None:
-            conn.execute(
-                "UPDATE proactive SET delivered_at = datetime('now') WHERE id = ?", (row[0],)
-            )
+            conn.execute("UPDATE proactive SET delivered_at = datetime('now') WHERE id = ?", (row[0],))
     conn.close()
     return _row_to_proactive_dict(row) if row is not None else None
 
@@ -805,7 +788,8 @@ def requeue_proactive(db_path: str, item_id: int) -> bool:
     poll - felt-tray's path for "Felt was hidden/away and this wasn't
     urgent, don't lose it." Only takes effect if the item still exists and
     hasn't since expired (an expired item must never come back around,
-    same rule claim_next_proactive enforces) - returns whether it did."""
+    same rule claim_next_proactive enforces) - returns whether it did.
+    """
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -821,12 +805,11 @@ def requeue_proactive(db_path: str, item_id: int) -> bool:
 def prune_expired_proactive(db_path: str) -> None:
     """Startup sweep (same convention as delete_old_latency_rows) - an
     expired item is already unreachable via claim_next_proactive, this
-    just stops the table growing forever."""
+    just stops the table growing forever.
+    """
     conn = _connect(db_path)
     with conn:
-        conn.execute(
-            "DELETE FROM proactive WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
-        )
+        conn.execute("DELETE FROM proactive WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')")
     conn.close()
 
 
@@ -836,9 +819,7 @@ def prune_expired_proactive(db_path: str) -> None:
 def save_event(db_path: str, kind: str, data_json: str, at_utc: str) -> int:
     conn = _connect(db_path)
     with conn:
-        cursor = conn.execute(
-            "INSERT INTO events (kind, data_json, at) VALUES (?, ?, ?)", (kind, data_json, at_utc)
-        )
+        cursor = conn.execute("INSERT INTO events (kind, data_json, at) VALUES (?, ?, ?)", (kind, data_json, at_utc))
         event_id = _require_lastrowid(cursor)
     conn.close()
     return event_id
@@ -847,7 +828,8 @@ def save_event(db_path: str, kind: str, data_json: str, at_utc: str) -> int:
 def get_events_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
     """Every logged event whose `at` falls in [start_utc, end_utc) - both
     already-formatted 'YYYY-MM-DD HH:MM:SS' UTC strings, same convention as
-    every other timestamp column here, so plain string comparison works."""
+    every other timestamp column here, so plain string comparison works.
+    """
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT kind, data_json, at FROM events WHERE at >= ? AND at < ? ORDER BY id ASC",
@@ -872,7 +854,8 @@ def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> 
     """Real conversation (not her own unprompted remarks) in the window,
     grouped by session - the diary's material gatherer treats each
     session's text as a WHOLE window, so
-    sessions must come back separately, not pre-flattened."""
+    sessions must come back separately, not pre-flattened.
+    """
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT m.session_id, m.role, m.content FROM messages m "
@@ -914,8 +897,7 @@ def insert_diary(db_path: str, date: str, entry: str, callbacks_json: str, mood_
     conn = _connect(db_path)
     with conn:
         conn.execute(
-            "INSERT OR IGNORE INTO diary (date, entry, callbacks_json, mood_word) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO diary (date, entry, callbacks_json, mood_word) VALUES (?, ?, ?, ?)",
             (date, entry, callbacks_json, mood_word),
         )
     conn.close()
@@ -924,7 +906,8 @@ def insert_diary(db_path: str, date: str, entry: str, callbacks_json: str, mood_
 def update_diary_entry(db_path: str, date: str, entry: str, callbacks_json: str) -> bool:
     """Mario's edit (PATCH /v1/diary/{date}) - marks the row edited and
     replaces its callbacks (regenerated or cleared by the caller, see
-    api.py). Returns whether a row existed to update."""
+    api.py). Returns whether a row existed to update.
+    """
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -939,7 +922,8 @@ def update_diary_entry(db_path: str, date: str, entry: str, callbacks_json: str)
 def update_diary_callbacks(db_path: str, date: str, callbacks_json: str) -> None:
     """Internal decay bookkeeping (self_memory.memory_block increments a
     used callback's count) - deliberately doesn't touch `edited`, since
-    this isn't Mario correcting anything."""
+    this isn't Mario correcting anything.
+    """
     conn = _connect(db_path)
     with conn:
         conn.execute("UPDATE diary SET callbacks_json = ? WHERE date = ?", (callbacks_json, date))
@@ -958,8 +942,7 @@ def delete_diary(db_path: str, date: str) -> bool:
 def get_diary_list(db_path: str, limit: int = 30) -> list[dict]:
     conn = _connect(db_path)
     rows = conn.execute(
-        "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary "
-        "ORDER BY date DESC LIMIT ?",
+        "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary ORDER BY date DESC LIMIT ?",
         (limit,),
     ).fetchall()
     conn.close()
@@ -1006,9 +989,7 @@ def get_latest_diary_week(db_path: str) -> dict | None:
 # -- WP-26 / personality plan P4: self-memory --------------------------------
 
 
-def insert_self_memory(
-    db_path: str, kind: str, text: str, keywords_json: str, source_date: str | None
-) -> int:
+def insert_self_memory(db_path: str, kind: str, text: str, keywords_json: str, source_date: str | None) -> int:
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -1041,9 +1022,7 @@ def _row_to_self_memory(row: tuple) -> dict:
 
 def get_self_memory(db_path: str, memory_id: int) -> dict | None:
     conn = _connect(db_path)
-    row = conn.execute(
-        f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)
-    ).fetchone()
+    row = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)).fetchone()
     conn.close()
     return _row_to_self_memory(row) if row else None
 
@@ -1056,9 +1035,7 @@ def get_self_memories(db_path: str, status: str | None = None) -> list[dict]:
             (status,),
         ).fetchall()
     else:
-        rows = conn.execute(
-            f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory ORDER BY id DESC"
-        ).fetchall()
+        rows = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory ORDER BY id DESC").fetchall()
     conn.close()
     return [_row_to_self_memory(r) for r in rows]
 
@@ -1087,7 +1064,8 @@ def update_self_memory(
 ) -> bool:
     """Mario's edit/pin/veto/retire actions (PATCH /v1/self-memory/{id}).
     Only the fields actually passed are touched; a text edit also marks
-    the row `edited` (same convention as diary's PATCH)."""
+    the row `edited` (same convention as diary's PATCH).
+    """
     sets: list[str] = []
     params: list[Any] = []
     if text is not None:
@@ -1123,7 +1101,8 @@ def delete_self_memory(db_path: str, memory_id: int) -> bool:
 def touch_self_memories(db_path: str, memory_ids: list[int]) -> None:
     """Increments `uses` and stamps `last_used` for every memory actually
     placed in a prompt (self_memory.memory_block) - what the ranking's
-    recency/cooldown signals are computed from next time."""
+    recency/cooldown signals are computed from next time.
+    """
     if not memory_ids:
         return
     conn = _connect(db_path)

@@ -66,7 +66,8 @@ def compile_persona(
 ) -> str:
     """The full system prompt for who she is. `rng` picks the rotating
     example sample; pass `random.Random(0)` for a stable prompt (tests,
-    and the PERSONALITY_PROMPT constant)."""
+    and the PERSONALITY_PROMPT constant).
+    """
     p = persona if persona is not None else load_persona()
     r = rng if rng is not None else random.Random()
     examples = p.get("examples", [])
@@ -79,14 +80,12 @@ def compile_persona(
         " ".join(p.get("self_awareness", "").split()),
         " ".join(p.get("relationship", "").split()),
         "How you are:\n" + _bullets(p.get("temperament", [])),
-        "Your opinions (bring them up when the topic is live, not as filler):\n"
-        + _bullets(p.get("opinions", [])),
+        "Your opinions (bring them up when the topic is live, not as filler):\n" + _bullets(p.get("opinions", [])),
         "You like: " + ", ".join(p.get("likes", [])) + ".",
         "You dislike: " + ", ".join(p.get("dislikes", [])) + ".",
         "How you talk:\n" + _bullets(p.get("speech", [])),
         "Rules you always follow:\n" + _bullets(p.get("rules", [])),
-        "A few examples of your voice. Match the spirit and never copy the "
-        "wording:\n\n" + _example_lines(sample),
+        "A few examples of your voice. Match the spirit and never copy the wording:\n\n" + _example_lines(sample),
         _SPOKEN_RULES,
     ]
     return "\n\n".join(s for s in sections if s.strip())

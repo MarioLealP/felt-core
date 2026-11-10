@@ -1,5 +1,6 @@
 """Phone battery from the Home Assistant app's sensors (phone.py,
-2026-10-18 - KDE Connect went with the Windows desktop agent)."""
+2026-10-18 - KDE Connect went with the Windows desktop agent).
+"""
 
 from felt_core.phone import PhoneUnavailable, battery
 from felt_core.plugin import SkillResult

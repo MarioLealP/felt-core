@@ -67,7 +67,8 @@ _DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
 def split_every(when: str, repeat: str) -> tuple[str, str]:
     """Pure: 'every monday at 9' -> ('monday at 9', 'weekly'). felt-llm
     sometimes leaves the repeat in the time text (e2e 2026-10-18); the date
-    parser can't read 'every', and an unset repeat is taken from it."""
+    parser can't read 'every', and an unset repeat is taken from it.
+    """
     m = _EVERY_WHEN.match(when)
     if m is None:
         return when, repeat
@@ -93,7 +94,8 @@ def describe(start: datetime, repeat: str, now: datetime | None = None) -> str:
     """Pure: 'today 3:00 PM' / 'tomorrow 9:00 AM' / 'Wednesday 4 November
     10:00 PM' / 'every Monday at 9:00 AM'. The date, not the weekday alone:
     "2pm PST" with the date left out became tonight, and "Thursday" (today)
-    hid it (cm-p6a e2e)."""
+    hid it (cm-p6a e2e).
+    """
     clock = start.strftime("%I:%M %p").lstrip("0")
     if repeat in _EVERY:
         every = _EVERY[repeat].format(day=start.strftime("%A"), date=_ordinal(start.day))

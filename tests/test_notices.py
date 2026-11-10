@@ -41,7 +41,8 @@ def test_the_rules():
 
 def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
     db = str(tmp_path / "f.db")
-    assert notices.latest(db) == 0 and notices.after(db, 0) == []
+    assert notices.latest(db) == 0
+    assert notices.after(db, 0) == []
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned")
     trivy = _in(db, "Trivy weekly: 1 critical")
     alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
@@ -55,7 +56,8 @@ def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
         (trivy, "line", False),
         (honeypot, "followup", True),
     ]
-    assert lines[0]["area"] == "security" and lines[0]["sound"]
+    assert lines[0]["area"] == "security"
+    assert lines[0]["sound"]
     assert notices.after(db, lines[1]["message_id"]) == lines[2:]
     assert notices.latest(db) == lines[2]["message_id"]
 

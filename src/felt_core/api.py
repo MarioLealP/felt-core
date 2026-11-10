@@ -277,7 +277,8 @@ def _origin_ok(request: Request, app_origins: tuple[str, ...]) -> bool:
     is cross-origin (Origin set and not us, or Sec-Fetch-Site same-site/
     cross-site). A same-origin app request sends one of app_origins (the SSO
     host, or felt-tray's cert-only window host); native clients use the token
-    path, not these routes, and send no Origin."""
+    path, not these routes, and send no Origin.
+    """
     if request.method in _SAFE_METHODS:
         return True
     origin = request.headers.get("origin")
@@ -290,7 +291,8 @@ def _origin_ok(request: Request, app_origins: tuple[str, ...]) -> bool:
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """WP-55: with FELT_API_TOKEN set, every other route needs
-    `Authorization: Bearer <token>` (constant-time compare) or gets 401."""
+    `Authorization: Bearer <token>` (constant-time compare) or gets 401.
+    """
     config = load_config()
     token = config.api_token
     path = request.url.path
@@ -316,9 +318,7 @@ async def auth_middleware(request: Request, call_next):
             config.machine_deny_serials,
         )
         if why:
-            logger.warning(
-                "machine caller %s refused on %s %s: %s", identity, request.method, path, why
-            )
+            logger.warning("machine caller %s refused on %s %s: %s", identity, request.method, path, why)
             return JSONResponse(status_code=403, content={"detail": why})
         return await call_next(request)
     if config.auth_mode == "identity":
@@ -365,7 +365,8 @@ async def latency_middleware(request: Request, call_next):
     request_id/SQLite overhead - and neither are the polling/status reads
     (_UNTIMED_PATHS): felt-tray polls /v1/music/now every 15 s, and those
     near-instant rows swamped the `total` stage's percentiles, hiding the
-    real turn latency (audit 2026-09-24)."""
+    real turn latency (audit 2026-09-24).
+    """
     if not request.url.path.startswith("/v1/") or _is_untimed(request.url.path):
         return await call_next(request)
 
@@ -393,7 +394,8 @@ async def latency_metrics_endpoint(since_hours: int = 24, endpoint: str | None =
 @app.exception_handler(local_llm.AmbientSkipped)
 async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkipped):
     """An ambient line that gave way (llm_gate) isn't an outage: the react
-    endpoints' "no reaction" answer - empty body, the reason in a header."""
+    endpoints' "no reaction" answer - empty body, the reason in a header.
+    """
     logger.info("%s: %s", request.url.path, exc)
     return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "llm-gate"})
 
@@ -401,7 +403,8 @@ async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkippe
 @app.exception_handler(local_llm.LocalLLMUnavailable)
 async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnavailable):
     """felt-llm is the only model backend (WP-36 D''): when it's down every
-    model-backed endpoint answers 503 and the client just skips the turn."""
+    model-backed endpoint answers 503 and the client just skips the turn.
+    """
     logger.warning("%s: felt-llm offline (%s)", request.url.path, exc)
     return JSONResponse(status_code=503, content={"detail": "felt-llm offline"})
 
@@ -450,7 +453,8 @@ async def reaction_tag_endpoint(req: ReactionTagRequest) -> dict:
     library); ONE schema-constrained felt-llm call (the tag is an enum of
     exactly those). `{"tag": null}` if the reply couldn't be parsed; 400
     for an empty tag list; 503 when felt-llm is down (the caller keeps its
-    fallback tag)."""
+    fallback tag).
+    """
     if not req.tags:
         raise HTTPException(status_code=400, detail="tags must not be empty")
     config = load_config()
@@ -493,7 +497,8 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
     though the conversation is already durable in SQLite (`get_history`
     was previously only read internally, to build the brain's own
     context) — this just exposes that same data so a dashboard can
-    restore what was actually said."""
+    restore what was actually said.
+    """
     config = load_config()
     return get_history(config.db_path, session_id, limit)
 
@@ -502,7 +507,8 @@ class _TTSResponse(Protocol):
     """What `_synthesize_reply` needs back from a TTS POST - narrower than
     `httpx.Response` so the unit tests' hand-written fake responses (no
     real network, see `tests/test_api_tts_cache.py`) satisfy the type
-    without subclassing httpx."""
+    without subclassing httpx.
+    """
 
     @property
     def content(self) -> bytes: ...
@@ -514,7 +520,8 @@ class _TTSClient(Protocol):
     """What `_synthesize_reply` needs from its HTTP client - just enough
     of `httpx.AsyncClient`'s surface to also accept the tests' fake
     clients (`_ExplodingClient`/`FakeClient`), which duck-type `.post()`
-    without subclassing `httpx.AsyncClient`."""
+    without subclassing `httpx.AsyncClient`.
+    """
 
     async def post(self, url: str, *, json: dict[str, Any]) -> _TTSResponse: ...
 
@@ -530,7 +537,8 @@ async def _tts_audio(
     """One felt-voice /v1/tts call behind the shared WP-06 cache (keyed on
     text + emotion). Each real call is timed as a "tts" stage; a streamed
     reply's chunk 0 is additionally "tts_first_chunk" (WP-54) - it's the
-    part the user actually waits for."""
+    part the user actually waits for.
+    """
     # WP-06: a cache hit here (warmed by brain.py's weather precompute
     # loop) means the common "what's the weather right now?" turn makes
     # zero calls to felt-voice at all.
@@ -541,9 +549,7 @@ async def _tts_audio(
         if first_chunk:
             await stack.enter_async_context(metrics.timed("tts_first_chunk", chars=len(tts_text)))
         await stack.enter_async_context(metrics.timed("tts", chars=len(tts_text)))
-        tts_resp = await client.post(
-            f"{config.voice_url}/v1/tts", json=tts_request_body(tts_text, emotion)
-        )
+        tts_resp = await client.post(f"{config.voice_url}/v1/tts", json=tts_request_body(tts_text, emotion))
         tts_resp.raise_for_status()
     audio_bytes = tts_resp.content
     tts_cache.put(tts_text, audio_bytes, emotion)
@@ -552,7 +558,8 @@ async def _tts_audio(
 
 async def _fill_reply_stream(stream: reply_stream.ReplyStream, config: Any) -> None:
     """Background half of a streamed reply: chunks 1..N-1, on a client of its
-    own (the request's is closed as soon as chunk 0's response is sent)."""
+    own (the request's is closed as soon as chunk 0's response is sent).
+    """
     async with voice_client(config, timeout=60) as client:
         await reply_stream.run(stream, lambda _n, text: _tts_audio(text, None, config, client))
 
@@ -575,13 +582,12 @@ async def _synthesize_reply(
     splits into 2+ sentence chunks answers with chunk 0's audio plus
     X-Reply-Stream/X-Reply-Chunks, and the rest is synthesised in the
     background for GET /v1/reply/{id}/chunk/{n}. A one-chunk reply is
-    exactly the non-streamed response."""
+    exactly the non-streamed response.
+    """
     tts_text = strip_for_tts(reply)
     logger.debug("TTS input after strip_for_tts: %r", tts_text)
 
-    chunks = (
-        speech_chunks(tts_text, config.reply_stream_first_chunk_chars) if stream else [tts_text]
-    )
+    chunks = speech_chunks(tts_text, config.reply_stream_first_chunk_chars) if stream else [tts_text]
     streaming = len(chunks) >= 2
     voice_down = False
     try:
@@ -614,7 +620,8 @@ async def _synthesize_reply(
 
 def _wants_stream_v2(request: Request, config: Any) -> bool:
     """WP-65: a client that plays protocol v2 says so per request; every
-    other client gets WP-54's whole-reply-then-chunks behaviour."""
+    other client gets WP-54's whole-reply-then-chunks behaviour.
+    """
     return config.reply_streaming and request.headers.get("x-accept-stream") == "2"
 
 
@@ -636,7 +643,8 @@ async def _fill_open_stream(
 ) -> None:
     """Background half of a v2 reply: each further chunk as chat_streamed()
     writes it, synthesised in order, then the finished result. felt-llm
-    keeps writing while a chunk is in TTS (chat_streamed queues them)."""
+    keeps writing while a chunk is in TTS (chat_streamed queues them).
+    """
     result: ChatResult | None = None
     try:
         async with voice_client(config, timeout=60) as client:
@@ -681,7 +689,8 @@ async def _reply_v2(
     moment it exists - X-Reply-Text is chunk 0's text, X-Reply-Chunks
     "open", and the rest of the reply (its text, ui_action, tag) is at
     GET /v1/reply/{id} once done. A reply that never came out in chunks, or
-    felt-voice being down, falls back to the whole-reply response."""
+    felt-voice being down, falls back to the whole-reply response.
+    """
     items = chat_streamed(message, config, session_id, tone)
     first: str | ChatResult | None = None
     meta = ReplyMeta()
@@ -739,12 +748,11 @@ async def voice_chat_endpoint(
     tone: str | None = Form(None),
 ) -> Response:
     """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
-    the brain -> felt-voice (TTS), so a client doesn't have to."""
+    the brain -> felt-voice (TTS), so a client doesn't have to.
+    """
     config = load_config()
     if not config.voice_url:
-        raise HTTPException(
-            status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
-        )
+        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
 
     async with voice_client(config, timeout=60) as client:
         async with metrics.timed("stt"):
@@ -799,12 +807,11 @@ async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
     X-Animation-Tag headers) but for already-typed text - so a typed
     message gets the same TTS + reaction-animation treatment a spoken one
     does, minus the STT step (Mario, 2026-09-21: "hook up the chat like it
-    was voice input, need her to reply with TTS + animation")."""
+    was voice input, need her to reply with TTS + animation").
+    """
     config = load_config()
     if not config.voice_url:
-        raise HTTPException(
-            status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set)."
-        )
+        raise HTTPException(status_code=503, detail="Voice isn't configured (no FELT_VOICE_URL set).")
 
     if _wants_stream_v2(request, config):
 
@@ -813,9 +820,7 @@ async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
                 schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
 
         async with voice_client(config, timeout=60) as client:
-            return await _reply_v2(
-                req.message, req.session_id, req.tone, config, client, on_result=marks
-            )
+            return await _reply_v2(req.message, req.session_id, req.tone, config, client, on_result=marks)
 
     result = await chat(req.message, config, req.session_id, req.tone)
     if req.session_id == APP_SESSION:
@@ -837,7 +842,8 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
     _synthesize_reply). 200 + WAV + X-Chunk-Text once ready, 408 if it still
     isn't after `timeout` (clamped to 1-60 s), 204 for n past the last chunk
     (the stream is done), 404 for an unknown/expired id, 502 if that chunk's
-    TTS failed."""
+    TTS failed.
+    """
     stream = reply_stream.get(stream_id)
     if stream is None or n < 0:
         raise HTTPException(status_code=404, detail="unknown or expired stream")
@@ -854,9 +860,7 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
         raise HTTPException(status_code=502, detail="chunk TTS failed") from None
     if wav is None:
         raise HTTPException(status_code=408, detail="chunk not ready")
-    return Response(
-        content=wav, media_type="audio/wav", headers={"X-Chunk-Text": quote(stream.texts[n])}
-    )
+    return Response(content=wav, media_type="audio/wav", headers={"X-Chunk-Text": quote(stream.texts[n])})
 
 
 @app.get("/v1/reply/{stream_id}")
@@ -864,7 +868,8 @@ async def reply_result_endpoint(stream_id: str) -> dict:
     """WP-65 (protocol v2): the finished reply behind a stream - `{done,
     text, ui_action, animation_tag, emotion}` (+ `error` if felt-llm went
     away mid-reply). Before it's done: `{done: false, text}` with the chunks
-    so far. 404 for an unknown/expired id."""
+    so far. 404 for an unknown/expired id.
+    """
     stream = reply_stream.get(stream_id)
     if stream is None:
         raise HTTPException(status_code=404, detail="unknown or expired stream")
@@ -879,12 +884,11 @@ class ScreenContextRequest(BaseModel):
 
 
 @app.post("/v1/context/screen")
-async def screen_context_endpoint(
-    req: ScreenContextRequest, session_id: str = "default"
-) -> Response:
+async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "default") -> Response:
     """Receives passive screen observations from felt-vision.
     Returns audio+animation headers just like chat, but handles pure-silent
-    reactions by skipping TTS entirely. 503 when felt-llm is down."""
+    reactions by skipping TTS entirely. 503 when felt-llm is down.
+    """
     config = load_config()
     result = await process_screen_context(req.description, config, session_id, req.tone)
 
@@ -921,7 +925,8 @@ async def react_screen_endpoint(
     when it's unreachable, which felt-tray treats as "no reaction".
 
     cm-qplv: with its [vision] table set, felt-tray describes the screen on
-    the desktop's own GPU and sends that text as `seen` instead of the image."""
+    the desktop's own GPU and sends that text as `seen` instead of the image.
+    """
     if image is None and not (seen and seen.strip()):
         raise HTTPException(status_code=422, detail="send an image or seen")
     config = load_config()
@@ -973,9 +978,7 @@ class EventReactionRequest(BaseModel):
 
 
 @app.post("/v1/react/event")
-async def react_event_endpoint(
-    req: EventReactionRequest, session_id: str = "dashboard"
-) -> Response:
+async def react_event_endpoint(req: EventReactionRequest, session_id: str = "dashboard") -> Response:
     """A short spoken reaction to a desktop event (events.py) - e.g.
     {"event": "music_new_track", "details": {"title", "artist", "album"}}.
 
@@ -986,19 +989,16 @@ async def react_event_endpoint(
     short an absence - plus an additive X-Reaction-Skipped: <reason>
     header saying why. 503 {"detail": "voice_unavailable"} only if TTS
     isn't configured/reachable, 503 {"detail": "felt-llm offline"} when
-    felt-llm is down. Never stored as a screen observation."""
+    felt-llm is down. Never stored as a screen observation.
+    """
     config = load_config()
     if not config.voice_url:
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
 
     if not features.enabled(config.db_path, "ambient.desktop_events"):
-        return Response(
-            content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "switched-off"}
-        )
+        return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "switched-off"})
     with llm_gate.ambient(f"event {req.event}"):
-        result = await react_to_event(
-            req.event, req.details, config, session_id=session_id, tone=req.tone
-        )
+        result = await react_to_event(req.event, req.details, config, session_id=session_id, tone=req.tone)
     if not result.line:
         return Response(
             content=b"",
@@ -1041,7 +1041,8 @@ async def log_event_endpoint(req: EventLogRequest, background_tasks: BackgroundT
     yesterday's entry. It runs as a FastAPI background task: after the 204
     is sent (the model write takes seconds, and felt-animation's post
     timeout is 2 s), but still on the server's event loop, so proactive
-    pre-synthesis (WP-25) works."""
+    pre-synthesis (WP-25) works.
+    """
     config = load_config()
     at_utc = diary.normalize_at(req.at)
     save_event(config.db_path, req.kind[:64], diary.cap_event_data(req.data), at_utc)
@@ -1054,7 +1055,8 @@ async def diary_list_endpoint(limit: int = 30, date: str | None = None) -> dict:
     """LAN-only, like the rest of felt-core's API (felt-dashboard's "Felt's
     diary" page, WP-26). `date=` returns just that one entry (or an empty
     `entries` list); otherwise the most recent `limit` entries, newest
-    first, plus the weekly summaries."""
+    first, plus the weekly summaries.
+    """
     config = load_config()
     if date is not None:
         row = get_diary(config.db_path, date)
@@ -1077,7 +1079,8 @@ async def diary_patch_endpoint(date: str, req: DiaryPatchRequest) -> dict:
     new text - a hand-edited entry is usually a small correction, and a
     stale callback pointing at wording that's no longer there is worse
     than no callback until the next nightly write naturally adds fresh
-    ones. Documented here since the WP left this as an implementer call."""
+    ones. Documented here since the WP left this as an implementer call.
+    """
     config = load_config()
     updated = update_diary_entry(config.db_path, date, req.entry, "[]")
     if not updated:
@@ -1094,7 +1097,8 @@ async def diary_delete_endpoint(date: str) -> dict:
 @app.post("/v1/diary/write")
 async def diary_write_debug_endpoint(date: str) -> dict:
     """A manual trigger for testing (WP-26), gated by FELT_DEBUG the same
-    way /v1/proactive/debug is - not a normal client path."""
+    way /v1/proactive/debug is - not a normal client path.
+    """
     config = load_config()
     if not config.debug:
         raise HTTPException(status_code=404, detail="not found")
@@ -1119,13 +1123,12 @@ async def self_memory_patch_endpoint(memory_id: int, req: SelfMemoryPatchRequest
     """Mario's view/pin/edit/veto controls (WP-26 combined with personality
     plan P4, Decision 3). `status: "vetoed"` means never re-added - its
     text feeds the nightly writer's "never" list (diary._build_writer_prompt)
-    for as long as the vetoed row exists."""
+    for as long as the vetoed row exists.
+    """
     config = load_config()
     if get_self_memory(config.db_path, memory_id) is None:
         raise HTTPException(status_code=404, detail="not found")
-    updated = update_self_memory(
-        config.db_path, memory_id, text=req.text, pinned=req.pinned, status=req.status
-    )
+    updated = update_self_memory(config.db_path, memory_id, text=req.text, pinned=req.pinned, status=req.status)
     return {"ok": updated}
 
 
@@ -1156,7 +1159,8 @@ async def get_temperature_unit() -> dict:
 async def weather_now_endpoint() -> dict:
     """WP-21: the current weather condition from the WP-06 precompute cache
     (refreshed every 15 min, stale after 20) - felt-animation polls it for
-    weather props. `condition` is "rain" / "sun" / "snow" / "storm" or None."""
+    weather props. `condition` is "rain" / "sun" / "snow" / "storm" or None.
+    """
     return current_weather()
 
 
@@ -1166,7 +1170,8 @@ async def music_now_endpoint() -> dict:
     felt-tray every ~15s to drive unprompted "oh, this one again" remarks
     on a track change, and answerable directly via the now_playing skill.
     `{"is_playing": false}` covers both "nothing loaded" and "Spotify not
-    connected" - callers don't need to distinguish those."""
+    connected" - callers don't need to distinguish those.
+    """
     config = load_config()
     if not config.spotify_refresh_token:
         return {"is_playing": False}
@@ -1197,7 +1202,8 @@ async def music_lyrics_endpoint() -> dict:
     (Spotify's own API has no lyrics endpoint). `current_line`/`chorus`
     are only populated when LRCLIB returned synced (LRC) lyrics - plenty
     of tracks only have plain text, which is still usable for a quoted
-    remark but has no per-line timing to build them from."""
+    remark but has no per-line timing to build them from.
+    """
     config = load_config()
     if not config.spotify_refresh_token:
         return {"found": False}
@@ -1299,7 +1305,8 @@ async def shopping_list_page() -> FileResponse:
 async def proactive_next_endpoint(timeout: float = 25.0) -> Response:
     """felt-tray's long-poll. Returns the oldest undelivered, unexpired
     item (already marked delivered) as soon as one exists, or an empty
-    204 once the (clamped) timeout elapses with nothing to hand out."""
+    204 once the (clamped) timeout elapses with nothing to hand out.
+    """
     config = load_config()
     item = await wait_for_next(config, clamp_timeout(timeout))
     if item is None:
@@ -1314,7 +1321,8 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
     cache + felt-voice call /v1/voice-chat and friends already share via
     tts_cache/_synthesize_reply, just without the X-* reply headers (there's
     no ui_action/animation_tag to carry here beyond what /next already
-    returned)."""
+    returned).
+    """
     config = load_config()
     row = get_proactive_item(config.db_path, item_id)
     if row is None:
@@ -1337,7 +1345,8 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
 @app.post("/v1/proactive/{item_id}/requeue")
 async def proactive_requeue_endpoint(item_id: int) -> dict:
     """felt-tray calls this when Felt was hidden/away and the item wasn't
-    `urgent` - don't lose it, hand it out again on the next /next poll."""
+    `urgent` - don't lose it, hand it out again on the next /next poll.
+    """
     config = load_config()
     return {"requeued": requeue_proactive(config.db_path, item_id)}
 
@@ -1354,7 +1363,8 @@ class ProactiveDebugRequest(BaseModel):
 async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
     """WP-25 accept test's door into the queue - only reachable with
     FELT_DEBUG=1, a 404 (not just an auth error) otherwise so its
-    existence isn't even discoverable on a normal deployment."""
+    existence isn't even discoverable on a normal deployment.
+    """
     config = load_config()
     if not config.debug:
         raise HTTPException(status_code=404, detail="not found")
@@ -1371,7 +1381,8 @@ async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
 
 def _ws_authorized(websocket: WebSocket) -> bool:
     """WP-55: the HTTP auth middleware doesn't see websockets, and browsers
-    can't set headers on them - so a Bearer header or ?token= is checked here."""
+    can't set headers on them - so a Bearer header or ?token= is checked here.
+    """
     config = load_config()
     if config.auth_mode == "identity":
         return False  # B5.4: no shared token any more, and no machine caller uses websockets

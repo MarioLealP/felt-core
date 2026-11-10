@@ -13,7 +13,8 @@ def test_sheet_loads_with_required_sections():
     for key in ("identity", "self_awareness", "rules", "opinions", "examples"):
         assert p.get(key), key
     for ex in p["examples"]:
-        assert "felt" in ex and ("mario" in ex or "context" in ex)
+        assert "felt" in ex
+        assert "mario" in ex or "context" in ex
 
 
 def test_compiled_prompt_has_character_and_spoken_rules():

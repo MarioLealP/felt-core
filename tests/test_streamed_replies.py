@@ -30,8 +30,7 @@ PROSE = [
     "Fried rice! You've got everything for it. Day-old rice is actually better, it fries "
     "without going mushy. Scramble the eggs first, set them aside, then the chicken. "
     "Soy sauce at the end, and some spring onion if you have it.",
-    "Dr. Smith said the U.S. version costs 3.5 euros. That's cheap, honestly! "
-    "Want me to look for it?",
+    "Dr. Smith said the U.S. version costs 3.5 euros. That's cheap, honestly! Want me to look for it?",
     "Hm. Okay. So the thing is... I don't know. Maybe tomorrow? We'll see how it goes, I guess.",
     "Short one.",
     'She said "fine." Then she left!? Wow. That is a whole story right there, isn\'t it.',
@@ -140,7 +139,8 @@ async def test_chat_stream_hands_over_text_as_it_comes(tmp_path, monkeypatch):
     )
     assert pieces == ["Hello", " there!"]
     assert reply.text == "Hello there!"
-    assert not reply.tool_calls and not reply.truncated
+    assert not reply.tool_calls
+    assert not reply.truncated
     assert (reply.prompt_n, reply.cache_n) == (4, 261)
     assert seen["body"]["stream"] is True
     assert "tool_choice" not in seen["body"]
@@ -186,7 +186,8 @@ async def test_chat_stream_hitting_max_tokens_ends_at_last_sentence(tmp_path, mo
         max_tokens=5,
         config=_config(tmp_path),
     )
-    assert reply.truncated and reply.text == "One."
+    assert reply.truncated
+    assert reply.text == "One."
 
 
 async def test_chat_stream_errors_are_unavailable(tmp_path, monkeypatch):
@@ -265,7 +266,8 @@ async def test_chat_streamed_yields_chunks_while_writing(tmp_path, monkeypatch, 
 
     assert first_while_streaming is True  # her first words went out mid-reply
     assert chunks == speech_chunks(PROSE[0])
-    assert result is not None and result.reply == PROSE[0]
+    assert result is not None
+    assert result.reply == PROSE[0]
     assert fake_llm.calls[0]["stream"] and not fake_llm.calls[0]["tools"]  # no skills here
     assert _assistant_lines(config, "s") == [PROSE[0]]  # written once, at the end
 
@@ -398,9 +400,7 @@ async def test_a_skills_tag_and_action_come_before_her_first_words(tmp_path, mon
     ]
     metas = []
 
-    chunks, result = await _run(
-        orchestrator.chat_streamed("alarm at 7:30", _config(tmp_path), "s"), metas
-    )
+    chunks, result = await _run(orchestrator.chat_streamed("alarm at 7:30", _config(tmp_path), "s"), metas)
 
     assert len(metas) == 1
     assert metas[0].ui_action == result.ui_action
@@ -433,10 +433,7 @@ def test_first_chunk_can_end_at_a_clause_break():
 
 
 def test_clause_cut_only_for_the_first_chunk():
-    text = (
-        "Okay. Fine, fine. "
-        + "That one sentence goes on, and on, and on, and on for a good while longer."
-    )
+    text = "Okay. Fine, fine. " + "That one sentence goes on, and on, and on, and on for a good while longer."
     chunker = SpeechChunker(first_at_clause=True)
     out = chunker.feed(text + " End") + chunker.close()
     assert out[0] == "Okay. Fine, fine. That one sentence goes on,"

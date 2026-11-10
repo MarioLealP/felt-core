@@ -13,13 +13,12 @@ from felt_core.marks import marks_for
 MAX_PAGE = 200
 
 
-def history_page(
-    db_path: str, session_id: str, *, before_id: int | None = None, limit: int = 50
-) -> list[dict]:
+def history_page(db_path: str, session_id: str, *, before_id: int | None = None, limit: int = 50) -> list[dict]:
     """Up to `limit` messages older than `before_id` (newest page when None),
     oldest first. Each row: id, role, content, created_at (UTC, ISO-8601),
     marks (her marks on that message, see marks.py) and answering (the aside
-    of hers his line answers, see asides.py, else None)."""
+    of hers his line answers, see asides.py, else None).
+    """
     limit = max(1, min(limit, MAX_PAGE))
     before = "AND id < ? " if before_id is not None else ""
     params: tuple = (session_id,)

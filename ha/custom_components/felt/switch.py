@@ -1,5 +1,6 @@
 """Felt's own switches in HA: quiet, hidden, DJ mode - the same ones as in
-the Felt app and on the desktop, so automations can flip them."""
+the Felt app and on the desktop, so automations can flip them.
+"""
 
 from __future__ import annotations
 
@@ -23,9 +24,7 @@ SWITCHES = (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: FeltCoordinator = entry.runtime_data.coordinator
     async_add_entities(FeltSwitch(coordinator, entry, *s) for s in SWITCHES)
 
@@ -33,9 +32,7 @@ async def async_setup_entry(
 class FeltSwitch(CoordinatorEntity[FeltCoordinator], SwitchEntity):
     _attr_has_entity_name = True
 
-    def __init__(
-        self, coordinator: FeltCoordinator, entry: ConfigEntry, key: str, name: str, icon: str
-    ) -> None:
+    def __init__(self, coordinator: FeltCoordinator, entry: ConfigEntry, key: str, name: str, icon: str) -> None:
         super().__init__(coordinator)
         self._key = key
         self._attr_name = name

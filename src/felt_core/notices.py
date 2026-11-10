@@ -30,11 +30,10 @@ def _kind(source_ref: str) -> str:
 
 
 def rules(tier: str, kind: str, report: dict | None, missed: bool) -> dict:
-    """pop / sound / sticky for one of her lines."""
+    """Pop / sound / sticky for one of her lines."""
     outcome = kind in ("followup", "both")
     needs_him = outcome and (
-        (report is not None and report.get("verdict") in ("needs-mario", "unknown"))
-        or (report is None and missed)
+        (report is not None and report.get("verdict") in ("needs-mario", "unknown")) or (report is None and missed)
     )
     pop = tier in _POPS or needs_him
     return {
@@ -58,7 +57,8 @@ def latest(db_path: str) -> int:
 
 def after(db_path: str, last_id: int, limit: int = 20) -> list[dict]:
     """Her alert lines newer than `last_id`, oldest first, each with what
-    the pop-up needs and whether it pops at all."""
+    the pop-up needs and whether it pops at all.
+    """
     conn = _connect(db_path)
     try:
         _ensure(conn)

@@ -88,9 +88,7 @@ async def handle(params, ctx):
     config = ctx.config
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected.")
-    action = str(
-        get_single_param(params, "action", "command", ignore_keys=("level", "volume")) or ""
-    ).lower()
+    action = str(get_single_param(params, "action", "command", ignore_keys=("level", "volume")) or "").lower()
     op = _operation(action)
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -118,9 +116,7 @@ async def handle(params, ctx):
             volume = (player.get("device") or {}).get("volume_percent")
             if op in ("louder", "quieter", "volume"):
                 if op == "volume":
-                    target = _percent(
-                        get_single_param(params, "level", "volume", ignore_keys=("action",))
-                    )
+                    target = _percent(get_single_param(params, "level", "volume", ignore_keys=("action",)))
                     if target is None:
                         return SkillResult(text=f"Volume is at {volume}%. To what?")
                 else:
@@ -144,9 +140,7 @@ async def handle(params, ctx):
             return SkillResult(text="Playing again.")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
-                return SkillResult(
-                    text="Spotify refused that (it needs Premium, or the player is restricted)."
-                )
+                return SkillResult(text="Spotify refused that (it needs Premium, or the player is restricted).")
             return SkillResult(text="Spotify didn't take that right now.")
         except httpx.HTTPError:
             return SkillResult(text="Couldn't reach Spotify right now.")

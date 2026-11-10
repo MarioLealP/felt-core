@@ -33,9 +33,7 @@ def _client(tmp_path, monkeypatch, debug=False):
 def test_events_endpoint_logs_and_returns_204(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
-    response = client.post(
-        "/v1/events", json={"kind": "music_track", "data": {"title": "Song", "artist": "Artist"}}
-    )
+    response = client.post("/v1/events", json={"kind": "music_track", "data": {"title": "Song", "artist": "Artist"}})
 
     assert response.status_code == 204
     db_path = str(tmp_path / "felt.db")
@@ -48,9 +46,7 @@ def test_events_endpoint_logs_and_returns_204(tmp_path, monkeypatch):
 def test_events_endpoint_accepts_any_kind_and_caps_oversized_data(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
-    response = client.post(
-        "/v1/events", json={"kind": "some_totally_new_kind", "data": {"blob": "x" * 5000}}
-    )
+    response = client.post("/v1/events", json={"kind": "some_totally_new_kind", "data": {"blob": "x" * 5000}})
 
     assert response.status_code == 204
     db_path = str(tmp_path / "felt.db")
@@ -70,9 +66,7 @@ def test_events_endpoint_triggers_the_diary_writer(tmp_path, monkeypatch):
 
     monkeypatch.setattr(diary, "write_diary_for_date", fake_write)
 
-    response = client.post(
-        "/v1/events", json={"kind": "day_start", "data": {}, "at": "2026-09-23T08:00:00Z"}
-    )
+    response = client.post("/v1/events", json={"kind": "day_start", "data": {}, "at": "2026-09-23T08:00:00Z"})
 
     assert response.status_code == 204
     assert calls == ["2026-09-22"]
@@ -102,9 +96,7 @@ def test_diary_list_and_single_date(tmp_path, monkeypatch):
 def test_diary_patch_marks_edited_and_clears_callbacks(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     db_path = str(tmp_path / "felt.db")
-    insert_diary(
-        db_path, "2026-09-20", "original entry", json.dumps([{"text": "x", "uses": 0}]), "cozy"
-    )
+    insert_diary(db_path, "2026-09-20", "original entry", json.dumps([{"text": "x", "uses": 0}]), "cozy")
 
     response = client.patch("/v1/diary/2026-09-20", json={"entry": "corrected entry"})
 

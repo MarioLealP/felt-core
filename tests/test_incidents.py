@@ -76,7 +76,8 @@ def test_one_that_outlasts_its_wait_becomes_open(tmp_path):
     assert _get(db, i)["state"] == "open"
     _in(db, "clockmost RESOLVED: Caddy: an upstream is unhealthy", at=_at(40))
     got = _get(db, i)
-    assert got["state"] == "resolved" and got["resolved_at"] == "2026-10-03 12:40:00"
+    assert got["state"] == "resolved"
+    assert got["resolved_at"] == "2026-10-03 12:40:00"
 
 
 def test_repeats_fold_and_a_flapping_check_waits_again(tmp_path):
@@ -86,7 +87,8 @@ def test_repeats_fold_and_a_flapping_check_waits_again(tmp_path):
     _in(db, "clockmost RESOLVED: Caddy: an upstream is unhealthy", at=_at(3))
     assert _in(db, title, at=_at(60)) == i  # same problem, folded
     got = _get(db, i)
-    assert got["count"] == 2 and got["state"] == "pending"
+    assert got["count"] == 2
+    assert got["state"] == "pending"
     assert incidents.promote_due(db, _at(65)) == []  # a fresh wait from 60
     assert incidents.promote_due(db, _at(71)) == [i]
 
@@ -96,7 +98,8 @@ def test_folding_stops_after_the_window(tmp_path):
     a = _in(db, "backup full FAILED", at=_at(0))
     assert _in(db, "backup full FAILED", at=_at(60)) == a
     b = _in(db, "backup full FAILED", at=_at(60 * 8))
-    assert b != a and _get(db, a)["count"] == 2
+    assert b != a
+    assert _get(db, a)["count"] == 2
 
 
 def test_updates_skipped_joins_the_failed_backup(tmp_path):
@@ -114,7 +117,9 @@ def test_expected_events_are_noted_and_an_update_run_is_one_incident(tmp_path):
     a = _in(db, "clockmost: update deployed", "immich", at=_at(0))
     assert _in(db, "clockmost: update deployed", "caddy", at=_at(2)) == a
     got = _get(db, a)
-    assert got["state"] == "noted" and got["expected"] and got["count"] == 2
+    assert got["state"] == "noted"
+    assert got["expected"]
+    assert got["count"] == 2
     # the next night's run is its own line
     assert _in(db, "clockmost: update deployed", at=_at(60 * 24)) != a
 

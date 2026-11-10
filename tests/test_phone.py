@@ -14,9 +14,7 @@ from felt_core.plugin import ExecutionContext
 
 
 def _config(tmp_path):
-    return FeltConfig(
-        db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="t", phone="pocox7"
-    )
+    return FeltConfig(db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="t", phone="pocox7")
 
 
 @pytest.fixture
@@ -118,11 +116,10 @@ async def test_timer_skill_falls_back_to_a_push(tmp_path, ha, monkeypatch):
     skill = load_plugin_module("set_timer/skill.py")
     ha.status = 500
     started = []
-    monkeypatch.setattr(
-        skill.asyncio, "create_task", lambda coro: (started.append(1), coro.close())
-    )
+    monkeypatch.setattr(skill.asyncio, "create_task", lambda coro: (started.append(1), coro.close()))
     result = await skill.handle({"minutes": 10}, _ctx(tmp_path))
-    assert started == [1] and "ping you" in result.text
+    assert started == [1]
+    assert "ping you" in result.text
 
 
 async def test_alarm_skill_sets_the_next_occurrence_on_the_phone(tmp_path, ha):
@@ -130,7 +127,8 @@ async def test_alarm_skill_sets_the_next_occurrence_on_the_phone(tmp_path, ha):
     result = await skill.handle({"time": "7:30am", "label": "gym"}, _ctx(tmp_path))
     assert "on your phone" in result.text
     extras = ha.calls[0][2]["data"]["intent_extras"]
-    assert "HOUR:7:int" in extras and "MINUTES:30:int" in extras
+    assert "HOUR:7:int" in extras
+    assert "MINUTES:30:int" in extras
 
 
 async def test_alarm_skill_falls_back_when_the_phone_is_unreachable(tmp_path, ha, monkeypatch):
@@ -139,7 +137,8 @@ async def test_alarm_skill_falls_back_when_the_phone_is_unreachable(tmp_path, ha
     scheduled = []
     monkeypatch.setattr(skill, "schedule_alarm", lambda c, at, label: scheduled.append(at))
     result = await skill.handle({"time": "7:30am"}, _ctx(tmp_path))
-    assert len(scheduled) == 1 and "on your phone" not in result.text
+    assert len(scheduled) == 1
+    assert "on your phone" not in result.text
 
 
 async def test_find_phone_rings_on_the_alarm_stream(tmp_path, ha):

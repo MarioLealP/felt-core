@@ -177,9 +177,7 @@ async def test_get_lyrics_does_not_cache_a_429_or_5xx(tmp_path, monkeypatch):
     async def fake_get(self, url, params, headers):
         calls.append(1)
         status = next(statuses)
-        return _FakeResponse(
-            status, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"} if status == 200 else {}
-        )
+        return _FakeResponse(status, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"} if status == 200 else {})
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
 
@@ -188,7 +186,8 @@ async def test_get_lyrics_does_not_cache_a_429_or_5xx(tmp_path, monkeypatch):
         second = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
         third = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
 
-    assert first is None and second is None
+    assert first is None
+    assert second is None
     assert third is not None
     assert third["plain"] == "Hi"  # the real lyrics were still fetched once LRCLIB recovered
     assert len(calls) == 3
@@ -204,9 +203,7 @@ async def test_get_lyrics_sends_the_configured_user_agent(tmp_path, monkeypatch)
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
 
     async with httpx.AsyncClient() as client:
-        await get_lyrics(
-            client, tmp_path, "track6", "Song", "Artist", "Album", 200, user_agent="custom-ua/1"
-        )
+        await get_lyrics(client, tmp_path, "track6", "Song", "Artist", "Album", 200, user_agent="custom-ua/1")
 
     assert seen["User-Agent"] == "custom-ua/1"
 
@@ -237,9 +234,7 @@ def test_find_chorus_lists_every_occurrence():
         (30000, 35000),
         (40000, 44000),
     ]
-    assert chorus["windows"][1]["lines"] == [
-        {"start_ms": 30000, "end_ms": 35000, "text": "This is the chorus"}
-    ]
+    assert chorus["windows"][1]["lines"] == [{"start_ms": 30000, "end_ms": 35000, "text": "This is the chorus"}]
 
 
 def test_find_chorus_top_level_window_follows_the_position():

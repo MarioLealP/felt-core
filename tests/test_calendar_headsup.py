@@ -59,9 +59,7 @@ def test_plan_ignores_far_events_and_sent_or_pending_keys():
     assert ch.plan([("cal", _event(90))], NOW, 330, lambda key: False) == []
     event = _event(12)
     ch._pending.add(ch.dedupe_key(event, ch.URGENT))
-    planned = ch.plan(
-        [("cal", event)], NOW, 330, lambda key: key == ch.dedupe_key(event, ch.NORMAL)
-    )
+    planned = ch.plan([("cal", event)], NOW, 330, lambda key: key == ch.dedupe_key(event, ch.NORMAL))
     assert planned == []
 
 
@@ -149,7 +147,8 @@ async def test_game_context_reaches_the_prompt(tmp_path, monkeypatch):
     assert await ch.deliver(config, "cal", event, ch.NORMAL, now=NOW)
     assert "PathOfExile" in prompts[0]
     item = _queued(config)
-    assert item is not None and item["kind"] == "calendar"
+    assert item is not None
+    assert item["kind"] == "calendar"
 
 
 async def test_plain_line_when_her_model_is_down(tmp_path, monkeypatch):
@@ -262,8 +261,10 @@ async def test_leave_soon_goes_to_desk_and_phone(tmp_path, monkeypatch):
     prompts, notified = _patch_trip(monkeypatch, trip, line="leave in 15 for the TAC")
     assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
     item = _queued(config)
-    assert item["kind"] == "urgent" and item["text"] == "leave in 15 for the TAC"
-    assert "leave in 15 minutes" in prompts[0] and "30 minutes" in prompts[0]
+    assert item["kind"] == "urgent"
+    assert item["text"] == "leave in 15 for the TAC"
+    assert "leave in 15 minutes" in prompts[0]
+    assert "30 minutes" in prompts[0]
     assert notified == [("TAC", "leave in 15 for the TAC", "felt-leave-trip1")]
     assert not await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)  # once
 
@@ -302,7 +303,8 @@ async def test_poll_asks_drive_times_only_for_addresses(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ch.leave_by, "drive_minutes", fake_drive)
     drive = await ch._drive_times(config, [("cal", _trip(80)), ("cal", _event(80, "plain"))], NOW)
-    assert drive == {"trip1": 30.0} and asked == [ADDRESS]
+    assert drive == {"trip1": 30.0}
+    assert asked == [ADDRESS]
 
 
 async def test_an_appointment_entered_twice_is_one(tmp_path, monkeypatch):

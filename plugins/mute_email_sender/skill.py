@@ -1,14 +1,14 @@
 """WP-43: "I don't care about X emails" - X goes on the noise list and she
 never mentions its mail again (emails.py; a mailing list's whole domain, a
-person's one address)."""
+person's one address).
+"""
 
 from felt_core import emails
 from felt_core.plugin import SkillResult
 
 name = "mute_email_sender"
 description = (
-    "Stops her mentioning emails from a sender for good - when Mario says he doesn't "
-    "care about someone's emails."
+    "Stops her mentioning emails from a sender for good - when Mario says he doesn't care about someone's emails."
 )
 parameters_schema = {
     "type": "object",

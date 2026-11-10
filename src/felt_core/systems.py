@@ -93,8 +93,9 @@ def _row(r: sqlite3.Row | dict) -> dict:
 
 
 def _her_lines(conn, ids: list[int]) -> dict[int, int]:
-    """incident id -> the id of her newest line about it (what "ask Felt"
-    answers in Talk)."""
+    """Incident id -> the id of her newest line about it (what "ask Felt"
+    answers in Talk).
+    """
     if not ids:
         return {}
     try:
@@ -114,15 +115,13 @@ def _her_lines(conn, ids: list[int]) -> dict[int, int]:
 
 def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
     """The areas (from every live incident) and one page of history,
-    newest first. Dropped noise never shows."""
+    newest first. Dropped noise never shows.
+    """
     conn = _connect(db_path)
     try:
         _ensure(conn)
         conn.row_factory = sqlite3.Row
-        live = [
-            _row(r)
-            for r in conn.execute("SELECT * FROM incidents WHERE state IN ('open', 'pending')")
-        ]
+        live = [_row(r) for r in conn.execute("SELECT * FROM incidents WHERE state IN ('open', 'pending')")]
         rows = conn.execute(
             "SELECT * FROM incidents WHERE state != 'dropped' AND id < ? ORDER BY id DESC LIMIT ?",
             (before or 2**62, limit),
@@ -155,7 +154,8 @@ def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
 
 def details(db_path: str, incident_id: int, links: dict[str, str]) -> dict | None:
     """Everything about one incident: her lines, Claude's full report with
-    his trail, the raw alerts, the session to join, links out (name -> URL, from the settings)."""
+    his trail, the raw alerts, the session to join, links out (name -> URL, from the settings).
+    """
     incident = get(db_path, incident_id)
     if incident is None or incident["state"] == "dropped":
         return None
@@ -176,14 +176,14 @@ def details(db_path: str, incident_id: int, links: dict[str, str]) -> dict | Non
 
 def context_for(db_path: str, incident_id: int) -> str:
     """What she knows about an incident when Mario asks her about it: the
-    alert, its state, and Claude's conclusion if he has one."""
+    alert, its state, and Claude's conclusion if he has one.
+    """
     incident = get(db_path, incident_id)
     if incident is None:
         return ""
     lines = [
         f"(That was about a server alert: {incident['title']}",
-        f"first seen {incident['first_at']} UTC, fired {incident['count']} time(s),"
-        f" now {incident['state']}.",
+        f"first seen {incident['first_at']} UTC, fired {incident['count']} time(s), now {incident['state']}.",
     ]
     report = json.loads(incident["report"]) if incident.get("report") else None
     if report:
@@ -202,7 +202,8 @@ def context_for(db_path: str, incident_id: int) -> str:
 
 def mark_handled(db_path: str, incident_id: int) -> bool:
     """Mario says it's dealt with: the incident closes, and nothing more
-    is said about it."""
+    is said about it.
+    """
     conn = _connect(db_path)
     try:
         _ensure(conn)

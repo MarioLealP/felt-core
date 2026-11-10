@@ -15,10 +15,7 @@ from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
 name = "board_status"
-description = (
-    "Mario's work board (the agents' open-work list): in progress, needs review, next, "
-    "backlog. Read-only."
-)
+description = "Mario's work board (the agents' open-work list): in progress, needs review, next, backlog. Read-only."
 parameters_schema = {
     "type": "object",
     "properties": {
@@ -78,10 +75,7 @@ def _focus(raw: str | None) -> str:
 
 async def fetch_issues(config) -> list[dict]:
     """The board's issues, one dict per line of the Beads export."""
-    url = (
-        f"{config.board_gitea_url.rstrip('/')}/api/v1/repos/{config.board_repo}"
-        f"/raw/{config.board_path}"
-    )
+    url = f"{config.board_gitea_url.rstrip('/')}/api/v1/repos/{config.board_repo}/raw/{config.board_path}"
     async with httpx.AsyncClient(
         timeout=15,
         headers={"Authorization": f"token {config.board_token}"},
@@ -121,10 +115,7 @@ def build_board(issues: list[dict]) -> dict[str, list[str]]:
     for issue in issues:
         board[_column(issue, open_ids)].append(issue)
     return {
-        col: [
-            i["title"]
-            for i in sorted(items, key=lambda i: (i.get("priority", 4), i.get("created_at", "")))
-        ]
+        col: [i["title"] for i in sorted(items, key=lambda i: (i.get("priority", 4), i.get("created_at", "")))]
         for col, items in board.items()
     }
 

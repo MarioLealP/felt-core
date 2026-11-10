@@ -13,7 +13,8 @@ from felt_core.plugin import ExecutionContext
 _spec = importlib.util.spec_from_file_location(
     "board_status_skill", Path(__file__).parents[1] / "plugins/board_status/skill.py"
 )
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
@@ -64,9 +65,7 @@ async def test_overview_counts_columns_and_lists_the_top(monkeypatch):
     seen = []
     _mock(monkeypatch, seen)
     r = await skill.handle({}, _ctx("how's the board?"))
-    assert r.text.startswith(
-        "Board: In progress 1, Ready 3, Blocked 1, Backlog 1, Polish pile 1, Done 1."
-    )
+    assert r.text.startswith("Board: In progress 1, Ready 3, Blocked 1, Backlog 1, Polish pile 1, Done 1.")
     assert "In progress: The board" in r.text
     assert "Ready: ntfy hygiene; Home Assistant; Unblocked now" in r.text
     assert "Nothing is waiting for Mario's review." in r.text

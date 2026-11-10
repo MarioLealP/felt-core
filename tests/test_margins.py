@@ -38,7 +38,8 @@ def test_the_page_is_her_non_chat_lines_with_a_source(tmp_path):
         ("Dentist in 15.", "calendar_15"),
         ("Alarm: stretch", "alarm"),
     ]
-    assert got[0]["created_at"].endswith("Z") and got[0]["read"] is False
+    assert got[0]["created_at"].endswith("Z")
+    assert got[0]["read"] is False
     assert margins.unread(db) == 4
     older = margins.page(db, before_id=got[2]["id"], limit=1)
     assert [m["content"] for m in older] == ["Good song."]
@@ -62,7 +63,8 @@ def test_read_dismiss_and_snooze(tmp_path):
         conn.execute("UPDATE messages SET snoozed_until = datetime('now', '-1 minute')")
     conn.close()
     back = [m for m in margins.page(db) if m["content"] == "Dentist in 15."]
-    assert back and back[0]["read"] is False
+    assert back
+    assert back[0]["read"] is False
 
 
 def test_read_all_leaves_snoozed_lines_and_other_sessions(tmp_path):

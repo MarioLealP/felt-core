@@ -38,10 +38,7 @@ def _old_database(path: str) -> None:
             "INSERT INTO screen_observations (session_id, description, spoken_reply)"
             " VALUES ('s', 'excel', 'Spreadsheets again?')"
         )
-        conn.execute(
-            "INSERT INTO event_reactions (session_id, event, line)"
-            " VALUES ('s', 'song', 'Good song.')"
-        )
+        conn.execute("INSERT INTO event_reactions (session_id, event, line) VALUES ('s', 'song', 'Good song.')")
     conn.close()
 
 

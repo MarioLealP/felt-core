@@ -31,7 +31,8 @@ def _fingerprint(conn, has: set[str], table: str, sql: str) -> str:
 
 def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
     """(newest message id, aside picks fingerprint, number of marks,
-    incidents fingerprint, controls fingerprint)."""
+    incidents fingerprint, controls fingerprint).
+    """
     conn = _connect(db_path)
     try:
         newest = conn.execute(
@@ -39,17 +40,11 @@ def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
         ).fetchone()[0]
         has = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         picks = (
-            conn.execute(
-                "SELECT COALESCE(GROUP_CONCAT(message_id), '') FROM aside_picks"
-            ).fetchone()[0]
+            conn.execute("SELECT COALESCE(GROUP_CONCAT(message_id), '') FROM aside_picks").fetchone()[0]
             if "aside_picks" in has
             else ""
         )
-        marks = (
-            conn.execute("SELECT COUNT(*) FROM message_marks").fetchone()[0]
-            if "message_marks" in has
-            else 0
-        )
+        marks = conn.execute("SELECT COUNT(*) FROM message_marks").fetchone()[0] if "message_marks" in has else 0
         incidents = _fingerprint(
             conn,
             has,
@@ -100,7 +95,8 @@ async def notices(
 ) -> AsyncIterator[str]:
     """The event stream. `gone` is awaited each round; truthy ends it (the
     client went away). `lists_version` says when the shopping list changed -
-    it lives in Home Assistant (shopping.py); "" = couldn't tell, so no notice."""
+    it lives in Home Assistant (shopping.py); "" = couldn't tell, so no notice.
+    """
     newest, picks, marks, incidents, ctl = await asyncio.to_thread(_state, db_path, session_id)
     lists = await lists_version() if lists_version else ""
     yield _event("hello", {"newest": newest})

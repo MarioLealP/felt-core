@@ -101,7 +101,5 @@ def test_prune_removes_only_expired_rows(tmp_path):
     prune_expired_proactive(db_path)
 
     assert get_proactive_item(db_path, keep) is not None
-    remaining_texts = [
-        row["text"] for row in [get_proactive_item(db_path, keep)] if row is not None
-    ]
+    remaining_texts = [row["text"] for row in [get_proactive_item(db_path, keep)] if row is not None]
     assert remaining_texts == ["keep me"]
