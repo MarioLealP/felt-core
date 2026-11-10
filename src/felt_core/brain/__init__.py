@@ -3,8 +3,11 @@ screen reactions, and the background weather/music-taste/warm-up loops -
 split (WP-40) out of a single 1080-line brain.py into a package by
 responsibility:
 
-- orchestrator.py: chat() itself - the local tool-calling turn and skill
-  execution.
+- orchestrator.py: chat() itself - the local tool-calling turn.
+- call_guards.py: checks on a tool call before it runs (hush fast paths,
+  presence intents, per-skill guards).
+- skill_turns.py: one step of a turn - run a skill call, phrase its result,
+  force a tool turn.
 - replies.py: felt-llm reply generation and skill-result phrasing. Also
   this package's small public surface for other modules (events.py) that
   need a model-generated line without reaching into orchestrator internals.

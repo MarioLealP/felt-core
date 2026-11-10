@@ -17,6 +17,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+import felt_core.core.diary_material as diary_material
 from felt_core.api.reply import _synthesize_reply
 from felt_core.brain import (
     poe_reactions,
@@ -199,7 +200,7 @@ async def log_event_endpoint(req: EventLogRequest, background_tasks: BackgroundT
     pre-synthesis (WP-25) works.
     """
     config = load_config()
-    at_utc = diary.normalize_at(req.at)
-    save_event(config.db_path, req.kind[:64], diary.cap_event_data(req.data), at_utc)
+    at_utc = diary_material.normalize_at(req.at)
+    save_event(config.db_path, req.kind[:64], diary_material.cap_event_data(req.data), at_utc)
     background_tasks.add_task(diary.on_event, config, req.kind, at_utc)
     return Response(status_code=204)

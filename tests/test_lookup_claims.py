@@ -283,13 +283,13 @@ async def test_a_skill_whose_service_is_down_says_so(tmp_path, monkeypatch):
     # e2e 2026-10-18: poe2-rag/drive search/weather/searxng down -> the whole chat 500'd
     import httpx2
 
-    from felt_core.brain import orchestrator
+    import felt_core.brain.skill_turns as skill_turns
 
     async def down(name, params, registry, ctx):
         raise httpx2.ConnectError("All connection attempts failed")
 
-    monkeypatch.setattr(orchestrator, "run_skill", down)
-    result, output = await orchestrator._run_skill_call(
+    monkeypatch.setattr(skill_turns, "run_skill", down)
+    result, output = await skill_turns._run_skill_call(
         ("poe2_wiki", {"query": "chaos orb"}), {}, _config(tmp_path), "what does the chaos orb do"
     )
     assert result is None

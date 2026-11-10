@@ -3,7 +3,7 @@ dedupe/cap, event-data capping, and facts never touched at all."""
 
 import json
 
-import felt_core.core.diary as diary
+import felt_core.core.diary_material as diary_material
 from felt_core.config import FeltConfig
 from felt_core.db.events import save_event
 from felt_core.db.facts import save_fact
@@ -16,42 +16,42 @@ def _config(tmp_path):
 
 
 def test_event_line_whitelists_known_kinds():
-    assert diary._event_line("game_start", {"name": "endfield.exe"}) == 'started playing "endfield.exe"'
-    assert diary._event_line("day_start", {}) is None
-    assert diary._event_line("unknown_kind", {"secret": "do not send"}) is None
+    assert diary_material._event_line("game_start", {"name": "endfield.exe"}) == 'started playing "endfield.exe"'
+    assert diary_material._event_line("day_start", {}) is None
+    assert diary_material._event_line("unknown_kind", {"secret": "do not send"}) is None
 
 
 def test_event_line_game_stop_formats_duration():
-    line = diary._event_line("game_stop", {"name": "poe2.exe", "duration_s": 7200})
+    line = diary_material._event_line("game_stop", {"name": "poe2.exe", "duration_s": 7200})
     assert line == 'stopped playing "poe2.exe" (about 120 min)'
 
 
 def test_compact_material_dedupes_repeated_lines_and_keeps_order():
-    raw = diary.RawMaterial(
+    raw = diary_material.RawMaterial(
         seen=[{"description": "a game", "spoken_reply": None}] * 3,
         events=[],
         chat_windows=[],
     )
-    text = diary.compact_material(raw)
+    text = diary_material.compact_material(raw)
     assert text.count("a game") == 1
 
 
 def test_compact_material_caps_total_length():
-    raw = diary.RawMaterial(
+    raw = diary_material.RawMaterial(
         seen=[{"description": f"unique observation {i}", "spoken_reply": None} for i in range(500)],
         events=[],
         chat_windows=[],
     )
-    text = diary.compact_material(raw)
-    assert len(text) <= diary._MAX_MATERIAL_CHARS
+    text = diary_material.compact_material(raw)
+    assert len(text) <= diary_material._MAX_MATERIAL_CHARS
 
 
 def test_cap_event_data_keeps_small_payloads_intact():
-    assert json.loads(diary.cap_event_data({"name": "x"})) == {"name": "x"}
+    assert json.loads(diary_material.cap_event_data({"name": "x"})) == {"name": "x"}
 
 
 def test_cap_event_data_truncates_oversized_payloads():
-    encoded = diary.cap_event_data({"blob": "x" * 5000})
+    encoded = diary_material.cap_event_data({"blob": "x" * 5000})
     assert len(encoded) < 5000
     assert json.loads(encoded)["_truncated"] is True
 
@@ -72,7 +72,7 @@ async def test_gather_material_includes_chat_windows_and_never_touches_facts(tmp
         "2026-09-20 12:00:00",
     )
 
-    material = await diary.gather_material(config, "2026-09-20")
+    material = await diary_material.gather_material(config, "2026-09-20")
 
     assert "bread" in material
     assert "medical history" in material  # nothing leaves the LAN, no classifier gate

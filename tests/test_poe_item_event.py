@@ -2,6 +2,8 @@
 
 import asyncio
 
+import felt_core.core.event_policy as event_policy
+import felt_core.core.event_prompt as event_prompt
 from felt_core.brain import poe_reactions
 from felt_core.core import events
 
@@ -51,7 +53,7 @@ def test_parse_unique_currency_rare():
 
 
 def test_prompt_needs_a_real_price():
-    priced = events.build_prompt(
+    priced = event_prompt.build_prompt(
         "poe_item",
         {
             "name": "Death Rush",
@@ -63,8 +65,8 @@ def test_prompt_needs_a_real_price():
     assert priced is not None
     assert "40 divine" in priced
     assert "Death Rush" in priced
-    assert events.build_prompt("poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []}) is None
-    assert events.build_prompt("poe_item", {}) is None
+    assert event_prompt.build_prompt("poe_item", {"name": "Doom Shell", "rarity": "Rare", "prices": []}) is None
+    assert event_prompt.build_prompt("poe_item", {}) is None
 
 
 def test_details_are_parsed_and_priced(monkeypatch):
@@ -83,6 +85,6 @@ def test_details_are_parsed_and_priced(monkeypatch):
 
 
 def test_poe_item_policy_skips_the_chatter_gap():
-    p = events.DEFAULT_POLICIES["poe_item"]
+    p = event_policy.DEFAULT_POLICIES["poe_item"]
     assert p.bypass_min_gap
     assert p.cooldown_s <= 5

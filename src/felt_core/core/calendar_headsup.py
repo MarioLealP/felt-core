@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict
 from felt_core.clients import ha_calendar, local_llm, phone
 from felt_core.config import FeltConfig
 from felt_core.core import features, leave_by, llm_gate
-from felt_core.core.events import _game_name
+from felt_core.core.event_prompt import _game_name
 from felt_core.core.proactive import enqueue_proactive
 from felt_core.db.events import get_events_between
 from felt_core.db.settings import get_setting, set_setting

@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 import felt_core.api.app as api
 import felt_core.api.reply as reply_api
+import felt_core.core.event_policy as event_policy
+import felt_core.core.event_prompt as event_prompt
 import felt_core.core.events as events
 from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
@@ -46,7 +48,7 @@ def _user(call):
 
 def _decide(event, details=None, **ages):
     ages = {"since_any_remark": None, "since_event": None, "since_same": None, **ages}
-    return events.decide(event, details or {}, events.DEFAULT_POLICIES, min_gap_s=30, **ages)
+    return event_policy.decide(event, details or {}, event_policy.DEFAULT_POLICIES, min_gap_s=30, **ages)
 
 
 def test_unknown_event_is_no_reaction():
@@ -83,14 +85,17 @@ def test_game_stop_needs_a_real_session():
 
 def test_policy_override_from_config(tmp_path):
     config = _config(tmp_path, event_policies='{"music_new_track": {"cooldown_s": 5}}')
-    assert events.policies(config)["music_new_track"].cooldown_s == 5
-    assert events.policies(config)["music_new_track"].dedupe_s == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
+    assert event_policy.policies(config)["music_new_track"].cooldown_s == 5
+    assert (
+        event_policy.policies(config)["music_new_track"].dedupe_s
+        == event_policy.DEFAULT_POLICIES["music_new_track"].dedupe_s
+    )
 
 
 def test_a_bad_policy_override_is_ignored(tmp_path, caplog):
     # a value of the wrong type keeps the default (and says so); unknown keys were always dropped
     config = _config(tmp_path, event_policies='{"music_new_track": {"cooldown_s": "soon", "nope": 1}}')
-    assert events.policies(config)["music_new_track"] == events.DEFAULT_POLICIES["music_new_track"]
+    assert event_policy.policies(config)["music_new_track"] == event_policy.DEFAULT_POLICIES["music_new_track"]
     assert "FELT_EVENT_POLICIES[music_new_track] ignored" in caplog.text
 
 
@@ -98,7 +103,7 @@ def test_a_bad_policy_override_is_ignored(tmp_path, caplog):
 
 
 def test_prompt_uses_only_whitelisted_fields():
-    prompt = events.build_prompt("music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la")
+    prompt = event_prompt.build_prompt("music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la")
     assert prompt is not None
     assert '"Song A" by Artist A' in prompt
     assert "la la la" in prompt
@@ -106,7 +111,7 @@ def test_prompt_uses_only_whitelisted_fields():
 
 
 def test_game_prompt_strips_exe_and_formats_duration():
-    prompt = events.build_prompt("game_stop", {"name": "endfield.exe", "duration_s": 7200})
+    prompt = event_prompt.build_prompt("game_stop", {"name": "endfield.exe", "duration_s": 7200})
     assert prompt is not None
     assert "endfield" in prompt
     assert ".exe" not in prompt
@@ -114,7 +119,7 @@ def test_game_prompt_strips_exe_and_formats_duration():
 
 
 def test_music_without_title_is_too_thin():
-    assert events.build_prompt("music_new_track", {"artist": "x"}) is None
+    assert event_prompt.build_prompt("music_new_track", {"artist": "x"}) is None
 
 
 # -- react_to_event --------------------------------------------------------
@@ -283,8 +288,8 @@ def test_unhushed_has_a_small_cooldown_and_ignores_the_min_gap():
 
 
 def test_unhushed_prompt_early_vs_full():
-    early = events.build_prompt("unhushed", _EARLY)
-    full = events.build_prompt("unhushed", _FULL)
+    early = event_prompt.build_prompt("unhushed", _EARLY)
+    full = event_prompt.build_prompt("unhushed", _FULL)
     assert early is not None
     assert full is not None
     assert "couldn't last without you" in early
@@ -297,14 +302,14 @@ def test_unhushed_prompt_early_vs_full():
 
 
 def test_unhushed_prompt_after_a_few_seconds():
-    prompt = events.build_prompt("unhushed", {"hushed_for_s": 5, "planned_s": 600, "early": True})
+    prompt = event_prompt.build_prompt("unhushed", {"hushed_for_s": 5, "planned_s": 600, "early": True})
     assert prompt is not None
     assert "after only a few seconds" in prompt
     assert "1 minutes" not in prompt
 
 
 def test_unhushed_prompt_names_the_last_line_to_avoid():
-    prompt = events.build_prompt("unhushed", _EARLY, previous="Missed me already?")
+    prompt = event_prompt.build_prompt("unhushed", _EARLY, previous="Missed me already?")
     assert prompt is not None
     assert '"Missed me already?"' in prompt
     assert "something different" in prompt

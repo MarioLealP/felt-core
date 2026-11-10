@@ -1,33 +1,10 @@
 #!/usr/bin/env bash
 # Every check CI runs, runnable locally: lint, format, types, file size, layout, TLS checks, the lockfile, pip-audit, tests.
-# Meru/nuwa-python's check.sh, with one difference: felt-core predates the standard, so the file-size check reads a
-# baseline (scripts/baseline/) of what failed on 2026-11-10. A file that fails and isn't listed fails the check, and so
-# does a listed file that no longer fails - fix a file, delete its line.
+# Meru/nuwa-python's check.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# one sort order everywhere: comm needs both sides sorted the same way (a laptop locale sorts _ differently)
-export LC_ALL=C
 
 step() { printf '\n== %s\n' "$*"; }
-
-# against_baseline <baseline file> <what> - stdin: the files failing now, one per line
-against_baseline() {
-  local baseline=$1 what=$2 now
-  now=$(sort)
-  local new stale
-  new=$(comm -23 <(printf '%s\n' "$now" | sed '/^$/d') "$baseline")
-  stale=$(comm -13 <(printf '%s\n' "$now" | sed '/^$/d') "$baseline")
-  if [[ -n $new ]]; then
-    printf '%s\n' "$new"
-    echo "new $what (STANDARDS.md); not in $baseline"
-    return 1
-  fi
-  if [[ -n $stale ]]; then
-    printf '%s\n' "$stale"
-    echo "fixed - delete these lines from $baseline"
-    return 1
-  fi
-}
 
 step ruff
 uv run ruff check .
@@ -35,8 +12,10 @@ uv run ruff format --check .
 step ty
 uv run ty check
 step "no source file over 500 lines"
-find src plugins -name '*.py' -exec awk 'FNR == 501 { print FILENAME }' {} + |
-  against_baseline scripts/baseline/over-500.txt "source files over 500 lines"
+if find src plugins -name '*.py' -exec awk 'FNR == 501 { print FILENAME }' {} + | grep .; then
+  echo "source files over 500 lines (STANDARDS.md: no god files)"
+  exit 1
+fi
 step "layout: only __init__, __main__ and config at the top of src/<app>"
 if find src -mindepth 2 -maxdepth 2 -name '*.py' ! -name __init__.py ! -name __main__.py ! -name config.py | grep .; then
   echo "modules at the top of src/felt_core - move them into a folder (STANDARDS.md, Layout)"

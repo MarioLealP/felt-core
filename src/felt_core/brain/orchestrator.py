@@ -18,17 +18,13 @@ out of chat() and the API answers 503.
 
 import asyncio
 import logging
-import re
-from collections.abc import AsyncIterator, Callable
-
-import httpx2
+from collections.abc import AsyncIterator
 
 from felt_core.brain import router
-from felt_core.brain.background import _WEATHER_NOW_PHRASES, _weather_precompute_fresh
+from felt_core.brain.call_guards import _apply_call_guards, _looks_affirmative, _presence_fast_path
 from felt_core.brain.lookup_claims import claims_a_tool_use, claims_an_action
 from felt_core.brain.music_fast_path import music_fast_path
 from felt_core.brain.replies import (
-    _REPLY_MAX_TOKENS,
     _tool_result_instruction,
     local_reply,
     local_turn_messages,
@@ -36,147 +32,25 @@ from felt_core.brain.replies import (
     skill_tools,
 )
 from felt_core.brain.result import ChatResult
+from felt_core.brain.skill_turns import (
+    _LOOKUP_SKILLS,
+    _forced_tool_turn,
+    _reply_turn,
+    _router_context,
+    _run_skill_call,
+    _said,
+    _skill_chat_result,
+    _weather_fast_line,
+)
 from felt_core.brain.streaming import ReplyMeta, ReplySpeaker, correction_note
 from felt_core.clients import ha_assist, local_llm
-from felt_core.clients.spotify_client import music_playing_cached
 from felt_core.config import FeltConfig
 from felt_core.core import emails, features, metrics
-from felt_core.core.animation import resolve_animation_tag
 from felt_core.core.plugin_loader import LoadedSkill, load_plugins
-from felt_core.core.tools import run_skill
 from felt_core.db.messages import get_her_recent_lines, get_history, save_message
 from felt_core.db.observations import get_current_screen_description
-from felt_core.dj import control as dj_control
-from felt_core.models.plugin import ExecutionContext
 
 logger = logging.getLogger(__name__)
-
-# Deliberately a plain keyword set, not a model call: a bare "yes" has no
-# content for a tool-vs-chat decision to work with, and this only ever
-# fires right after her mail mention (emails.just_mentioned), so the blast radius of a false positive is small (summarizing
-# an email Mario didn't actually ask about) compared to the complexity of
-# a more "proper" intent check.
-_AFFIRMATIVE_RE = re.compile(
-    r"^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|please|do it|summarize( it)?|"
-    r"tell me more|what does it say)[.!?]?\s*$",
-    re.IGNORECASE,
-)
-
-
-def _looks_affirmative(message: str) -> bool:
-    return bool(_AFFIRMATIVE_RE.match(message))
-
-
-# 2026-09-22 finding: "tell me something fun about octopuses" was routed by
-# the tool picker to generate_image - a real ComfyUI job got
-# submitted, polled for ~48s, and the whole turn took 136s for a message
-# with zero make-intent. generate_image has a real side effect (a GPU job)
-# and a real cost (time), unlike every other skill here, so it gets a
-# second, narrower check the router itself doesn't do: an explicit
-# draw/make-an-image verb+noun pairing, not just topical similarity to
-# "image" as a concept.
-_IMAGE_INTENT_RE = re.compile(
-    r"\b(draw|paint|sketch|generate|make|create|render|design)\b.*"
-    r"\b(image|picture|pic|drawing|painting|art|portrait|wallpaper|illustration)\b"
-    r"|\b(draw|paint|sketch)\s+(me|us|a|an|the)\b",
-    re.IGNORECASE,
-)
-
-
-def _guard_generate_image(message: str) -> bool:
-    return bool(_IMAGE_INTENT_RE.search(message))
-
-
-# A table, not a single if-statement, so another expensive/side-effect
-# skill can get its own guard later without touching chat()'s control flow.
-_SKILL_GUARDS: dict[str, Callable[[str], bool]] = {
-    "generate_image": _guard_generate_image,
-}
-
-# WP-09: "shut up" cuts her off mid-sentence - the whole point is that it's
-# immediate and never gets second-guessed by the model's own judgment call
-# (or delayed by the round trip to it). Matched as a deterministic regex
-# fast path, same shape as _looks_affirmative above, checked before the
-# model is ever called (see _chat_local); the model's own felt_presence
-# tool call is only a fallback for phrasing this doesn't catch.
-_HUSH_RE = re.compile(r"^\s*(shut up|shh+|be quiet|quiet please|stop talking)[.!]?\s*$", re.IGNORECASE)
-_UNHUSH_RE = re.compile(r"^\s*(you can talk again|ok(ay)? talk)[.!]?\s*$", re.IGNORECASE)
-
-
-def _presence_fast_path(message: str) -> tuple[str, dict] | None:
-    if _HUSH_RE.match(message):
-        return "felt_presence", {"intent": "shut_up"}
-    if _UNHUSH_RE.match(message):
-        return "felt_presence", {"intent": "unhush"}
-    return None
-
-
-# Never-truly-quiet: the router LLM must not be able to hush her or send her
-# away on a guess. Live 2026-09-25, "keep me company" was routed to
-# felt_presence and came back as a hush (the skill's substring fallback maps
-# any invented intent containing "quiet" to shut_up). A router-picked
-# felt_presence call therefore only stands if its intent is one of the
-# harmless ones below, or if Mario's own words explicitly ask for silence or
-# distance. The hotkeys (Ctrl+Alt+S/H/B) remain the reliable path.
-_ROUTER_SAFE_PRESENCE_INTENTS = {
-    "unhush",
-    "ok_talk",
-    "you_can_talk_again",
-    "come_back",
-    "come",
-    "come_here",
-    "move",
-    "move_over",
-    "shoo",
-    "look",
-    "look_at_this",
-    "repeat",
-    "what_did_you_say",
-    "say_that_again",
-}
-_EXPLICIT_SILENCE_REQUEST_RE = re.compile(
-    r"\b(shut up|shh+|be quiet|quiet (please|down)|stop talking|zip it|go away|"
-    r"hide|leave me alone|be right back|brb|give me (a |\w+ )?(minute|minutes|sec|second|moment))\b",
-    re.IGNORECASE,
-)
-
-
-def _router_presence_allowed(message: str, params: dict) -> bool:
-    intent = str(params.get("intent") or "").strip().lower().replace(" ", "_")
-    if intent in _ROUTER_SAFE_PRESENCE_INTENTS:
-        return True
-    return bool(_EXPLICIT_SILENCE_REQUEST_RE.search(message))
-
-
-def _apply_call_guards(
-    call: tuple[str, dict] | None, fast_call: tuple[str, dict] | None, message: str
-) -> tuple[str, dict] | None:
-    """The presence guard and the per-skill guards, shared by the router
-    path and the WP-36 local tool-calling path: a model's pick only stands
-    if it clears them. `fast_call` (the deterministic presence regex) is
-    never second-guessed.
-    """
-    if (
-        fast_call is None
-        and call is not None
-        and call[0] == "felt_presence"
-        and not _router_presence_allowed(message, call[1])
-    ):
-        logger.info(
-            "presence guard: dropping router's felt_presence %r - no explicit request in message",
-            call[1].get("intent"),
-        )
-        return None
-
-    if call is not None:
-        guard = _SKILL_GUARDS.get(call[0])
-        if guard is not None and not guard(message):
-            logger.info(
-                "skill guard: overriding router's '%s' pick - no matching intent in message",
-                call[0],
-            )
-            return None
-    return call
 
 
 # cm-p6a (2026-10-22): "google the launch time and set me a reminder an hour
@@ -190,146 +64,6 @@ _CHAIN_NOTE = (
     "thing, e.g. to find something and then set a reminder), call that tool now instead "
     "of answering. Never say something is done unless its tool result is above."
 )
-# Skills that only read. While every call so far was one of these, an "I've
-# got it set" in her follow-up is a fake claim and gets a tool forced; once
-# something acted, "I'll nudge you at ten" is true, and forcing a tool could
-# set the reminder twice. A skill not listed counts as acting (never forced).
-_LOOKUP_SKILLS = frozenset(
-    {
-        "board_status",
-        "check_email",
-        "diary_recall",
-        "get_container_status",
-        "get_gpu_status",
-        "get_phone_battery",
-        "get_recent_alerts",
-        "get_time",
-        "get_weather",
-        "list_alarms",
-        "list_calendar_events",
-        "news_digest",
-        "now_playing",
-        "poe2_wiki",
-        "poe_price_check",
-        "printer_status",
-        "search_documents",
-        "web_search",
-    }
-)
-
-
-def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
-    """WP-06 fast path: the precomputed "weather right now" line, if the
-    picked call is that question and a fresh one exists.
-    """
-    if call is None or call[0] != "get_weather":
-        return None
-    day = str(call[1].get("day", "now") or "now").lower()
-    if day not in _WEATHER_NOW_PHRASES:
-        return None
-    return _weather_precompute_fresh()
-
-
-async def _run_skill_call(call: tuple[str, dict], registry: dict[str, LoadedSkill], config: FeltConfig, message: str):
-    """Runs the picked skill; returns (SkillResult | None, tool_output).
-    None (not the ValueError branch's job alone) so the animation/ui_action
-    lookup has something safe to check regardless of which path was taken -
-    a skill that raised never gets a reaction.
-    """
-    skill_name, params = call
-    result = None
-    logger.info("skill call: %s", skill_name)
-    try:
-        ctx = ExecutionContext(config=config, original_message=message)
-        async with metrics.timed("skill", skill=skill_name):
-            result = await run_skill(skill_name, params, registry, ctx)
-        # voice_line (if the skill set one) over the full text - WP-06:
-        # it's already the spoken-form summary, `text` is the fuller
-        # toast/chat form (see plugin.py's SkillResult).
-        tool_output = result.voice_line or result.text or ""
-    except ValueError as e:
-        tool_output = f"Error: {e}"
-    except httpx2.HTTPError as e:
-        # the service behind the skill is down or erroring (poe2-rag, drive
-        # search, weather, searxng...): was an unhandled crash - the whole
-        # chat 500'd (e2e 2026-10-18). She says so instead of guessing.
-        logger.warning("skill %s: service unavailable (%r)", skill_name, e)
-        tool_output = (
-            f"Error: couldn't reach the service behind {skill_name} right now. "
-            "Say so plainly - don't answer from memory as if you'd looked it up."
-        )
-    return result, tool_output
-
-
-def _skill_chat_result(reply: str, result, skill_name: str, registry: dict[str, LoadedSkill]) -> ChatResult:
-    if result is None:
-        return ChatResult(reply=reply)
-    return ChatResult(
-        reply=reply,
-        ui_action=result.ui_action,
-        animation_tag=resolve_animation_tag(registry.get(skill_name), result),
-    )
-
-
-async def _reply_turn(
-    messages: list[dict],
-    config: FeltConfig,
-    speaker: ReplySpeaker | None,
-    *,
-    tools: list[dict] | None = None,
-    guard: Callable[[str], bool] | None = None,
-) -> local_llm.LocalReply:
-    """A felt-llm call that may be her answer: streamed through the
-    speaker when chat_streamed() is running the turn (WP-65), else the
-    plain call. `guard` spots a fake claim in the streamed opening.
-    """
-    async with metrics.timed("reply", route="local", model=config.local_llm_model):
-        if speaker is None:
-            return await local_llm.chat(messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config)
-        return await speaker.turn(messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, guard=guard, config=config)
-
-
-async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: FeltConfig) -> local_llm.LocalReply | None:
-    """FELT-108: the same call again with a tool call required, after a
-    reply claimed a lookup or action it never did. None when that fails or
-    still calls nothing - the caller keeps the plain reply (never worse than
-    before).
-    """
-    try:
-        async with metrics.timed("reply", route="local", model=config.local_llm_model):
-            forced = await local_llm.chat(
-                messages,
-                max_tokens=_REPLY_MAX_TOKENS,
-                tools=tools,
-                tool_choice="required",
-                config=config,
-            )
-    except local_llm.LocalLLMUnavailable as e:
-        logger.warning("forced retry failed (%s) - keeping the plain reply", e)
-        return None
-    if not forced.tool_calls:
-        logger.warning("forced retry still called no tool - keeping the plain reply")
-        return None
-    return forced
-
-
-def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
-    """The reply as she said it (with anything already let out in front,
-    WP-65), written to the history - once per turn, at the end.
-    """
-    if speaker is not None:
-        reply = speaker.full_reply(reply)
-    save_message(config.db_path, session_id, "assistant", reply)
-    return reply
-
-
-def _router_context(history: list[dict]) -> router.Context:
-    previous = next((m.get("content") for m in reversed(history) if m.get("role") == "user"), None)
-    return router.Context(
-        previous=previous if isinstance(previous, str) else None,
-        music_playing=music_playing_cached(),
-        dj_on=dj_control.is_on(),
-    )
 
 
 async def _chat_local(

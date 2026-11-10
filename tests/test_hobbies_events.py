@@ -1,10 +1,11 @@
 """WP-30: hobbies in the welcome-back line and the diary."""
 
-from felt_core.core import diary, events
+import felt_core.core.diary_material as diary_material
+import felt_core.core.event_prompt as event_prompt
 
 
 def test_afk_end_mentions_known_hobbies_only():
-    prompt = events.build_prompt(
+    prompt = event_prompt.build_prompt(
         "afk_end",
         {
             "duration_s": 2400,
@@ -21,12 +22,12 @@ def test_afk_end_mentions_known_hobbies_only():
 
 
 def test_afk_end_without_hobbies_is_unchanged():
-    prompt = events.build_prompt("afk_end", {"duration_s": 2400})
+    prompt = event_prompt.build_prompt("afk_end", {"duration_s": 2400})
     assert prompt is not None
     assert "While he was gone" not in prompt
 
 
 def test_diary_hobby_line_is_first_person():
-    line = diary._event_line("hobby", {"hobby": "gaming", "minutes": 15})
+    line = diary_material._event_line("hobby", {"hobby": "gaming", "minutes": 15})
     assert line == "spent about 15 min playing on my handheld while Mario was away"
-    assert diary._event_line("hobby", {"hobby": "unknown"}) is None
+    assert diary_material._event_line("hobby", {"hobby": "unknown"}) is None
