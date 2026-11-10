@@ -6,7 +6,7 @@ import felt_core.core.marks as marks
 from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core.app_history import history_page
-from felt_core.db.store import save_message
+from felt_core.db.messages import save_message
 
 
 def _config(tmp_path) -> FeltConfig:
@@ -145,7 +145,7 @@ async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
 
 
 def test_ink_is_seen_once_across_devices(tmp_path):
-    from felt_core.db.store import _connect
+    from felt_core.db.session import _connect
 
     db = str(tmp_path / "felt.db")
     msg = save_message(db, "dashboard", "user", "add oat milk and bin bags")

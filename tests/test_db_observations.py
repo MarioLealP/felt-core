@@ -1,4 +1,4 @@
-from felt_core.db.store import (
+from felt_core.db.observations import (
     get_recent_observations,
     save_observation,
     seconds_since_last_spoken_reaction,

@@ -15,7 +15,7 @@ import sqlite3
 
 from felt_core.core.alert_types import by_name
 from felt_core.core.incidents import _ensure, get
-from felt_core.db.store import _connect
+from felt_core.db.session import _connect
 
 AREAS = ("server", "backups", "security", "desktop", "laptop", "router")
 _SECURITY = {"wazuh-fim", "wazuh-oom", "honeypot", "authentik-bruteforce", "crowdsec", "trivy"}

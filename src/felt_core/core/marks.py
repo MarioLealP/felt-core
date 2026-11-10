@@ -23,7 +23,7 @@ import uuid
 from felt_core.brain.personality import daily_persona, per_call_context, with_context
 from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db.store import _connect
+from felt_core.db.session import _connect
 
 logger = logging.getLogger(__name__)
 

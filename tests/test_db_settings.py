@@ -1,4 +1,4 @@
-from felt_core.db.store import get_setting, set_setting
+from felt_core.db.settings import get_setting, set_setting
 
 
 def test_get_setting_returns_default_when_unset(tmp_path):

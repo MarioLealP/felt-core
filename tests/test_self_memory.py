@@ -7,12 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 import felt_core.core.self_memory as self_memory
 from felt_core.config import FeltConfig
-from felt_core.db.store import (
-    get_self_memories,
-    insert_diary,
-    insert_self_memory,
-    update_self_memory,
-)
+from felt_core.db.diary import insert_diary
+from felt_core.db.self_memory import get_self_memories, insert_self_memory, update_self_memory
 
 
 def _config(tmp_path):

@@ -7,7 +7,8 @@ Mario 10-02: Talk stays "only the conversation"; her chatter lives here.
 
 from datetime import UTC, datetime, timedelta
 
-from felt_core.db.store import ALERT, APP_SESSION, CHAT, _connect
+from felt_core.db.kinds import ALERT, APP_SESSION, CHAT
+from felt_core.db.session import _connect
 
 MAX_PAGE = 200
 MAX_SNOOZE_HOURS = 24 * 7

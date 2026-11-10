@@ -17,7 +17,8 @@ from felt_core.config import FeltConfig
 from felt_core.core.music_taste import summarize_taste
 from felt_core.core.plugin_loader import LoadedSkill
 from felt_core.core.self_memory import memory_block
-from felt_core.db.store import get_all_facts, get_music_taste_stats
+from felt_core.db.facts import get_all_facts
+from felt_core.db.music_taste import get_music_taste_stats
 
 # A safety ceiling, not a length budget (FELT-71, Mario 10-02: "It's self
 # hosted, we dont need token cap"). Her persona keeps replies short on its own

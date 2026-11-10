@@ -5,7 +5,10 @@ import asyncio
 
 from felt_core.core import song_remarks
 from felt_core.core.events import EventReaction
-from felt_core.db import store as db
+from felt_core.db.kinds import APP_SESSION, EVENT
+from felt_core.db.messages import save_message
+from felt_core.db.proactive import claim_next_proactive
+from felt_core.db.session import _connect
 
 
 def _snap(track_id, playing=True, name="Song", artists=("A", "B"), album="Album"):
@@ -38,23 +41,23 @@ def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch
         voice_url = None
 
     async def fake_react(event, details, config, session_id):
-        assert (event, session_id) == ("music_new_track", db.APP_SESSION)
+        assert (event, session_id) == ("music_new_track", APP_SESSION)
         # react_to_event logs the line itself, as an event line
-        db.save_message(config.db_path, session_id, "assistant", "Oh, this one.", kind=db.EVENT)
+        save_message(config.db_path, session_id, "assistant", "Oh, this one.", kind=EVENT)
         return EventReaction(line="Oh, this one.", emotion="happy")
 
     import felt_core.core.events as events
 
     monkeypatch.setattr(events, "react_to_event", fake_react)
     asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
-    item = db.claim_next_proactive(Config.db_path)
+    item = claim_next_proactive(Config.db_path)
     assert item is not None
     assert item["text"] == "Oh, this one."
     assert item["kind"] == "music"
-    conn = db._connect(Config.db_path)
+    conn = _connect(Config.db_path)
     lines = conn.execute("SELECT kind FROM messages").fetchall()
     conn.close()
-    assert lines == [(db.EVENT,)]  # not a second, proactive copy
+    assert lines == [(EVENT,)]  # not a second, proactive copy
 
 
 def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
@@ -69,4 +72,4 @@ def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
 
     monkeypatch.setattr(events, "react_to_event", quiet)
     asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
-    assert db.claim_next_proactive(Config.db_path) is None
+    assert claim_next_proactive(Config.db_path) is None

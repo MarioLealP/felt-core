@@ -32,7 +32,7 @@ from felt_core.core.app_history import history_page
 from felt_core.core.asides import current_asides, link_answer, remark_text
 from felt_core.core.diary import he_is_here
 from felt_core.core.marks import mark_seen, maybe_mark
-from felt_core.db.store import APP_SESSION
+from felt_core.db.kinds import APP_SESSION
 
 SESSION = APP_SESSION
 

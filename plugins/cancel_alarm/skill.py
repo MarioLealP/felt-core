@@ -6,7 +6,7 @@ from datetime import datetime
 
 from felt_core.core.alarms import cancel_alarm
 from felt_core.core.params import get_single_param
-from felt_core.db.store import get_pending_alarms
+from felt_core.db.alarms import get_pending_alarms
 from felt_core.models.plugin import SkillResult
 
 name = "cancel_alarm"

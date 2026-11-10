@@ -16,7 +16,7 @@ from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core.plugin_loader import LoadedSkill
 from felt_core.core.speech import SpeechChunker, speech_chunks
-from felt_core.db.store import get_history
+from felt_core.db.messages import get_history
 from felt_core.models.plugin import SkillResult, UIAction
 
 

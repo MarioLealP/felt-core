@@ -3,7 +3,7 @@ import pytest
 import felt_core.brain.screen_reactions as brain
 from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
-from felt_core.db.store import get_history
+from felt_core.db.messages import get_history
 
 
 def _config(tmp_path, **kwargs):

@@ -33,15 +33,14 @@ from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core import metrics
 from felt_core.core.asides import schedule_pick
-from felt_core.db.store import (
-    EVENT,
-    get_her_recent_lines,
+from felt_core.db.event_reactions import (
     last_event_reaction_line,
     save_event_reaction,
-    save_message,
     seconds_since_last_event_reaction,
-    seconds_since_last_spoken_reaction,
 )
+from felt_core.db.kinds import EVENT
+from felt_core.db.messages import get_her_recent_lines, save_message
+from felt_core.db.observations import seconds_since_last_spoken_reaction
 
 logger = logging.getLogger(__name__)
 

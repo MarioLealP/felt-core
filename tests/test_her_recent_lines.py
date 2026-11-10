@@ -5,17 +5,9 @@ herself less (remarks, events and pushes all see the same list)."""
 import asyncio
 
 from felt_core.brain import orchestrator
-from felt_core.db.store import (
-    ALARM,
-    APP_SESSION,
-    EMAIL,
-    EVENT,
-    PROACTIVE,
-    REMARK,
-    _connect,
-    get_her_recent_lines,
-    save_message,
-)
+from felt_core.db.kinds import ALARM, APP_SESSION, EMAIL, EVENT, PROACTIVE, REMARK
+from felt_core.db.messages import get_her_recent_lines, save_message
+from felt_core.db.session import _connect
 
 
 def _say(db, content, kind, session=APP_SESSION, role="assistant"):

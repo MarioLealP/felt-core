@@ -81,7 +81,7 @@ async def timed(stage: str, **tags):
 
 
 def _save_stage(metrics: _RequestMetrics, stage: str, ms: float, tags: dict) -> None:
-    from felt_core.db.store import save_latency_row
+    from felt_core.db.latency import save_latency_row
 
     save_latency_row(
         metrics.db_path,

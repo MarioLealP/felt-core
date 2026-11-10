@@ -5,7 +5,7 @@ Felt "knows" long-term is auditable: someone asked it to remember
 something, it's in the facts table, done. See db.py for the schema.
 """
 
-from felt_core.db.store import save_fact
+from felt_core.db.facts import save_fact
 from felt_core.models.plugin import SkillResult
 
 name = "remember_fact"

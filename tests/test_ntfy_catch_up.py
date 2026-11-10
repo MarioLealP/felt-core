@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from felt_core.core.ntfy_listener import LAST_ID, sent_at, stream_params
-from felt_core.db.store import set_setting
+from felt_core.db.settings import set_setting
 
 
 def test_first_run_is_live_only_then_it_catches_up_from_the_last_seen(tmp_path):

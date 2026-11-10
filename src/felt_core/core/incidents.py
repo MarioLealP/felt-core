@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 
 from felt_core.core import llm_gate
 from felt_core.core.alert_types import AlertType, Parsed, by_name, parse
-from felt_core.db.store import _connect
+from felt_core.db.session import _connect
 
 logger = logging.getLogger(__name__)
 

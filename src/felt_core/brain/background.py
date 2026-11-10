@@ -30,7 +30,7 @@ from felt_core.core.music_taste import is_skip
 from felt_core.core.plugin_loader import load_plugins
 from felt_core.core.speech import strip_for_tts
 from felt_core.core.tools import run_skill
-from felt_core.db.store import record_music_play
+from felt_core.db.music_taste import record_music_play
 from felt_core.dj import control as dj_control
 from felt_core.models.plugin import ExecutionContext
 

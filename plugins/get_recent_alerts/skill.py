@@ -2,7 +2,7 @@
 ever being a silent log — the read half of the ntfy integration.
 """
 
-from felt_core.db.store import get_recent_ntfy_events
+from felt_core.db.ntfy_events import get_recent_ntfy_events
 from felt_core.models.plugin import SkillResult
 
 name = "get_recent_alerts"

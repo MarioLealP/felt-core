@@ -11,8 +11,8 @@ import felt_core.api.app as api
 import felt_core.core.events as events
 from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
-from felt_core.db.store import (
-    get_history,
+from felt_core.db.messages import get_history
+from felt_core.db.observations import (
     get_recent_observations,
     save_observation,
     seconds_since_last_spoken_reaction,
@@ -338,14 +338,14 @@ async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_scr
 
 
 async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fake_llm):
-    import felt_core.db.store as db
+    from felt_core.db.session import _connect
 
     config = _config(tmp_path)
     fake_llm.script = ["Missed me already?", "missed me already!", "Freedom! Finally!"]
 
     first = await events.react_to_event("unhushed", _EARLY, config)
     # Past the 20 s cooldown without sleeping: age the first row.
-    conn = db._connect(config.db_path)
+    conn = _connect(config.db_path)
     with conn:
         conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")
     conn.close()
@@ -357,11 +357,12 @@ async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fak
 
 
 async def test_unhushed_gives_up_rather_than_repeat(tmp_path, fake_llm):
-    import felt_core.db.store as db
+    from felt_core.db.event_reactions import save_event_reaction
+    from felt_core.db.session import _connect
 
     config = _config(tmp_path)
-    db.save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")
-    conn = db._connect(config.db_path)
+    save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")
+    conn = _connect(config.db_path)
     with conn:
         conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")
     conn.close()

@@ -21,8 +21,9 @@ from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core import metrics
 from felt_core.core.plugin_loader import LoadedSkill
-from felt_core.db import store as db
-from felt_core.db.store import get_history
+from felt_core.db.diary import get_diary
+from felt_core.db.events import save_event
+from felt_core.db.messages import get_history
 from felt_core.models.plugin import SkillResult
 
 
@@ -359,14 +360,14 @@ async def test_diary_generation_uses_felt_llm(tmp_path, fake_llm):
 
 async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_llm, caplog):
     config = _config(tmp_path)
-    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
+    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
 
     with caplog.at_level(logging.INFO, logger="felt_core.core.diary"):
         written = await diary.write_diary_for_date(config, "2026-09-27")
 
     assert written is False
-    assert db.get_diary(config.db_path, "2026-09-27") is None
+    assert get_diary(config.db_path, "2026-09-27") is None
     assert not any(r.levelno >= logging.WARNING for r in caplog.records)
     assert any("felt-llm unavailable" in r.message for r in caplog.records)
 

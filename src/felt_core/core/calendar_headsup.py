@@ -40,7 +40,8 @@ from felt_core.config import FeltConfig
 from felt_core.core import features, leave_by, llm_gate
 from felt_core.core.events import _game_name
 from felt_core.core.proactive import enqueue_proactive
-from felt_core.db import store as db
+from felt_core.db.events import get_events_between
+from felt_core.db.settings import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ def dedupe_key(event: dict, stage: Stage) -> str:
 
 
 def already_sent(config: FeltConfig, key: str) -> bool:
-    return db.get_setting(config.db_path, key) is not None
+    return get_setting(config.db_path, key) is not None
 
 
 def plan(
@@ -197,7 +198,7 @@ def current_game(config: FeltConfig, now: datetime) -> str | None:
     latest game_start with no game_stop after it), else None.
     """
     fmt = "%Y-%m-%d %H:%M:%S"
-    rows = db.get_events_between(
+    rows = get_events_between(
         config.db_path,
         (now - _GAME_CONTEXT_WINDOW).astimezone(UTC).strftime(fmt),
         (now + timedelta(seconds=1)).astimezone(UTC).strftime(fmt),
@@ -276,7 +277,7 @@ async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stag
         reminder = is_reminder(event)
         if due_stage(start, now, reminder) is not stage or already_sent(config, key):
             return False
-        db.set_setting(config.db_path, key, now.isoformat())
+        set_setting(config.db_path, key, now.isoformat())
         minutes = minutes_left(start, now)
         title = str(fresh.get("summary") or "something on your calendar")
         line = await phrase(config, title, minutes, fresh.get("location"), current_game(config, now), reminder)
@@ -341,7 +342,7 @@ async def deliver_leave(
         leave = leave_by.leave_time(start, minutes)
         if stage is LEAVE_SOON and leave <= now:
             return False  # past the leave time already - "time to go" says it
-        db.set_setting(config.db_path, key, now.isoformat())
+        set_setting(config.db_path, key, now.isoformat())
         title = str(fresh.get("summary") or "your appointment")
         at = start.astimezone(ha_calendar.TZ).strftime("%H:%M")
         drive_min = math.ceil(minutes)

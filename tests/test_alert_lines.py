@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 from felt_core.core import alert_lines, incidents, margins
 from felt_core.core.alert_types import CATALOGUE
-from felt_core.db.store import ALERT, _connect
+from felt_core.db.kinds import ALERT
+from felt_core.db.session import _connect
 
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 

@@ -10,15 +10,10 @@ from felt_core.core import emails
 from felt_core.core.alarms import _fire_at
 from felt_core.core.asides import current_asides
 from felt_core.core.proactive import enqueue_proactive
-from felt_core.db.store import (
-    ALARM,
-    APP_SESSION,
-    EMAIL,
-    PROACTIVE,
-    _connect,
-    get_history,
-    save_alarm,
-)
+from felt_core.db.alarms import save_alarm
+from felt_core.db.kinds import ALARM, APP_SESSION, EMAIL, PROACTIVE
+from felt_core.db.messages import get_history
+from felt_core.db.session import _connect
 
 
 def _config(tmp_path) -> FeltConfig:
