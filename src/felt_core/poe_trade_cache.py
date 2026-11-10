@@ -100,7 +100,7 @@ def load_cache(config: FeltConfig) -> dict | None:
         return None
     try:
         return json.loads(path.read_text())
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return None
 
 

@@ -147,7 +147,7 @@ def _server(pki, cert_name, issuer):
                     seen.append(([v for k, v in p["subjectAltName"] if k == "URI"], p["serialNumber"]))
                     s.recv(4096)
                     s.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-            except (ssl.SSLError, OSError):
+            except ssl.SSLError, OSError:
                 pass
 
     threading.Thread(target=loop, daemon=True).start()

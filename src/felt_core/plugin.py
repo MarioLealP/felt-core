@@ -42,7 +42,7 @@ class ExecutionContext:
     rather than KeyError-ing on a missing param.
     """
 
-    config: "FeltConfig"
+    config: FeltConfig
     original_message: str = ""
 
 

@@ -45,7 +45,7 @@ def daily_persona() -> str:
 def per_call_context(
     tone: str | None = None,
     context_text: str | None = None,
-    config: "FeltConfig | None" = None,
+    config: FeltConfig | None = None,
 ) -> str:
     """What changes per call, for the user turn - never the system prompt.
     WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day +

@@ -136,7 +136,7 @@ def dim_percent(params, config) -> int:
     """Pure: the brightness he said (1-100), else the usual dim level."""
     try:
         said = int(params.get("brightness"))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return config.ha_dim_percent
     return min(100, max(1, said))
 

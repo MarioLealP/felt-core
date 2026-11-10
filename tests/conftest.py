@@ -64,7 +64,7 @@ def _scrub_response_secrets(response):
         try:
             text = raw.decode() if isinstance(raw, bytes) else raw
             data = json.loads(text)
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except UnicodeDecodeError, json.JSONDecodeError:
             data = None
         if isinstance(data, dict) and any(field in data for field in _SECRET_JSON_FIELDS):
             for field in _SECRET_JSON_FIELDS:

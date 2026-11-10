@@ -76,7 +76,7 @@ def cap_event_data(data: dict) -> str:
     """
     try:
         encoded = json.dumps(data, default=str)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "{}"
     if len(encoded) > _MAX_EVENT_DATA_CHARS:
         return json.dumps({"_truncated": True, "keys": list(data)[:10]})
@@ -94,7 +94,7 @@ def _text(data: dict, key: str) -> str:
 def _num(data: dict, key: str) -> float | None:
     try:
         return float(data[key])
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         return None
 
 
@@ -159,7 +159,7 @@ def _event_line(kind: str, data: dict) -> str | None:
 def _as_float(v: Any) -> float:
     try:
         return float(v)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.0
 
 

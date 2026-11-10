@@ -97,6 +97,6 @@ def desktop(db_path: str, now: datetime | None = None) -> dict | None:
     try:
         saved = json.loads(get_setting(db_path, "desktop_state") or "{}")
         at = datetime.strptime(saved["at"], _FMT).replace(tzinfo=UTC)
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         return None
     return saved if _now(now) - at <= DESKTOP_FRESH else None

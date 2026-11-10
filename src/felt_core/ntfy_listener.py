@@ -38,7 +38,7 @@ def sent_at(event: dict) -> datetime | None:
     """When ntfy got it (a caught-up alert keeps its own time)."""
     try:
         return datetime.fromtimestamp(int(event["time"]), UTC)
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         return None
 
 

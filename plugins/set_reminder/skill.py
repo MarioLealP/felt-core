@@ -138,7 +138,7 @@ async def handle(params, ctx):
     # it wrong 2 times in 5 (zone dropped, or converted and still called PST)
     try:
         before = max(0, int(params.get("minutes_before") or 0))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         before = 0
 
     when_text, repeat = split_every(str(when_text), repeat)

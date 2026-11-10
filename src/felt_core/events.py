@@ -129,7 +129,7 @@ def _text(details: dict, key: str) -> str:
 def _number(details: dict, key: str) -> float | None:
     try:
         return float(details[key])
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         return None
 
 

@@ -111,7 +111,7 @@ def parse_picks(text: str, count: int) -> list[int]:
     """The model's JSON -> up to two valid 1-based positions, deduplicated."""
     try:
         picks = json.loads(text).get("picks", [])
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return []
     out: list[int] = []
     for p in picks if isinstance(picks, list) else []:
