@@ -138,7 +138,7 @@ async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
     save_message(config.db_path, "dashboard", "user", "hi")
 
     async def down(*a, **kw):
-        raise local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailableError("down")
 
     monkeypatch.setattr(marks.local_llm, "chat", down)
     assert await marks.maybe_mark(config, "dashboard") is None

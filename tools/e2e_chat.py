@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+import pathlib
 import re
 import sys
 import tempfile
@@ -63,7 +64,7 @@ class Case(BaseModel):
     # a second message in the same conversation (her follow-up question's answer)
     then: str | None = None
     # calendar cases: the appointment that has to be there at the end, with a
-    # place (True) or without (False)
+    # place (True) or without (False)  # ruff: ignore[commented-out-code]  # prose
     place: bool | None = None
     # calendar cases: words every created event's summary must keep (cm-zha)
     summary_has: tuple[str, ...] = ()
@@ -642,7 +643,9 @@ async def main() -> int:
     if not os.path.isdir(config.router_model_dir):
         from fastembed import TextEmbedding
 
-        config = config.model_copy(update={"router_model_dir": "/tmp/e2e-router-model"})
+        config = config.model_copy(
+            update={"router_model_dir": str(pathlib.Path.home() / ".cache" / "felt-e2e-router-model")}
+        )
         await asyncio.to_thread(TextEmbedding, config.router_model, cache_dir=config.router_model_dir)
     await router.warm(config)
     recorder = Recorder()

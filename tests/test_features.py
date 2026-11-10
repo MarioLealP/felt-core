@@ -28,7 +28,7 @@ def test_defaults_and_switching(tmp_path):
     features.set_enabled(db, "ambient.asides", True)
     assert not features.enabled(db, "ambient.song_remarks")
     assert features.enabled(db, "ambient.asides")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown feature"):
         features.enabled(db, "ambient.nope")
 
 

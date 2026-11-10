@@ -34,7 +34,7 @@ async def _ender_status(config) -> str | None:
         return None
     try:
         return ender.describe(await ender.snapshot(config))
-    except ender.EnderUnavailable:
+    except ender.EnderUnavailableError:
         return "Couldn't reach Home Assistant for the Ender right now."
 
 

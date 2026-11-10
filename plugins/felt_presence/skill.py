@@ -130,7 +130,7 @@ def _canonical_intent(raw: str) -> str | None:
     return None
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     raw_intent = str(get_single_param(params, "intent") or "")
     intent = _canonical_intent(raw_intent) if raw_intent.strip() else None
     if intent is None:

@@ -14,7 +14,7 @@ reaction stays ambient, "look at this" is his).
 
 import httpx2
 
-from felt_core.clients.local_llm import AmbientSkipped, LocalLLMUnavailable, image_part
+from felt_core.clients.local_llm import AmbientSkippedError, LocalLLMUnavailableError, image_part
 from felt_core.config import FeltConfig
 from felt_core.core import llm_gate
 
@@ -36,12 +36,12 @@ _POE_MAX_TOKENS = 260
 
 
 async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, *, poe: bool) -> str:
-    """felt-vision's description of the screenshot. Raises LocalLLMUnavailable
-    when it is down or answers nothing usable (AmbientSkipped when the gate
+    """felt-vision's description of the screenshot. Raises LocalLLMUnavailableError
+    when it is down or answers nothing usable (AmbientSkippedError when the gate
     made an ambient call give way).
     """
     if not config.vision_url:
-        raise LocalLLMUnavailable("vision_url is not configured")
+        raise LocalLLMUnavailableError("vision_url is not configured")
     prompt = (POE_PROMPT if poe else SCREEN_PROMPT).format(app=app, title=title)
     payload = {
         "messages": [{"role": "user", "content": [image_part(jpeg_bytes), {"type": "text", "text": prompt}]}],
@@ -60,11 +60,11 @@ async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, 
     try:
         body = await llm_gate.run(call)
         text = (body["choices"][0]["message"].get("content") or "").strip()
-    except llm_gate.Skipped as e:
-        raise AmbientSkipped(str(e)) from e
+    except llm_gate.SkippedError as e:
+        raise AmbientSkippedError(str(e)) from e
     except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
-        raise LocalLLMUnavailable(f"felt-vision call failed: {e!r}") from e
+        raise LocalLLMUnavailableError(f"felt-vision call failed: {e!r}") from e
     if not text:
-        raise LocalLLMUnavailable("felt-vision described nothing")
+        raise LocalLLMUnavailableError("felt-vision described nothing")
     # a tooltip keeps its lines; a screen description is one line
     return text if poe else " ".join(text.split())

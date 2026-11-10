@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 
 # Deliberately a plain keyword set, not a model call: a bare "yes" has no
 # content for a tool-vs-chat decision to work with, and this only ever
-# fires right after her mail mention (emails.just_mentioned), so the blast radius of a false positive is small (summarizing
-# an email Mario didn't actually ask about) compared to the complexity of
-# a more "proper" intent check.
+# fires right after her mail mention (emails.just_mentioned), so the blast
+# radius of a false positive is small (summarizing an email Mario didn't
+# actually ask about) compared to the complexity of a more "proper" intent
+# check.
 _AFFIRMATIVE_RE = re.compile(
     r"^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|please|do it|summarize( it)?|"
     r"tell me more|what does it say)[.!?]?\s*$",

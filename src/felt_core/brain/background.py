@@ -89,7 +89,7 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
             max_tokens=_REPLY_MAX_TOKENS,
             config=config,
         )
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         logger.info("weather precompute: felt-llm unavailable, skipping this pass")
         return
     if reply.text.strip():
@@ -161,7 +161,7 @@ async def warm_up_llm(config: FeltConfig) -> None:
     """One tool-bearing chat call built exactly like a real turn (persona +
     every skill's tool declaration, dummy message), so felt-llm's prompt
     cache holds the ~5K-token prefix before Mario's first turn - the first
-    turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailable;
+    turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailableError;
     deliberately not wrapped in metrics.timed (it isn't a user turn).
     """
     registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
@@ -187,7 +187,7 @@ async def llm_warmup_loop(config: FeltConfig) -> None:
                 if warm:
                     logger.info("felt-llm went offline, will warm it up again when it's back")
                 warm = False
-        except local_llm.LocalLLMUnavailable:
+        except local_llm.LocalLLMUnavailableError:
             logger.info("felt-llm warm-up failed (unavailable), retrying in %ds", _WARMUP_INTERVAL_S)
         except Exception:
             logger.exception("felt-llm warm-up failed, retrying in %ds", _WARMUP_INTERVAL_S)

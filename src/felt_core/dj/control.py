@@ -69,7 +69,7 @@ async def start(config: FeltConfig) -> str:
             await sp.start_track(client, config, first["uri"], first.get("title"))
             for p in rest:
                 await sp.queue_track(client, config, p["uri"])
-        except sp.NoActivePlayer:
+        except sp.NoActivePlayerError:
             return NOT_AWAKE
         except httpx2.HTTPError:
             logger.warning("dj: Spotify refused the start", exc_info=True)

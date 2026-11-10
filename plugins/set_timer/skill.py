@@ -13,7 +13,7 @@ later.
 import asyncio
 
 from felt_core.clients.notify import notify
-from felt_core.clients.phone import PhoneUnavailable, start_timer
+from felt_core.clients.phone import PhoneUnavailableError, start_timer
 from felt_core.core.params import get_single_param
 from felt_core.models.plugin import SkillResult
 
@@ -27,6 +27,11 @@ parameters_schema = {
     },
     "required": ["minutes"],
 }
+
+
+# The event loop keeps only a weak reference to a task: a fallback timer nobody holds could be collected before it
+# rings. Held here until it's done.
+_pending: set[asyncio.Task] = set()
 
 
 async def _fire_after(config, minutes: float, label: str) -> None:
@@ -45,7 +50,9 @@ async def handle(params, ctx):
     try:
         await start_timer(ctx.config, max(1, round(minutes * 60)), label)
         return SkillResult(text=f"Timer set on your phone for {minutes:g} minutes.")
-    except PhoneUnavailable:
+    except PhoneUnavailableError:
         pass  # phone offline: a push when it's done instead
-    asyncio.create_task(_fire_after(ctx.config, minutes, label))
+    task = asyncio.create_task(_fire_after(ctx.config, minutes, label))
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
     return SkillResult(text=f"Timer set for {minutes:g} minutes (phone unreachable - I'll ping you).")

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 import felt_core.api.chat as chat_api
 import felt_core.api.reply as reply_api
 from felt_core.api.app import app
-from felt_core.clients.local_llm import LocalLLMUnavailable
+from felt_core.clients.local_llm import LocalLLMUnavailableError
 
 
 def test_chat_ws_happy_path_still_works(tmp_path, monkeypatch, fake_llm):
@@ -31,7 +31,7 @@ def test_chat_ws_reports_felt_llm_offline_and_stays_open(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
 
     async def offline_chat(message, config, session_id="default", tone=None):
-        raise LocalLLMUnavailable("down")
+        raise LocalLLMUnavailableError("down")
 
     monkeypatch.setattr(chat_api, "chat", offline_chat)
 

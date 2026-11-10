@@ -16,7 +16,7 @@ has already been decided on - it never chooses silence.
 
 The prompt is composed here from a whitelist of typed detail fields, never
 by dumping `details`. Lines come from felt-llm only (WP-36 D''): when it is
-unreachable LocalLLMUnavailable propagates and /v1/react/event answers 503.
+unreachable LocalLLMUnavailableError propagates and /v1/react/event answers 503.
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str 
         # No facts (an event remark doesn't need them); local_reply adds
         # the personality prompt and the length cap.
         text = await local_reply(
-            taste + [{"role": "user", "content": prompt + _emotion_note(EMOTIONS)}],
+            [*taste, {"role": "user", "content": prompt + _emotion_note(EMOTIONS)}],
             config,
             include_facts=False,
             tone=tone,
@@ -238,7 +238,7 @@ async def react_to_event(
                 logger.info("event reaction %s: repeated the last line, asking once more", event)
                 line, emotion = await _generate_line(event, prompt, config, tone)
                 line = cap_words(line, UNHUSHED_MAX_WORDS)
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         logger.warning("event reaction %s: felt-llm unavailable", event)
         raise
     except Exception:

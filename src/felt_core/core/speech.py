@@ -28,12 +28,12 @@ _ACTION_LEAD_RE = re.compile(r"(^|[.!?…]\s+)\*[^*\n]{1,40}\*[.!?…,]*\s*")
 _ACTION_TAIL_RE = re.compile(r"\s*\*[^*\n]{1,40}\*[.!?…]*\s*$")
 _EMOJI_RE = re.compile(
     r"["
-    "\U0001f300-\U0001faff"  # misc symbols/pictographs through supplemental symbols
-    "\U00002600-\U000027bf"  # misc symbols + dingbats
-    "\U0001f1e6-\U0001f1ff"  # regional indicators (flag emoji)
-    "\U00002b00-\U00002bff"  # misc symbols and arrows (stars, etc.)
-    "\U0000fe0f"  # emoji variation selector
-    "\U0000200d"  # zero-width joiner (combined emoji)
+    "\U0001f300-\U0001faff"  # misc symbols/pictographs through supplemental symbols  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
+    "\U00002600-\U000027bf"  # misc symbols + dingbats  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
+    "\U0001f1e6-\U0001f1ff"  # regional indicators (flag emoji)  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
+    "\U00002b00-\U00002bff"  # misc symbols and arrows (stars, etc.)  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
+    "\U0000fe0f"  # emoji variation selector  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
+    "\U0000200d"  # zero-width joiner (combined emoji)  # ruff: ignore[unraw-re-pattern]  # \U escapes Python has to expand
     r"]+"
 )
 _WHITESPACE_RE = re.compile(r"[ \t]+")

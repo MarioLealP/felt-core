@@ -1,6 +1,8 @@
 """brain._finished_play_from_transition (WP-16 Part 2): the pure
 track-change classification music_taste_loop's polling wraps around."""
 
+import contextlib
+
 import felt_core.brain.background as brain
 
 _SONG_A = {"id": "a1", "name": "Song A", "artists": [{"name": "Artist A"}]}
@@ -86,7 +88,7 @@ def test_same_null_id_local_file_still_playing_means_nothing_finished():
     assert brain._finished_play_from_transition(_snapshot(_LOCAL_FILE, 1000), _snapshot(_LOCAL_FILE, 16000)) is None
 
 
-class _StopLoop(Exception):
+class _StopLoopError(Exception):
     pass
 
 
@@ -113,16 +115,14 @@ async def test_loop_advances_past_an_item_whose_record_fails(tmp_path, monkeypat
     async def fake_sleep(seconds):
         sleeps.append(seconds)
         if len(sleeps) >= 5:
-            raise _StopLoop
+            raise _StopLoopError
 
     monkeypatch.setattr(brain, "get_currently_playing", fake_now_playing)
     monkeypatch.setattr(brain, "record_music_play", failing_record)
     monkeypatch.setattr(brain.asyncio, "sleep", fake_sleep)
 
-    try:
+    with contextlib.suppress(_StopLoopError):
         await brain.music_taste_loop(config)
-    except _StopLoop:
-        pass
 
     # A finished once (A->B), B finished once (B->None); never a retry of A.
     assert recorded == ["a1", "b2"]

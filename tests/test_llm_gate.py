@@ -49,21 +49,21 @@ async def test_chat_cancels_a_running_ambient_call_and_goes_next():
     while not log:
         await asyncio.sleep(0)
     assert await llm_gate.run(_job(log, "chat")) == "chat"
-    with pytest.raises(llm_gate.Skipped, match="cancelled"):
+    with pytest.raises(llm_gate.SkippedError, match="cancelled"):
         await ambient
     assert log == ["start screen", "start chat", "end chat"]
 
 
 async def test_no_ambient_right_after_a_chat():
     await llm_gate.run(_job([], "chat"))
-    with pytest.raises(llm_gate.Skipped, match="conversation"):
+    with pytest.raises(llm_gate.SkippedError, match="conversation"):
         await _as(llm_gate.ambient("song"), _job([], "song"))
     assert await _as(llm_gate.timely("alarm"), _job([], "alarm")) == "alarm"
 
 
 async def test_ambient_budget(monkeypatch):
     monkeypatch.setattr(llm_gate, "AMBIENT_BUDGET_S", 0.0)
-    with pytest.raises(llm_gate.Skipped, match="budget"):
+    with pytest.raises(llm_gate.SkippedError, match="budget"):
         await _as(llm_gate.ambient("song"), _job([], "song"))
 
 
@@ -71,7 +71,7 @@ async def test_ambient_that_cannot_start_in_time_is_dropped():
     hold = asyncio.Event()
     busy = asyncio.create_task(_as(llm_gate.timely("alarm"), _job([], "alarm", hold)))
     await asyncio.sleep(0)
-    with pytest.raises(llm_gate.Skipped, match="expired"):
+    with pytest.raises(llm_gate.SkippedError, match="expired"):
         await _as(llm_gate.ambient("song", lifetime_s=0.05), _job([], "song"))
     hold.set()
     await busy
@@ -96,7 +96,7 @@ def test_a_skipped_screen_reaction_is_no_reaction_not_an_outage(tmp_path, monkey
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
 
     async def gave_way(*_a, **_k):
-        raise local_llm.AmbientSkipped("ambient call skipped (conversation)")
+        raise local_llm.AmbientSkippedError("ambient call skipped (conversation)")
 
     monkeypatch.setattr(local_llm, "chat", gave_way)
     with TestClient(app) as c:

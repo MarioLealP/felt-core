@@ -187,7 +187,7 @@ async def test_list_mail_goes_past_her_first(tmp_path, fake_llm):
 async def test_list_mail_waits_while_her_model_is_busy(tmp_path, fake_llm):
     config = _config(tmp_path)
     _patreon(config.db_path)
-    fake_llm.script = [local_llm.LocalLLMUnavailable("busy")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("busy")]
     await emails.tick(config)
     assert _states(config.db_path) == {"New post": "new"}
 
@@ -227,6 +227,6 @@ async def test_a_list_mail_she_cant_judge_yet_doesnt_hold_back_a_person(tmp_path
     config = _config(tmp_path)
     _patreon(config.db_path)
     _ana(config.db_path)
-    fake_llm.script = [local_llm.LocalLLMUnavailable("busy")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("busy")]
     await emails.sort_new(config)
     assert _states(config.db_path) == {"New post": "new", "Dinner": "waiting"}

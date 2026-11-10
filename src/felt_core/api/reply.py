@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
 from urllib.parse import quote
 
 import httpx2
@@ -201,7 +201,7 @@ async def _fill_open_stream(
                 except Exception:
                     logger.exception("reply stream %s: TTS failed for chunk %d", stream.id, n)
                     stream.fail_from(n)
-    except local_llm.LocalLLMUnavailable as e:
+    except local_llm.LocalLLMUnavailableError as e:
         logger.warning("reply stream %s: felt-llm went away mid-reply (%s)", stream.id, e)
     finally:
         if result is None:
@@ -279,9 +279,9 @@ async def _reply_v2(
 @router.post("/v1/voice-chat")
 async def voice_chat_endpoint(
     request: Request,
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
     session_id: str = "default",
-    tone: str | None = Form(None),
+    tone: Annotated[str | None, Form()] = None,
 ) -> Response:
     """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
     the brain -> felt-voice (TTS), so a client doesn't have to.
@@ -392,7 +392,7 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
         raise HTTPException(status_code=408, detail="chunk not ready")
     try:
         wav = await stream.wait_chunk(n, max(0.0, timeout - (time.monotonic() - start)))
-    except reply_stream.ChunkFailed:
+    except reply_stream.ChunkFailedError:
         raise HTTPException(status_code=502, detail="chunk TTS failed") from None
     if wav is None:
         raise HTTPException(status_code=408, detail="chunk not ready")

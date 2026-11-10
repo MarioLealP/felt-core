@@ -233,7 +233,9 @@ async def handle(params, ctx):
 
     if target.isoformat() not in daily["time"]:
         return SkillResult(
-            text=f"{target.isoformat()} is outside the forecast window I have data for (next {len(daily['time'])} days).",
+            text=(
+                f"{target.isoformat()} is outside the forecast window I have data for (next {len(daily['time'])} days)."
+            ),
             animation_tag=tag,
         )
 

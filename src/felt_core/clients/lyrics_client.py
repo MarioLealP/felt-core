@@ -74,7 +74,7 @@ def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | Non
     """Pure: the chorus of a synced lyric - the most-repeated non-empty
     line (>= _MIN_CHORUS_REPEATS occurrences), plus any other line
     repeated nearly as often (within _CHORUS_COUNT_SLACK), since a chorus
-    is usually several lines. Returns
+    is usually several lines. Returns.
 
         {"text", "start_ms", "end_ms", "windows": [...]}
 
@@ -153,7 +153,9 @@ def _cache_key(track_id: str | None, track_name: str, artist_name: str, album_na
     """
     if track_id and _TRACK_ID_RE.match(track_id):
         return track_id
-    digest = hashlib.sha1(f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode()).hexdigest()
+    digest = hashlib.sha1(
+        f"{track_name}|{artist_name}|{album_name}|{duration_s}".encode(), usedforsecurity=False
+    ).hexdigest()
     return f"k_{digest[:24]}"
 
 

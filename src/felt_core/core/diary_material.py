@@ -189,7 +189,7 @@ def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
     return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
 
-async def gather_material(config: FeltConfig, date_str: str) -> str:
+async def gather_material(config: FeltConfig, date_str: str) -> str:  # ruff: ignore[unused-async]  # sync sqlite until the data layer pass
     """Material for one Europe/Lisbon calendar date: screen `seen` text
     plus her spoken replies, logged desktop events, and chat as whole
     session windows.

@@ -93,7 +93,7 @@ async def test_alarm_plain_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm
         return True
 
     monkeypatch.setattr("felt_core.core.alarms.notify", fake_notify)
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
     alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now(), "stretch")
     assert sent == ["Alarm: stretch"]

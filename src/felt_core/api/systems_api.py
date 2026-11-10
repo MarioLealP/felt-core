@@ -6,6 +6,7 @@ X-Authentik-Username header.
 """
 
 import asyncio
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -18,15 +19,15 @@ router = APIRouter(prefix="/v1/app")
 
 @router.get("/systems")
 async def systems_page(
-    before: int | None = Query(default=None, ge=1),
-    limit: int = Query(default=30, ge=1, le=100),
-    _user: str = Depends(sso_user),
+    _user: Annotated[str, Depends(sso_user)],
+    before: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ) -> dict:
     return await asyncio.to_thread(systems.page, load_config().db_path, before, limit)
 
 
 @router.get("/incidents/{incident_id}")
-async def incident(incident_id: int, _user: str = Depends(sso_user)) -> dict:
+async def incident(incident_id: int, _user: Annotated[str, Depends(sso_user)]) -> dict:
     config = load_config()
     urls = {"zabbix": config.zabbix_url, "wazuh": config.wazuh_url}
     links = {name: url for name, url in urls.items() if url}  # an unset one gets no link
@@ -37,7 +38,7 @@ async def incident(incident_id: int, _user: str = Depends(sso_user)) -> dict:
 
 
 @router.post("/incidents/{incident_id}/handled")
-async def handled(incident_id: int, _user: str = Depends(sso_user)) -> dict:
+async def handled(incident_id: int, _user: Annotated[str, Depends(sso_user)]) -> dict:
     if not await asyncio.to_thread(systems.mark_handled, load_config().db_path, incident_id):
         raise HTTPException(status_code=409, detail="not open")
     return {"ok": True}

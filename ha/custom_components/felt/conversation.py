@@ -12,7 +12,7 @@ from .client import FeltClient, FeltError
 from .const import DOMAIN
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:  # ruff: ignore[unused-async]  # async by contract
     async_add_entities([FeltAgent(entry)])
 
 

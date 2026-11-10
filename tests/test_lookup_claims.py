@@ -26,7 +26,7 @@ from felt_core.models.plugin import SkillResult
         "Pulling up the wiki now.",
         "Looking it up...",
         "I looked it up and couldn't find the exact launch time for WoW Forever.",
-        "I’ve googled it - nothing official yet.",
+        "I’ve googled it - nothing official yet.",  # ruff: ignore[ambiguous-unicode-character-string]  # curly quotes on purpose: the model writes them
         "I checked online and it's not out yet.",
         "I did a quick search, nothing public.",
     ],
@@ -85,8 +85,8 @@ def test_not_claims(text):
         "I've dimmed the lights to 30%.",
         "Brought the chandelure down to 20 percent for you.",
         # cm-p6a, 2026-10-22: after a web search, nothing set
-        "It’s on the fourth of November, three in the afternoon Pacific Time, which is eleven at "
-        "night here. I’ve got it set for you, so you’ll be up an hour before the servers open.",
+        "It’s on the fourth of November, three in the afternoon Pacific Time, which is eleven at "  # ruff: ignore[ambiguous-unicode-character-string]  # curly quotes on purpose: the model writes them
+        "night here. I’ve got it set for you, so you’ll be up an hour before the servers open.",  # ruff: ignore[ambiguous-unicode-character-string]  # curly quotes on purpose: the model writes them
         "It goes live November 4th at 11 PM UTC, so I'll ping you at 10.",
         "I'll remind you an hour before.",
         "Okay, it's set for 10 PM.",
@@ -270,7 +270,7 @@ async def test_forced_retry_error_keeps_the_reply(tmp_path, monkeypatch, fake_ll
     monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _registry([]))
     fake_llm.script = [
         "Let me check... it rerolls modifiers.",
-        local_llm.LocalLLMUnavailable("400"),
+        local_llm.LocalLLMUnavailableError("400"),
     ]
 
     result = await orchestrator.chat("chaos orb?", _config(tmp_path), session_id="s")

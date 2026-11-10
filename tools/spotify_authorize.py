@@ -17,6 +17,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 import webbrowser
 
@@ -48,7 +49,7 @@ def main() -> None:
             "show_dialog": "true",
         }
     )
-    out = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "felt-spotify.code")
+    out = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.mkdtemp(), "felt-spotify.code")
     result: dict[str, str] = {}
 
     class Handler(http.server.BaseHTTPRequestHandler):

@@ -122,23 +122,15 @@ def test_matching_containers_ambiguous_returns_all_candidates():
     # gitea-act-runner — the caller needs to know it's ambiguous, not be
     # told (wrongly) that nothing matched.
     containers = parse_container_items(
-        _ITEMS
-        + [
+        [
+            *_ITEMS,
             {
                 "key_": 'docker.container_info.state.status["/gitea-act-runner"]',
                 "lastvalue": "running",
                 "lastclock": "100",
             },
-            {
-                "key_": 'docker.container_info.state.running["/gitea-act-runner"]',
-                "lastvalue": "1",
-                "lastclock": "100",
-            },
-            {
-                "key_": 'docker.container_info.state.health["/gitea-act-runner"]',
-                "lastvalue": "4",
-                "lastclock": "100",
-            },
+            {"key_": 'docker.container_info.state.running["/gitea-act-runner"]', "lastvalue": "1", "lastclock": "100"},
+            {"key_": 'docker.container_info.state.health["/gitea-act-runner"]', "lastvalue": "4", "lastclock": "100"},
         ]
     )
     assert matching_containers(containers, "gitea") == ["gitea-act-runner", "gitea-server"]

@@ -30,7 +30,7 @@ MAX_STREAMS = 8
 _clock: Callable[[], float] = time.monotonic
 
 
-class ChunkFailed(Exception):
+class ChunkFailedError(Exception):
     """The chunk's TTS failed (or an earlier chunk's did - a stream stops at
     the first failure, the tray can't play past a gap).
     """
@@ -109,7 +109,7 @@ class ReplyStream:
 
     async def wait_chunk(self, n: int, timeout: float) -> bytes | None:
         """The chunk's WAV, waiting up to `timeout` s for it; None if it's
-        still not ready by then. Raises ChunkFailed. `n` must be < len.
+        still not ready by then. Raises ChunkFailedError. `n` must be < len.
         """
         if not self._events[n].is_set():
             try:
@@ -117,7 +117,7 @@ class ReplyStream:
             except TimeoutError:
                 return None
         if self._failed[n]:
-            raise ChunkFailed(n)
+            raise ChunkFailedError(n)
         return self._audio[n]
 
 
@@ -174,7 +174,7 @@ def clear() -> None:
 
 async def run(stream: ReplyStream, synthesize: Callable[[int, str], Awaitable[bytes]]) -> None:
     """Fills chunks 1..N-1 in order. The first failure fails the rest of
-    the stream (see ChunkFailed).
+    the stream (see ChunkFailedError).
     """
     for n in range(1, len(stream)):
         try:

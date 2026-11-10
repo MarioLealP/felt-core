@@ -3,7 +3,7 @@ Home Assistant app (phone.py, 2026-10-18 - KDE Connect went with the
 Windows desktop agent). A real-world side effect, not just information.
 """
 
-from felt_core.clients.phone import PhoneUnavailable, ring
+from felt_core.clients.phone import PhoneUnavailableError, ring
 from felt_core.models.plugin import SkillResult
 
 name = "find_phone"
@@ -14,6 +14,6 @@ parameters_schema = {"type": "object", "properties": {}}
 async def handle(params, ctx):
     try:
         await ring(ctx.config)
-    except PhoneUnavailable:
+    except PhoneUnavailableError:
         return SkillResult(text="Couldn't reach the phone right now.")
     return SkillResult(text="Ringing your phone.")

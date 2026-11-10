@@ -52,7 +52,7 @@ from felt_core.brain.music_fast_path import music_fast_path
         ("make the music louder pls", "media_control", {"action": "louder"}),
         ("ugh this song sucks, next", "media_control", {"action": "next"}),
         ("meh. skip this one!", "media_control", {"action": "next"}),
-        # queue, not play (2026-10-18)
+        # queue, not play (2026-10-18)  # ruff: ignore[commented-out-code]  # prose
         ("queue birdbrain", "play_music", {"query": "birdbrain", "when": "queue"}),
         (
             "can you queue up some daft punk",

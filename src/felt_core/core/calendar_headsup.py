@@ -243,7 +243,7 @@ async def phrase(
     prompt = build_prompt(title, minutes, location, game, reminder)
     try:
         line = await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         logger.info("calendar heads-up: felt-llm unavailable, using the plain line")
         return fallback_line(title, minutes, reminder)
     line = line.strip(" \n\"'")
@@ -355,13 +355,13 @@ async def deliver_leave(
             line = (await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)).strip(
                 " \n\"'"
             )
-        except local_llm.LocalLLMUnavailable:
+        except local_llm.LocalLLMUnavailableError:
             line = ""
         line = line or fallback_leave_line(title, at, drive_min, leave_in, go)
         enqueue_proactive(config, stage.kind, line, ttl_s=min(_LEAVE_TTL_S, (start - now).total_seconds()))
         try:
             await phone.notify(config, title, line, tag=f"felt-leave-{event['id']}")
-        except phone.PhoneUnavailable:
+        except phone.PhoneUnavailableError:
             logger.info("leave-by: phone unreachable, desk only")
         logger.info("leave-by: %s for %r (drive %d min)", stage.name, title, drive_min)
         return True

@@ -19,7 +19,7 @@ reached.
 
 from datetime import datetime, timedelta
 
-from felt_core.clients.phone import PhoneUnavailable
+from felt_core.clients.phone import PhoneUnavailableError
 from felt_core.clients.phone import set_alarm as phone_alarm
 from felt_core.core.alarms import schedule_alarm
 from felt_core.core.date_resolution import resolve_datetime
@@ -74,7 +74,7 @@ async def handle(params, ctx):
         try:
             await phone_alarm(config, fire_at.hour, fire_at.minute, label)
             return SkillResult(text=f"Alarm set on your phone for {_format(fire_at, label)}.")
-        except PhoneUnavailable:
+        except PhoneUnavailableError:
             pass  # phone unreachable — fall through to felt's own scheduling
 
     schedule_alarm(config, fire_at, label)

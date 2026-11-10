@@ -52,7 +52,7 @@ async def ha_chat(req: HaChat) -> HaReply:
         raise HTTPException(status_code=422, detail="empty message")
     try:
         result = await chat(text, load_config(), SESSION)
-    except local_llm.LocalLLMUnavailable as e:
+    except local_llm.LocalLLMUnavailableError as e:
         raise HTTPException(status_code=503, detail="felt-llm unavailable") from e
     return HaReply(reply=result.reply)
 

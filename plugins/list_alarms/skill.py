@@ -7,7 +7,7 @@ was unreachable, or a date further out than a phone alarm can hold).
 from datetime import datetime
 
 from felt_core.clients.ha_calendar import TZ
-from felt_core.clients.phone import PhoneUnavailable, next_alarm
+from felt_core.clients.phone import PhoneUnavailableError, next_alarm
 from felt_core.db.alarms import get_pending_alarms
 from felt_core.models.plugin import SkillResult
 
@@ -29,7 +29,7 @@ async def handle(params, ctx):
             lines.append(f"next on your phone: {_when(on_phone.astimezone(TZ))}")
         else:
             lines.append("none on your phone")
-    except PhoneUnavailable:
+    except PhoneUnavailableError:
         lines.append("couldn't reach your phone")
 
     for alarm in get_pending_alarms(ctx.config.db_path):

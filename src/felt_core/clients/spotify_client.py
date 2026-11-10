@@ -216,7 +216,7 @@ async def queue_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str) 
     await _player_call(client, config, "POST", "/me/player/queue", params={"uri": uri})
 
 
-class NoActivePlayer(Exception):
+class NoActivePlayerError(Exception):
     """Spotify has no awake player to start the song on."""
 
 
@@ -225,7 +225,7 @@ async def start_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str, 
     uris - on Mario's Linux desktop client that's accepted (204) and loads
     nothing, and while playing it stops the music (2026-10-18). Queue + next
     works while playing or paused (and resumes); a freshly started client
-    with nothing played yet has no active device (404) -> NoActivePlayer.
+    with nothing played yet has no active device (404) -> NoActivePlayerError.
     The queued song lands behind anything already queued (DJ picks, his own
     adds), and Spotify's queue list lags a fresh add - so it skips one at a
     time, each time waiting for the change to show, until the song is on
@@ -286,12 +286,12 @@ def felt_started(uri: str | None) -> bool:
 
 
 async def add_to_queue(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
-    """queue_track, with no active device (404) as NoActivePlayer."""
+    """queue_track, with no active device (404) as NoActivePlayerError."""
     try:
         await queue_track(client, config, uri)
     except httpx2.HTTPStatusError as e:
         if e.response.status_code == 404:
-            raise NoActivePlayer from e
+            raise NoActivePlayerError from e
         raise
 
 

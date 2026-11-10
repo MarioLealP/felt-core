@@ -38,7 +38,7 @@ def _row_to_self_memory(row: tuple) -> dict:
 
 def get_self_memory(db_path: str, memory_id: int) -> dict | None:
     conn = _connect(db_path)
-    row = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)).fetchone()
+    row = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)).fetchone()  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     conn.close()
     return _row_to_self_memory(row) if row else None
 
@@ -47,11 +47,11 @@ def get_self_memories(db_path: str, status: str | None = None) -> list[dict]:
     conn = _connect(db_path)
     if status is not None:
         rows = conn.execute(
-            f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE status = ? ORDER BY id DESC",
+            f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE status = ? ORDER BY id DESC",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             (status,),
         ).fetchall()
     else:
-        rows = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory ORDER BY id DESC").fetchall()
+        rows = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory ORDER BY id DESC").fetchall()  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     conn.close()
     return [_row_to_self_memory(r) for r in rows]
 
@@ -99,7 +99,7 @@ def update_self_memory(
     params.append(memory_id)
     conn = _connect(db_path)
     with conn:
-        cursor = conn.execute(f"UPDATE self_memory SET {', '.join(sets)} WHERE id = ?", params)
+        cursor = conn.execute(f"UPDATE self_memory SET {', '.join(sets)} WHERE id = ?", params)  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
         updated = cursor.rowcount > 0
     conn.close()
     return updated

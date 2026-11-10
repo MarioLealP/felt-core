@@ -13,13 +13,13 @@ import httpx2
 from felt_core.config import FeltConfig, reveal
 
 
-class ShoppingUnavailable(Exception):
+class ShoppingUnavailableError(Exception):
     """HA isn't configured or didn't answer."""
 
 
 async def _call(config: FeltConfig, service: str, data: dict | None = None) -> dict:
     if not (config.ha_url and config.ha_token and config.ha_shopping_list):
-        raise ShoppingUnavailable("Home Assistant isn't configured")
+        raise ShoppingUnavailableError("Home Assistant isn't configured")
     url = f"{config.ha_url}/api/services/todo/{service}"
     if service == "get_items":
         url += "?return_response"
@@ -31,7 +31,7 @@ async def _call(config: FeltConfig, service: str, data: dict | None = None) -> d
             response.raise_for_status()
             return response.json()
     except httpx2.HTTPError as e:
-        raise ShoppingUnavailable(str(e)) from e
+        raise ShoppingUnavailableError(str(e)) from e
 
 
 async def items(config: FeltConfig) -> list[dict]:

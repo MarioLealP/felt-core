@@ -1,6 +1,7 @@
 """news_digest (2026-10-22): Mario's news, read from his HA news sensors."""
 
 from datetime import datetime
+from typing import ClassVar
 
 import httpx2
 import pytest
@@ -29,8 +30,8 @@ def ha(monkeypatch, skill):
     """Fake HA: `ha.sensors` (topic -> stories) answers /api/states/sensor.news_<topic>."""
 
     class HA:
-        sensors: dict[str, list] = {}
-        asked: list[str] = []
+        sensors: ClassVar[dict[str, list]] = {}
+        asked: ClassVar[list[str]] = []
 
     def handler(request):
         topic = request.url.path.rsplit("/", 1)[1].removeprefix("sensor.news_")

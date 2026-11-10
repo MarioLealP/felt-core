@@ -131,7 +131,7 @@ async def chat_ws(websocket: WebSocket) -> None:
             data = await websocket.receive_json()
             try:
                 result = await chat(data["message"], config, data.get("session_id", "default"))
-            except local_llm.LocalLLMUnavailable:
+            except local_llm.LocalLLMUnavailableError:
                 # Same contract as the HTTP 503: the socket stays open.
                 await websocket.send_json({"error": "felt-llm offline"})
                 continue

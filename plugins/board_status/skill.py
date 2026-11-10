@@ -61,7 +61,7 @@ _COLUMNS = [
 _LIST_MAX = 6
 
 
-async def _read_only(request: httpx2.Request) -> None:
+async def _read_only(request: httpx2.Request) -> None:  # ruff: ignore[unused-async]  # async by contract
     if request.method != "GET":
         raise RuntimeError(f"board_status is read-only, refused {request.method}")
 

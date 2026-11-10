@@ -1,7 +1,7 @@
 import pytest
 
 import felt_core.brain.screen_reactions as brain
-from felt_core.clients.local_llm import LocalLLMUnavailable
+from felt_core.clients.local_llm import LocalLLMUnavailableError
 from felt_core.config import FeltConfig
 from felt_core.db.messages import get_history
 
@@ -28,9 +28,9 @@ async def test_screen_context_makes_one_plain_local_call(tmp_path, fake_llm):
 
 async def test_screen_context_raises_when_felt_llm_is_down(tmp_path, fake_llm):
     config = _config(tmp_path)
-    fake_llm.script = [LocalLLMUnavailable("down")]
+    fake_llm.script = [LocalLLMUnavailableError("down")]
 
-    with pytest.raises(LocalLLMUnavailable):
+    with pytest.raises(LocalLLMUnavailableError):
         await brain.process_screen_context("a cat", config, session_id="wp02-test")
 
 

@@ -6,7 +6,7 @@ from felt_core.core import reply_stream
 
 
 @pytest.fixture(autouse=True)
-def _fresh_store(monkeypatch):
+def clock(monkeypatch):
     reply_stream.clear()
     now = [1000.0]
     monkeypatch.setattr(reply_stream, "_clock", lambda: now[0])
@@ -58,27 +58,27 @@ async def test_failure_fails_that_chunk_and_every_later_one():
     waiter = asyncio.create_task(s.wait_chunk(3, 30))
     await reply_stream.run(s, synth)
     assert await s.wait_chunk(1, 1) == b"ok"
-    with pytest.raises(reply_stream.ChunkFailed):
+    with pytest.raises(reply_stream.ChunkFailedError):
         await s.wait_chunk(2, 1)
-    with pytest.raises(reply_stream.ChunkFailed):
+    with pytest.raises(reply_stream.ChunkFailedError):
         await waiter
 
 
-async def test_expires_120s_after_creation(_fresh_store):
+async def test_expires_120s_after_creation(clock):
     s = reply_stream.create(["a", "b"], b"WAV0")
-    _fresh_store[0] += 119
+    clock[0] += 119
     assert reply_stream.get(s.id) is s
-    _fresh_store[0] += 2
+    clock[0] += 2
     assert reply_stream.get(s.id) is None
 
 
-async def test_expiry_restarts_when_the_last_chunk_is_done(_fresh_store):
+async def test_expiry_restarts_when_the_last_chunk_is_done(clock):
     s = reply_stream.create(["a", "b"], b"WAV0")
-    _fresh_store[0] += 100
+    clock[0] += 100
     s.set_chunk(1, b"WAV1")
-    _fresh_store[0] += 100  # 200 s after creation, 100 s after completion
+    clock[0] += 100  # 200 s after creation, 100 s after completion
     assert reply_stream.get(s.id) is s
-    _fresh_store[0] += 21
+    clock[0] += 21
     assert reply_stream.get(s.id) is None
 
 

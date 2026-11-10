@@ -55,7 +55,7 @@ _FIELDS = (
 )
 
 
-class EnderUnavailable(Exception):
+class EnderUnavailableError(Exception):
     """HA not configured or unreachable."""
 
 
@@ -110,7 +110,7 @@ def snapshot_from(states: dict[str, str]) -> Snapshot:
 
 async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]:
     if not (config.ha_url and config.ha_token):
-        raise EnderUnavailable("HA not configured")
+        raise EnderUnavailableError("HA not configured")
     headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     out: dict[str, str] = {}
     try:
@@ -120,9 +120,9 @@ async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]
                 if r.status_code == 200:
                     out[f] = r.json()["state"]
                 elif r.status_code != 404:
-                    raise EnderUnavailable(f"HA {r.status_code}")
+                    raise EnderUnavailableError(f"HA {r.status_code}")
     except httpx2.HTTPError as e:
-        raise EnderUnavailable(repr(e)) from e
+        raise EnderUnavailableError(repr(e)) from e
     return out
 
 
@@ -263,7 +263,7 @@ async def check(config: FeltConfig) -> str | None:
     enqueue_proactive(config, "printer", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Ender", line, tag="felt-ender")
-    except phone.PhoneUnavailable:
+    except phone.PhoneUnavailableError:
         logger.info("ender: phone unreachable, desk only")
     logger.info("ender: %s -> %s, said %r", prev, cur, line)
     return line
@@ -276,7 +276,7 @@ async def watch(config: FeltConfig) -> None:
     while True:
         try:
             await check(config)
-        except EnderUnavailable as e:
+        except EnderUnavailableError as e:
             logger.debug("ender: HA unreachable (%s)", e)
         except Exception:
             logger.exception("ender: watch tick failed")

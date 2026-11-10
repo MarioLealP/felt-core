@@ -35,7 +35,7 @@ parameters_schema = {
 async def handle(params, ctx):
     try:
         return await _handle(params, ctx.config)
-    except shopping.ShoppingUnavailable:
+    except shopping.ShoppingUnavailableError:
         return SkillResult(text="Couldn't reach the shopping list in Home Assistant right now.")
 
 

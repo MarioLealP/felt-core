@@ -17,7 +17,7 @@ parameters_schema = {"type": "object", "properties": {}}
 _EXCERPT = 400
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     mails = emails.recent(ctx.config.db_path, limit=5)
     if not mails:
         return SkillResult(text="No recent emails.")

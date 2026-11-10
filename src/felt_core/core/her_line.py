@@ -30,6 +30,6 @@ async def her_line(config: FeltConfig, facts: str, fallback: str, timeout_s: flo
             local_reply([{"role": "user", "content": prompt(facts)}], config, include_facts=False),
             timeout_s,
         )
-    except local_llm.LocalLLMUnavailable, TimeoutError:
+    except local_llm.LocalLLMUnavailableError, TimeoutError:
         line = ""
     return line.strip(" \n\"'") or fallback

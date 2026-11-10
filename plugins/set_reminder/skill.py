@@ -11,7 +11,7 @@ instead of the 30/10-minute heads-ups.
 import re
 from datetime import datetime, timedelta
 
-from felt_core.clients.ha_calendar import TZ, CalendarUnavailable, connected, create_event
+from felt_core.clients.ha_calendar import TZ, CalendarUnavailableError, connected, create_event
 from felt_core.core.date_resolution import has_clock, resolve_datetime
 from felt_core.core.params import get_single_param
 from felt_core.models.plugin import SkillResult
@@ -173,7 +173,7 @@ async def handle(params, ctx):
             "Reminder set by Felt.",
             rrule=_RRULE.get(repeat),
         )
-    except CalendarUnavailable:
+    except CalendarUnavailableError:
         return SkillResult(text="I couldn't reach the calendar to set that reminder.")
     # the reminder's own time named as such, both zones, and the thing's
     # time too - else she says "launch is 10pm, ping at 9" (e2e, 3 of 5)

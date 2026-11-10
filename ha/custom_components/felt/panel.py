@@ -111,7 +111,7 @@ async def ws_call(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 @websocket_api.websocket_command({vol.Required("type"): "felt/app/stream"})
 @websocket_api.require_admin
 @websocket_api.async_response
-async def ws_stream(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+async def ws_stream(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:  # ruff: ignore[unused-async]  # async by contract
     """felt-core's live notices, relayed as subscription events. Reconnects
     after a break; felt-core's "hello" on each connect makes the page refetch.
     """

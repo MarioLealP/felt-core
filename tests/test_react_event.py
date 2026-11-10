@@ -12,7 +12,7 @@ import felt_core.api.reply as reply_api
 import felt_core.core.event_policy as event_policy
 import felt_core.core.event_prompt as event_prompt
 import felt_core.core.events as events
-from felt_core.clients.local_llm import LocalLLMUnavailable
+from felt_core.clients.local_llm import LocalLLMUnavailableError
 from felt_core.config import FeltConfig
 from felt_core.db.messages import get_history
 from felt_core.db.observations import (
@@ -209,9 +209,9 @@ async def test_game_events_speak_from_felt_llm_without_any_privacy_gate(tmp_path
 
 async def test_felt_llm_offline_propagates_instead_of_a_skip(tmp_path, fake_llm):
     config = _config(tmp_path)
-    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
 
-    with pytest.raises(LocalLLMUnavailable):
+    with pytest.raises(LocalLLMUnavailableError):
         await events.react_to_event("afk_end", {"duration_s": 3600}, config)
 
 
@@ -266,7 +266,7 @@ def test_endpoint_tone_is_optional_and_reaches_the_user_turn(tmp_path, monkeypat
 
 
 def test_endpoint_503_when_felt_llm_is_offline(tmp_path, monkeypatch, fake_llm):
-    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
     client = _client(tmp_path, monkeypatch)
 
     response = client.post("/v1/react/event", json={"event": "gpu_hot", "details": {"temp_c": 86}})

@@ -1,6 +1,7 @@
 """The shopping list: /v1/shopping-list and its page."""
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter
 from fastapi import Path as FastAPIPath
@@ -43,7 +44,7 @@ async def clear_checked_shopping_list_endpoint() -> dict:
 
 @router.patch("/v1/shopping-list/{item_id}")
 async def set_shopping_item_checked_endpoint(
-    checked: bool, item_id: str = FastAPIPath(pattern=f"^{_ITEM_ID}$")
+    checked: bool, item_id: Annotated[str, FastAPIPath(pattern=f"^{_ITEM_ID}$")]
 ) -> dict:
     await shopping.set_checked(load_config(), item_id, checked)
     return {"ok": True}
@@ -51,7 +52,7 @@ async def set_shopping_item_checked_endpoint(
 
 @router.delete("/v1/shopping-list/{item_id}")
 async def delete_shopping_item_endpoint(
-    item_id: str = FastAPIPath(pattern=f"^{_ITEM_ID}$"),
+    item_id: Annotated[str, FastAPIPath(pattern=f"^{_ITEM_ID}$")],
 ) -> dict:
     await shopping.remove(load_config(), item_id)
     return {"ok": True}

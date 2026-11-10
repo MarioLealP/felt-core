@@ -47,7 +47,7 @@ def page(db_path: str, session_id: str = APP_SESSION, *, before_id: int | None =
     conn = _connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, kind, source_ref, content, created_at, read_at FROM messages WHERE "
+            "SELECT id, kind, source_ref, content, created_at, read_at FROM messages WHERE "  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             + _VISIBLE_SQL
             + before
             + " ORDER BY id DESC LIMIT ?",
@@ -72,7 +72,7 @@ def unread(db_path: str, session_id: str = APP_SESSION) -> int:
     conn = _connect(db_path)
     try:
         row = conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE " + _VISIBLE_SQL + " AND read_at IS NULL",
+            "SELECT COUNT(*) FROM messages WHERE " + _VISIBLE_SQL + " AND read_at IS NULL",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             (session_id,),
         ).fetchone()
     finally:
@@ -89,7 +89,7 @@ def read_all(db_path: str, session_id: str = APP_SESSION) -> int:
     try:
         with conn:
             cursor = conn.execute(
-                "UPDATE messages SET read_at = ? WHERE " + _VISIBLE_SQL + " AND read_at IS NULL",
+                "UPDATE messages SET read_at = ? WHERE " + _VISIBLE_SQL + " AND read_at IS NULL",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 (now, session_id),
             )
     finally:
@@ -126,7 +126,7 @@ def mark(
     try:
         with conn:
             cursor = conn.execute(
-                f"UPDATE messages SET {sets} WHERE id IN ({q}) AND session_id = ?"
+                f"UPDATE messages SET {sets} WHERE id IN ({q}) AND session_id = ?"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 f" AND role = 'assistant' AND kind NOT IN ('{CHAT}', '{ALERT}')",
                 (*stamp, *ids, session_id),
             )

@@ -59,10 +59,10 @@ async def test_a_tooltip_keeps_its_lines(tmp_path, monkeypatch):
 async def test_felt_vision_down_is_unavailable(tmp_path, monkeypatch):
     config = _config(tmp_path, vision_url="http://felt-vision:8080")
     _mock_vision(monkeypatch, lambda r: httpx2.Response(503))
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await vision.describe(b"jpeg", "firefox", "x", config, poe=False)
     _mock_vision(monkeypatch, lambda r: _reply("   "))
-    with pytest.raises(local_llm.LocalLLMUnavailable, match="nothing"):
+    with pytest.raises(local_llm.LocalLLMUnavailableError, match="nothing"):
         await vision.describe(b"jpeg", "firefox", "x", config, poe=False)
 
 
