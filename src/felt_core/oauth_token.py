@@ -18,11 +18,11 @@ hand-rolling the check-cache/POST/store-in-cache dance itself.
 
 import time
 
-import httpx
+import httpx2
 
 
 async def refresh_access_token(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     cache: dict,
     token_url: str,
     data: dict,

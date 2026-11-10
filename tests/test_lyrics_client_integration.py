@@ -9,9 +9,9 @@ from felt_core.lyrics_client import get_lyrics
 
 @pytest.mark.vcr
 async def test_get_lyrics_finds_a_real_synced_track(tmp_path):
-    import httpx
+    import httpx2
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         result = await get_lyrics(
             client,
             tmp_path,

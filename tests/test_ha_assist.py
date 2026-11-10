@@ -3,7 +3,7 @@
 
 import json
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import ha_assist
@@ -33,14 +33,14 @@ def _ha(monkeypatch, answer, seen):
         seen.append(json.loads(request.content))
         if isinstance(answer, Exception):
             raise answer
-        return httpx.Response(200, json={"response": answer})
+        return httpx2.Response(200, json={"response": answer})
 
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
 
     def client(**kw):
-        return real(transport=httpx.MockTransport(handler), **kw)
+        return real(transport=httpx2.MockTransport(handler), **kw)
 
-    monkeypatch.setattr(ha_assist.httpx, "AsyncClient", client)
+    monkeypatch.setattr(ha_assist.httpx2, "AsyncClient", client)
 
 
 def _speech(kind, text):
@@ -74,7 +74,7 @@ async def test_no_match_goes_to_her_model(monkeypatch):
 
 
 async def test_home_assistant_down_goes_to_her_model(monkeypatch):
-    _ha(monkeypatch, httpx.ConnectError("down"), [])
+    _ha(monkeypatch, httpx2.ConnectError("down"), [])
     assert await ha_assist.handle(CONFIG, "lights off") is None
 
 

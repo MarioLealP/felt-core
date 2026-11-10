@@ -39,9 +39,9 @@ async def test_returns_false_when_publish_user_missing():
 
 async def test_returns_false_when_publish_password_missing(monkeypatch):
     # WP-40 audit fix: a publish user set without a password used to slip
-    # past this guard and build a half-`None` httpx auth tuple, which
+    # past this guard and build a half-`None` httpx2 auth tuple, which
     # would fail at the real request instead of failing closed here.
     config = _config(ntfy_publish_password=None)
-    monkeypatch.setattr("httpx.AsyncClient.post", _ExplodingClient().post)
+    monkeypatch.setattr("httpx2.AsyncClient.post", _ExplodingClient().post)
 
     assert await notify(config, "hi") is False

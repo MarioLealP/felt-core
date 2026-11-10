@@ -3,7 +3,7 @@
 import importlib.util
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig
 from felt_core.plugin import ExecutionContext
@@ -20,10 +20,10 @@ _spec.loader.exec_module(skill)
 def _mock(monkeypatch, hits, seen):
     def handler(request):
         seen.append(request)
-        return httpx.Response(200, json={"hits": hits})
+        return httpx2.Response(200, json={"hits": hits})
 
-    transport = httpx.MockTransport(handler)
-    orig = httpx.AsyncClient
+    transport = httpx2.MockTransport(handler)
+    orig = httpx2.AsyncClient
     monkeypatch.setattr(skill, "machine_client", lambda config, url, **kw: orig(transport=transport, **kw))
 
 

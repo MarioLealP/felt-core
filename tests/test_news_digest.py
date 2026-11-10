@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-import httpx
+import httpx2
 import pytest
 from conftest import load_plugin_module
 
@@ -36,11 +36,11 @@ def ha(monkeypatch, skill):
         topic = request.url.path.rsplit("/", 1)[1].removeprefix("sensor.news_")
         HA.asked.append(topic)
         if topic not in HA.sensors:
-            return httpx.Response(404)
-        return httpx.Response(200, json={"attributes": {"stories": HA.sensors[topic]}})
+            return httpx2.Response(404)
+        return httpx2.Response(200, json={"attributes": {"stories": HA.sensors[topic]}})
 
-    real = httpx.AsyncClient
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    real = httpx2.AsyncClient
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: real(transport=httpx2.MockTransport(handler), **kw))
     HA.sensors, HA.asked = {}, []
     return HA
 

@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 from pydantic import BaseModel
 
 from felt_core.felt_tls import felt_client
@@ -38,14 +38,14 @@ def meru_client_context(tls_dir: str) -> ssl.SSLContext:
     return ctx
 
 
-def meru_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
+def meru_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
     """A client for an in-cluster peer that checks certificates (drive-rag): her Meru certificate
     when FELT_MERU_TLS_DIR is set and the URL is https://, else felt_tls's Felt-cert client
     (compose).
     """
     tls_dir = getattr(config, "meru_tls_dir", None)
     if (url or "").startswith("https://") and tls_dir:
-        return httpx.AsyncClient(verify=meru_client_context(tls_dir), **kwargs)
+        return httpx2.AsyncClient(verify=meru_client_context(tls_dir), **kwargs)
     return felt_client(config, url, **kwargs)
 
 
@@ -77,7 +77,7 @@ async def access_token(config: Any, audience: str) -> str | None:
         cached = _cache.get(key)
         if cached and time.monotonic() < cached.expires - EARLY_S:
             return cached.token
-        async with httpx.AsyncClient(timeout=10) as http:
+        async with httpx2.AsyncClient(timeout=10) as http:
             response = await http.post(
                 config.authentik_token_url,
                 data={

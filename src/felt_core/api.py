@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 from urllib.parse import quote
 
-import httpx
+import httpx2
 import uvicorn
 from fastapi import (
     BackgroundTasks,
@@ -70,7 +70,7 @@ from felt_core.brain import (
 )
 from felt_core.calendar_api import router as calendar_router
 from felt_core.calendar_headsup import calendar_headsup_loop
-from felt_core.config import load_config
+from felt_core.config import load_config, reveal
 from felt_core.controls_api import router as controls_router
 from felt_core.db import (
     delete_diary,
@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
     config = load_config()
     # WP-62 M1: say whether the vault path delivered (never the value itself)
     if config.vault_probe:
-        logger.info("vault: probe delivered (%d chars)", len(config.vault_probe))
+        logger.info("vault: probe delivered (%d chars)", len(reveal(config.vault_probe)))
     else:
         logger.info("vault: no probe (settings not vault-delivered)")
     ntfy_task = asyncio.create_task(ntfy_listen(config))
@@ -293,7 +293,7 @@ async def auth_middleware(request: Request, call_next):
     `Authorization: Bearer <token>` (constant-time compare) or gets 401.
     """
     config = load_config()
-    token = config.api_token
+    token = reveal(config.api_token)
     path = request.url.path
     # felt-ha-hub D3: Home Assistant's route takes only its Authentik token -
     # decided first, so no proxy identity header or other path can open it
@@ -345,7 +345,7 @@ async def auth_middleware(request: Request, call_next):
     if _token_ok(given, token):
         return await call_next(request)
     if any(request.method == m and rx.fullmatch(path) for m, rx in _RESPONDER_ROUTES) and _token_ok(
-        given, config.responder_token
+        given, reveal(config.responder_token)
     ):
         return await call_next(request)
     return JSONResponse(
@@ -504,9 +504,9 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
 
 class _TTSResponse(Protocol):
     """What `_synthesize_reply` needs back from a TTS POST - narrower than
-    `httpx.Response` so the unit tests' hand-written fake responses (no
+    `httpx2.Response` so the unit tests' hand-written fake responses (no
     real network, see `tests/test_api_tts_cache.py`) satisfy the type
-    without subclassing httpx.
+    without subclassing httpx2.
     """
 
     @property
@@ -517,9 +517,9 @@ class _TTSResponse(Protocol):
 
 class _TTSClient(Protocol):
     """What `_synthesize_reply` needs from its HTTP client - just enough
-    of `httpx.AsyncClient`'s surface to also accept the tests' fake
+    of `httpx2.AsyncClient`'s surface to also accept the tests' fake
     clients (`_ExplodingClient`/`FakeClient`), which duck-type `.post()`
-    without subclassing `httpx.AsyncClient`.
+    without subclassing `httpx2.AsyncClient`.
     """
 
     async def post(self, url: str, *, json: dict[str, Any]) -> _TTSResponse: ...
@@ -593,7 +593,7 @@ async def _synthesize_reply(
         audio_bytes = await _tts_audio(
             chunks[0] if streaming else tts_text, emotion, config, client, first_chunk=streaming
         )
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         # felt-voice (the laptop) is off or failing: her reply still exists, so
         # it goes out as text only instead of a 500 that loses it (2026-10-15).
         logger.warning("felt-voice unavailable - replying without audio", exc_info=True)
@@ -704,7 +704,7 @@ async def _reply_v2(
     if isinstance(first, str):
         try:
             wav = await _tts_audio(strip_for_tts(first), None, config, client, first_chunk=True)
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             logger.warning("felt-voice unavailable - replying without audio", exc_info=True)
     if not isinstance(first, str) or wav is None:
         # the whole reply, the WP-54 way
@@ -1017,7 +1017,7 @@ async def react_event_endpoint(req: EventReactionRequest, session_id: str = "das
                 extra_headers=emotion_headers or None,
                 emotion=result.emotion,
             )
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.exception("event reaction: TTS failed for %r", result.line)
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
 
@@ -1175,7 +1175,7 @@ async def music_now_endpoint() -> dict:
     if not config.spotify_refresh_token:
         return {"is_playing": False}
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         now_playing = await get_currently_playing(client, config)
 
     if now_playing is None:
@@ -1207,7 +1207,7 @@ async def music_lyrics_endpoint() -> dict:
     if not config.spotify_refresh_token:
         return {"found": False}
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         now_playing = await get_currently_playing(client, config)
         if now_playing is None:
             return {"found": False}
@@ -1333,7 +1333,7 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
     emotion = json.loads(row["payload_json"] or "{}").get("emotion")
     try:
         audio_bytes = await proactive_audio(config, row["text"], emotion)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         # felt-voice runs on the laptop, which is often off: the same answer
         # as no voice configured, not a 500 (2026-10-18 logs)
         logger.warning("proactive audio: felt-voice unavailable (%r)", e)
@@ -1385,7 +1385,7 @@ def _ws_authorized(websocket: WebSocket) -> bool:
     config = load_config()
     if config.auth_mode == "identity":
         return False  # B5.4: no shared token any more, and no machine caller uses websockets
-    token = config.api_token
+    token = reveal(config.api_token)
     if not token:
         return True
     given = websocket.headers.get("authorization", "")
@@ -1437,8 +1437,10 @@ def run() -> None:
     # were silently dropped below the default WARNING threshold. Only
     # uvicorn's own access-log lines were ever visible.
     logging.basicConfig(level=logging.INFO)
-    # httpx logs every request URL at INFO; keep URLs (and anything a caller
+    # httpx2 logs every request URL at INFO; keep URLs (and anything a caller
     # ever puts in a query string) out of the logs (2026-09-27 key leak).
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    # Plain httpx too: huggingface-hub (fastembed's model download) still uses it.
+    for name in ("httpx2", "httpx"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     config = load_config()
     uvicorn.run(app, host=config.host, port=config.port)

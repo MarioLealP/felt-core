@@ -1,4 +1,4 @@
-import httpx
+import httpx2
 from conftest import load_plugin_module
 
 from felt_core.config import FeltConfig
@@ -10,11 +10,11 @@ skill = load_plugin_module("web_search/skill.py")
 def _mock(monkeypatch, seen, results):
     def handler(request):
         seen.append(request)
-        return httpx.Response(200, json={"results": results})
+        return httpx2.Response(200, json={"results": results})
 
-    transport = httpx.MockTransport(handler)
-    orig = httpx.AsyncClient
-    monkeypatch.setattr(skill.httpx, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
+    transport = httpx2.MockTransport(handler)
+    orig = httpx2.AsyncClient
+    monkeypatch.setattr(skill.httpx2, "AsyncClient", lambda **kw: orig(transport=transport, **kw))
 
 
 async def test_asks_the_searxng_from_the_settings(monkeypatch):

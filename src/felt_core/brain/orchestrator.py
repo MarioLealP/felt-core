@@ -21,7 +21,7 @@ import logging
 import re
 from collections.abc import AsyncIterator, Callable
 
-import httpx
+import httpx2
 
 from felt_core import emails, features, ha_assist, local_llm, metrics
 from felt_core.animation import resolve_animation_tag
@@ -252,7 +252,7 @@ async def _run_skill_call(call: tuple[str, dict], registry: dict[str, LoadedSkil
         tool_output = result.voice_line or result.text or ""
     except ValueError as e:
         tool_output = f"Error: {e}"
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         # the service behind the skill is down or erroring (poe2-rag, drive
         # search, weather, searxng...): was an unhandled crash - the whole
         # chat 500'd (e2e 2026-10-18). She says so instead of guessing.

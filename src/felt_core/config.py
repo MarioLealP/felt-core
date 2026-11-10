@@ -8,6 +8,7 @@ See the project README for why this matters.
 import os
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +26,7 @@ class FeltConfig(BaseSettings):
     # WP-62 M1: a FAKE value that only the vault delivers - proves the
     # vault -> Agent -> secrets_dir path end to end before any real secret
     # moves. Never used for anything else.
-    vault_probe: str | None = None
+    vault_probe: SecretStr | None = None
 
     # felt-llm: the self-hosted llama.cpp server (OpenAI-compatible, one
     # model, native tool calling). The only model backend: nothing here
@@ -90,10 +91,10 @@ class FeltConfig(BaseSettings):
     # WP-55: shared bearer token for every API route (FELT_API_TOKEN, sops on
     # the server; the desktop clients send it). Unset = no auth (the old LAN
     # posture) - set it only once every client sends it.
-    api_token: str | None = None
+    api_token: SecretStr | None = None
     # WP-58: the felt-responder's own token, accepted only on /v1/incidents/*
     # (FELT_RESPONDER_TOKEN). Unset = the responder can't get in.
-    responder_token: str | None = None
+    responder_token: SecretStr | None = None
     # WP-62 phase 4: the browser app's own origin, for the CSRF guard on the
     # SSO-gated (cookie/forward-auth) state-changing routes. The forward-auth
     # cookie is SameSite=Lax and every *.clockmost.com app is same-site, so a
@@ -129,28 +130,28 @@ class FeltConfig(BaseSettings):
     board_gitea_url: str = "https://git.clockmost.com"
     board_repo: str = "Benylin/workspace"
     board_path: str = ".beads/issues.jsonl"
-    board_token: str | None = None
+    board_token: SecretStr | None = None
 
     # ntfy — consuming Mario's existing alert topic (assistant-automation.md),
     # not a new notification system. Unset = the listener simply doesn't run.
     ntfy_url: str | None = None
     ntfy_topic: str | None = None
     ntfy_user: str | None = None
-    ntfy_password: str | None = None
+    ntfy_password: SecretStr | None = None
 
     # Publish side — a separate, write-only ntfy user/topic, distinct from
     # the read-only subscription above (least-privilege: the credential
     # that can push to Mario's phone is not the same one that can only
     # read the existing clockmost topic).
     ntfy_publish_user: str | None = None
-    ntfy_publish_password: str | None = None
+    ntfy_publish_password: SecretStr | None = None
     ntfy_publish_topic: str | None = None
 
     # Zabbix — clockmost's existing monitoring, reused rather than building
     # a separate health-check path. Unset means the skill reports itself
     # unavailable, same pattern as everything else here.
     zabbix_url: str | None = None
-    zabbix_api_token: str | None = None
+    zabbix_api_token: SecretStr | None = None
     zabbix_host: str = "clockmost"
 
     # Home location, for location-dependent skills (weather, etc.) — never
@@ -164,7 +165,7 @@ class FeltConfig(BaseSettings):
     # exposing every HA entity to voice control sight-unseen — empty by
     # default, same "unset/empty = disabled" convention.
     ha_url: str | None = None
-    ha_token: str | None = None
+    ha_token: SecretStr | None = None
     ha_entities: str = ""
 
     def ha_entities_list(self) -> list[str]:
@@ -226,8 +227,8 @@ class FeltConfig(BaseSettings):
     # local MPRIS on the desktop. Unset = the skill reports itself
     # unconfigured, same convention as everything else here.
     spotify_client_id: str | None = None
-    spotify_client_secret: str | None = None
-    spotify_refresh_token: str | None = None
+    spotify_client_secret: SecretStr | None = None
+    spotify_refresh_token: SecretStr | None = None
 
     # WP-16 Part 3: LRCLIB lyrics, one JSON file per track id
     # (lyrics_client.py) - lyrics never change for a given track, so this
@@ -272,3 +273,12 @@ class FeltConfig(BaseSettings):
 
 def load_config() -> FeltConfig:
     return FeltConfig()
+
+
+def reveal(secret: SecretStr | None) -> str:
+    """The plain value of a secret setting, "" when it isn't set.
+
+    Settings hold secrets as SecretStr, which prints as ********** in logs, reprs and f-strings. Call this only where
+    the value leaves for the system it belongs to (a header, a login), never to log or show it.
+    """
+    return secret.get_secret_value() if secret else ""

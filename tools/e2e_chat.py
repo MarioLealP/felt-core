@@ -26,7 +26,7 @@ import tempfile
 import time
 from urllib.parse import parse_qs
 
-import httpx
+import httpx2
 from pydantic import BaseModel, Field
 
 from felt_core import appointment_hold, features, ha_calendar
@@ -43,7 +43,7 @@ def _llm_hosts() -> set[str]:
     """
     config = load_config()
     urls = (config.local_llm_url, config.vision_url)
-    return {"felt-llm", "felt-vision"} | {httpx.URL(u).host for u in urls if u}
+    return {"felt-llm", "felt-vision"} | {httpx2.URL(u).host for u in urls if u}
 
 
 LLM_HOSTS = _llm_hosts()
@@ -394,7 +394,7 @@ class Recorder:
         self.known[uri] = track
         return track
 
-    def _ha(self, request: httpx.Request, path: str) -> httpx.Response:
+    def _ha(self, request: httpx2.Request, path: str) -> httpx2.Response:
         """Home Assistant: the phone (companion app) part - recorded as
         'POST /phone/SET_TIMER' etc., never reaching the real phone.
         """
@@ -407,17 +407,17 @@ class Recorder:
             kind = HA_MATCHES.get(text)
             if kind is None:
                 code = {"code": "no_intent_match"}
-                return httpx.Response(200, json={"response": {"response_type": "error", "data": code}})
+                return httpx2.Response(200, json={"response": {"response_type": "error", "data": code}})
             self.calls.append(f"{'POST' if kind == 'action_done' else 'GET'} /ha-assist {text}")
             speech = {"plain": {"speech": "Done" if kind == "action_done" else "Yes"}}
-            return httpx.Response(200, json={"response": {"response_type": kind, "speech": speech}})
+            return httpx2.Response(200, json={"response": {"response_type": kind, "speech": speech}})
         if path.startswith("/api/states/") and path.removeprefix("/api/states/") in HA_DEVICES:
             entity = path.removeprefix("/api/states/")
             attrs: dict = {"friendly_name": HA_DEVICES[entity]}
             if entity.startswith("light."):
                 # as HA reports the Chandelure and the Yeelights (2026-10-25)
                 attrs["supported_color_modes"] = ["color_temp", "hs", "rgb"]
-            return httpx.Response(200, json={"entity_id": entity, "state": "on", "attributes": attrs})
+            return httpx2.Response(200, json={"entity_id": entity, "state": "on", "attributes": attrs})
         m = re.match(r"^/api/services/(light|switch|fan)/(turn_on|turn_off|toggle)$", path)
         if m:
             body = json.loads(request.content or b"{}")
@@ -425,27 +425,27 @@ class Recorder:
             colour = body.get("color_name") or body.get("color_temp_kelvin")
             colour = f" colour={colour}" if colour else ""
             self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}{colour}")
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         if path.startswith("/api/states/sensor.ender_"):
             field = path.removeprefix("/api/states/sensor.ender_")
             if field not in ENDER:
-                return httpx.Response(404)
+                return httpx2.Response(404)
             self.calls.append(f"GET /ender/{field}")
-            return httpx.Response(200, json={"state": ENDER[field]})
+            return httpx2.Response(200, json={"state": ENDER[field]})
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
             action = (body.get("data") or {}).get("intent_action", "")
             what = action.rsplit(".", 1)[-1] if action else "NOTIFY"
             self.calls.append(f"POST /phone/{what}")
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         if path.endswith("_battery_level"):
             self.calls.append(f"GET /phone{path}")
-            return httpx.Response(200, json={"state": "64"})
+            return httpx2.Response(200, json={"state": "64"})
         if path.endswith("_next_alarm"):
             self.calls.append(f"GET /phone{path}")
-            return httpx.Response(200, json={"state": "2026-10-19T05:30:00+00:00"})
+            return httpx2.Response(200, json={"state": "2026-10-19T05:30:00+00:00"})
         if path.endswith("_battery_state"):
-            return httpx.Response(200, json={"state": "charging"})
+            return httpx2.Response(200, json={"state": "charging"})
         if path.startswith("/api/services/todo/"):
             service = path.rsplit("/", 1)[1]
             if service == "get_items":
@@ -455,28 +455,28 @@ class Recorder:
                     {"summary": "rice", "uid": "b" * 32, "status": "needs_action"},
                 ]
                 todo = {"todo.shopping_list": {"items": items}}
-                return httpx.Response(200, json={"changed_states": [], "service_response": todo})
+                return httpx2.Response(200, json={"changed_states": [], "service_response": todo})
             # the item after "?" (the verdict compares the part before it)
             item = json.loads(request.content or b"{}").get("item", "")
             self.calls.append(f"POST /todo/{service}?{item}")
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         self.calls.append(f"{request.method} /ha{path}")
-        return httpx.Response(503)
+        return httpx2.Response(503)
 
-    def _calendar(self, request: httpx.Request, path: str) -> httpx.Response | None:
+    def _calendar(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
         """HA's calendars: Mario's primary and the reminders one, holding only
         what she created this case.
         """
         if path == "/api/calendars":
             cals = [self.config.ha_calendar_default, self.config.ha_calendar_reminders]
-            return httpx.Response(200, json=[{"entity_id": c, "name": c} for c in cals])
+            return httpx2.Response(200, json=[{"entity_id": c, "name": c} for c in cals])
         if path.startswith("/api/calendars/"):
             cal = path.removeprefix("/api/calendars/")
-            return httpx.Response(200, json=[e for e in self.events if e["calendar"] == cal])
+            return httpx2.Response(200, json=[e for e in self.events if e["calendar"] == cal])
         if path.startswith("/api/states/calendar."):
-            return httpx.Response(200, json={"attributes": {"supported_features": 3}})
+            return httpx2.Response(200, json={"attributes": {"supported_features": 3}})
         if path == "/api/services/homeassistant/update_entity":
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         return None
 
     async def ws_call(self, config, message: dict) -> dict:
@@ -507,22 +507,22 @@ class Recorder:
         )
         return {"success": True}
 
-    def respond(self, request: httpx.Request) -> httpx.Response:
+    def respond(self, request: httpx2.Request) -> httpx2.Response:
         host = request.url.host
         path = request.url.path
         query = parse_qs(request.url.query.decode())
         if host == "accounts.spotify.com":
-            return httpx.Response(200, json={"access_token": "fake", "expires_in": 3600})
+            return httpx2.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
             return self._ha(request, path)
         if host.split(".")[0] == "felt-voice":  # felt-voice:8421 in the container
             # her proactive lines (a held appointment going in) pre-render
             # their voice in the background - not a write, and it lands in
             # whichever case runs next
-            return httpx.Response(503)
+            return httpx2.Response(503)
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
-            return httpx.Response(503)
+            return httpx2.Response(503)
         path = path.removeprefix("/v1")
         self.calls.append(f"{request.method} {path}")
         if path == "/me/player/pause":
@@ -536,15 +536,15 @@ class Recorder:
             q = query.get("q", [""])[0]
             m = re.match(r'artist:"(.+)"', q)
             items = [self._track(f"{m[1]} song {i}", m[1]) for i in range(3)] if m else [self._track(q, q)]
-            return httpx.Response(200, json={"tracks": {"items": items}})
+            return httpx2.Response(200, json={"tracks": {"items": items}})
         if path == "/me/player/queue":
             if request.method == "POST":
                 self.queue.append(query.get("uri", [""])[0])
-                return httpx.Response(204)
-            return httpx.Response(200, json={"queue": [{"uri": u} for u in self.queue]})
+                return httpx2.Response(204)
+            return httpx2.Response(200, json={"queue": [{"uri": u} for u in self.queue]})
         if path in ("/me/player", "/me/player/currently-playing"):
             item = self.now
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "is_playing": self.playing,
@@ -554,14 +554,14 @@ class Recorder:
                 },
             )
         if path == "/me/library/contains":
-            return httpx.Response(200, json=[False])
+            return httpx2.Response(200, json=[False])
         if request.method == "GET":
-            return httpx.Response(200, json={"items": []})
-        return httpx.Response(204)
+            return httpx2.Response(200, json={"items": []})
+        return httpx2.Response(204)
 
 
 def _install(recorder: Recorder) -> None:
-    real = httpx.AsyncHTTPTransport.handle_async_request
+    real = httpx2.AsyncHTTPTransport.handle_async_request
 
     async def handle(self, request):
         if request.url.host in LLM_HOSTS:
@@ -570,7 +570,7 @@ def _install(recorder: Recorder) -> None:
         await request.aread()
         return response
 
-    httpx.AsyncHTTPTransport.handle_async_request = handle  # type: ignore[method-assign]
+    httpx2.AsyncHTTPTransport.handle_async_request = handle  # type: ignore[method-assign]
 
 
 class _SkillLog(logging.Handler):
@@ -645,7 +645,7 @@ async def main() -> int:
         await asyncio.to_thread(TextEmbedding, config.router_model, cache_dir=config.router_model_dir)
     await router.warm(config)
     recorder = Recorder()
-    recorder.ha_host = httpx.URL(config.ha_url or "http://-").host
+    recorder.ha_host = httpx2.URL(config.ha_url or "http://-").host
     recorder.config = config
     _install(recorder)
     ha_calendar._ws_call = recorder.ws_call  # type: ignore[method-assign]

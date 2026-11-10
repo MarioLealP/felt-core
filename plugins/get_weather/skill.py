@@ -19,7 +19,7 @@ Mario as "not right" for exactly that reason).
 import time
 from datetime import UTC, date, datetime, timedelta
 
-import httpx
+import httpx2
 
 from felt_core.date_resolution import resolve_date, upcoming_weekend
 from felt_core.db import get_setting
@@ -150,7 +150,7 @@ async def _fetch(lat: float, lon: float, unit: str, max_age_s: float = _CURRENT_
         if location_today is None or data["daily"]["time"][0] == location_today.isoformat():
             return data
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         response = await client.get(
             "https://api.open-meteo.com/v1/forecast",
             params={

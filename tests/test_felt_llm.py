@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,22 +32,22 @@ def _config(tmp_path, **kwargs):
 
 
 def _mock_client(monkeypatch, handler):
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
 
     def factory(*args, **kwargs):
-        return real(transport=httpx.MockTransport(handler), **kwargs)
+        return real(transport=httpx2.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(local_llm.httpx, "AsyncClient", factory)
+    monkeypatch.setattr(local_llm.httpx2, "AsyncClient", factory)
 
 
 async def test_chat_payload_shape_and_parsing(tmp_path, monkeypatch):
     config = _config(tmp_path, local_llm_url="http://llm:8080/")
     seen = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         seen["url"] = str(request.url)
         seen["body"] = json.loads(request.content)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "choices": [
@@ -108,11 +108,11 @@ async def test_chat_omits_optional_fields_and_raises_unavailable(tmp_path, monke
     config = _config(tmp_path)
     bodies = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         bodies.append(json.loads(request.content))
         if len(bodies) == 1:
-            return httpx.Response(200, json={"choices": [{"message": {"content": "yo"}}]})
-        return httpx.Response(503, text="loading")
+            return httpx2.Response(200, json={"choices": [{"message": {"content": "yo"}}]})
+        return httpx2.Response(503, text="loading")
 
     _mock_client(monkeypatch, handler)
     reply = await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
@@ -129,8 +129,8 @@ async def test_chat_hitting_max_tokens_ends_at_last_sentence(tmp_path, monkeypat
     config = _config(tmp_path)
     cut = "Option three is nice. Option two feels like an office. But honestly, it feels a bit like"
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"choices": [{"message": {"content": cut}, "finish_reason": "length"}]})
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"choices": [{"message": {"content": cut}, "finish_reason": "length"}]})
 
     _mock_client(monkeypatch, handler)
     reply = await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
@@ -141,8 +141,8 @@ async def test_chat_hitting_max_tokens_ends_at_last_sentence(tmp_path, monkeypat
 async def test_chat_complete_reply_is_left_alone(tmp_path, monkeypatch):
     config = _config(tmp_path)
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
             200,
             json={"choices": [{"message": {"content": "Done. On the list"}, "finish_reason": "stop"}]},
         )
@@ -159,8 +159,8 @@ def test_end_at_last_sentence_without_a_full_sentence_adds_an_ellipsis():
 
 
 async def test_chat_connection_error_and_no_url_are_unavailable(tmp_path, monkeypatch):
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("refused")
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused")
 
     _mock_client(monkeypatch, handler)
     with pytest.raises(local_llm.LocalLLMUnavailable):
@@ -177,9 +177,9 @@ async def test_is_healthy_only_on_a_200(tmp_path, monkeypatch):
     statuses = iter([200, 503])
     seen = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         seen.append(str(request.url))
-        return httpx.Response(next(statuses))
+        return httpx2.Response(next(statuses))
 
     _mock_client(monkeypatch, handler)
     config = _config(tmp_path, local_llm_url="http://llm:8080/")
@@ -190,8 +190,8 @@ async def test_is_healthy_only_on_a_200(tmp_path, monkeypatch):
 
 
 async def test_is_healthy_false_on_connection_error(tmp_path, monkeypatch):
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("refused")
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused")
 
     _mock_client(monkeypatch, handler)
     assert await local_llm.is_healthy(_config(tmp_path)) is False

@@ -12,8 +12,9 @@ Stories are in their own language (mostly Portuguese); she answers in his.
 import re
 from datetime import datetime
 
-import httpx
+import httpx2
 
+from felt_core.config import reveal
 from felt_core.ha_calendar import TZ
 from felt_core.plugin import SkillResult
 
@@ -89,8 +90,8 @@ async def handle(params, ctx):
     wanted = [topic] if topic in TOPICS else list(TOPICS)
     now = datetime.now(TZ)
     lines: list[str] = []
-    headers = {"Authorization": f"Bearer {config.ha_token}"}
-    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+    headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
+    async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
         for t in wanted:
             r = await client.get(f"{config.ha_url}/api/states/sensor.news_{t}")
             if r.status_code == 404:

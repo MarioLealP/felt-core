@@ -12,9 +12,9 @@ felt-core being down. `config.phone` is the app's device name in HA
 
 from datetime import datetime
 
-import httpx
+import httpx2
 
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 _EXTRA = "android.intent.extra.alarm."
 
@@ -26,7 +26,7 @@ class PhoneUnavailable(Exception):
 def _headers(config: FeltConfig) -> dict[str, str]:
     if not (config.ha_url and config.ha_token and config.phone):
         raise PhoneUnavailable("phone not configured")
-    return {"Authorization": f"Bearer {config.ha_token}"}
+    return {"Authorization": f"Bearer {reveal(config.ha_token)}"}
 
 
 async def _notify(config: FeltConfig, message: str, data: dict | None = None) -> None:
@@ -35,9 +35,9 @@ async def _notify(config: FeltConfig, message: str, data: dict | None = None) ->
     if data:
         body["data"] = data
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.post(f"{config.ha_url}/api/services/notify/mobile_app_{config.phone}", json=body)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
         raise PhoneUnavailable(f"HA {response.status_code}")
@@ -104,9 +104,9 @@ async def next_alarm(config: FeltConfig) -> datetime | None:
     """
     headers = _headers(config)
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm")
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
         raise PhoneUnavailable(f"HA {response.status_code}")
@@ -120,10 +120,10 @@ async def battery(config: FeltConfig) -> tuple[int, bool]:
     """(percent, charging) from the app's sensors."""
     headers = _headers(config)
     try:
-        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             level = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_level")
             state = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_state")
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if level.status_code != 200:
         raise PhoneUnavailable(f"HA {level.status_code}")

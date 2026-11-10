@@ -25,7 +25,7 @@ none at all.
 
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
@@ -58,7 +58,7 @@ _UNIQUE_TYPES = [
 _FETCH_COUNT = 10
 
 
-async def _current_league(client: httpx.AsyncClient, cache: dict | None) -> str:
+async def _current_league(client: httpx2.AsyncClient, cache: dict | None) -> str:
     if cache and cache.get("leagues"):
         for league in cache["leagues"]:
             if not league.startswith("HC "):
@@ -93,7 +93,7 @@ def _format_divine(value: float) -> str:
     return f"{value:.{decimals}f} divine"
 
 
-async def _search_currency(client: httpx.AsyncClient, league: str, item_name: str):
+async def _search_currency(client: httpx2.AsyncClient, league: str, item_name: str):
     for currency_type in _CURRENCY_TYPES:
         response = await client.get(
             f"{_NINJA_BASE}/exchange/current/overview",
@@ -110,7 +110,7 @@ async def _search_currency(client: httpx.AsyncClient, league: str, item_name: st
     return None
 
 
-async def _search_uniques(client: httpx.AsyncClient, league: str, item_name: str):
+async def _search_uniques(client: httpx2.AsyncClient, league: str, item_name: str):
     for unique_type in _UNIQUE_TYPES:
         response = await client.get(
             f"{_NINJA_BASE}/stash/current/item/overview",
@@ -152,14 +152,14 @@ def _build_search_query(display_name: str, base_type: str, status_option: str) -
     }
 
 
-async def _post_trade_search(client: httpx.AsyncClient, league: str, query_body: dict) -> dict | None:
+async def _post_trade_search(client: httpx2.AsyncClient, league: str, query_body: dict) -> dict | None:
     response = await client.post(f"{_TRADE_BASE}/search/{quote(league)}", json=query_body, headers=_TRADE_HEADERS)
     if response.status_code != 200:
         return None
     return response.json()
 
 
-async def _fetch_trade_listings(client: httpx.AsyncClient, ids: list[str], search_id: str) -> list[dict]:
+async def _fetch_trade_listings(client: httpx2.AsyncClient, ids: list[str], search_id: str) -> list[dict]:
     response = await client.get(
         f"{_TRADE_BASE}/fetch/{','.join(ids)}", params={"query": search_id}, headers=_TRADE_HEADERS
     )
@@ -168,7 +168,7 @@ async def _fetch_trade_listings(client: httpx.AsyncClient, ids: list[str], searc
     return response.json().get("result", [])
 
 
-async def _currency_rates_to_divine(client: httpx.AsyncClient, league: str) -> dict[str, float]:
+async def _currency_rates_to_divine(client: httpx2.AsyncClient, league: str) -> dict[str, float]:
     """{trade listing currency code: divine-equivalent value} — poe.ninja's
     currency overview uses the exact same short codes ("divine", "chaos",
     "exalted", ...) as the trade API's listing `currency` field, confirmed
@@ -202,7 +202,7 @@ def _convert_to_divine(listings: list[dict], rates: dict[str, float]) -> list[fl
 
 
 async def _search_real_listings(
-    client: httpx.AsyncClient, league: str, display_name: str, base_type: str
+    client: httpx2.AsyncClient, league: str, display_name: str, base_type: str
 ) -> dict | None:
     search = await _post_trade_search(client, league, _build_search_query(display_name, base_type, "online"))
     if search is None:
@@ -250,7 +250,7 @@ async def handle(params, ctx):
 
     cache = load_cache(config)
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         league = await _current_league(client, cache)
 
         currency_result = await _search_currency(client, league, item_name)

@@ -8,7 +8,7 @@ already loaded).
 
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from felt_core.lyrics_client import current_line, get_lyrics
 from felt_core.plugin import SkillResult
@@ -24,7 +24,7 @@ async def handle(params, ctx):
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected.")
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         now_playing = await get_currently_playing(client, config)
         if now_playing is None or not now_playing["is_playing"]:
             return SkillResult(text="Nothing's playing right now.")

@@ -18,9 +18,9 @@ async def test_search_track_finds_a_real_track(spotify_config, monkeypatch):
     # its cassette starts with the token refresh: start from an empty cache
     monkeypatch.setitem(spotify_client._token_cache, "access_token", None)
     monkeypatch.setitem(spotify_client._token_cache, "expires_at", 0.0)
-    import httpx
+    import httpx2
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         track = await search_track(client, spotify_config, "Bohemian Rhapsody Queen")
 
     assert track is not None
@@ -33,9 +33,9 @@ async def test_list_devices_returns_a_list(spotify_config, monkeypatch):
     # its cassette has no token refresh: a cached token, whatever ran before
     monkeypatch.setitem(spotify_client._token_cache, "access_token", "cached-token")
     monkeypatch.setitem(spotify_client._token_cache, "expires_at", time.time() + 3600)
-    import httpx
+    import httpx2
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         devices = await list_devices(client, spotify_config)
 
     assert isinstance(devices, list)

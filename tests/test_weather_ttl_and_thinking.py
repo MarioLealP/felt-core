@@ -48,7 +48,7 @@ def _setup(monkeypatch, tmp_path):
         calls.append(params)
         return _FakeResponse(_fake_data(20.0 + len(calls)))
 
-    monkeypatch.setattr(skill.httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(skill.httpx2.AsyncClient, "get", fake_get)
     monkeypatch.setattr(skill.time, "monotonic", lambda: clock[0])
     config = FeltConfig(db_path=str(tmp_path / "t.db"), home_latitude=38.7, home_longitude=-9.1)
     ctx = ExecutionContext(config=config, original_message="weather?")

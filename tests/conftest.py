@@ -232,3 +232,47 @@ def _no_felt_llm_lookup(monkeypatch):
     # TestClient waits for it at shutdown (about half the suite's time on a 2-core CI runner). Nothing listens on
     # port 9, so the connection is refused at once. Tests that need felt-llm set their own URL.
     monkeypatch.setenv("FELT_LOCAL_LLM_URL", "http://127.0.0.1:9")
+
+
+_MASKED = "**********"  # what a SecretStr prints as
+
+
+@pytest.fixture(autouse=True)
+def masked_secret_guard(monkeypatch):
+    # Settings hold secrets as SecretStr, and an f-string or str() of one gives "**********" with no error: the
+    # outside system just answers 401. Every request a test sends is checked at httpx2's last step before the network
+    # (after auth=(user, password) has been applied), headers, URL and body; a hit fails the test at teardown, so a
+    # function that catches every exception can't hide it.
+    import base64
+    import contextlib
+    from urllib.parse import unquote_plus
+
+    import httpx2
+
+    hits: list[str] = []
+
+    def check(request: httpx2.Request) -> None:
+        sent = [str(request.url), *request.headers.values()]
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Basic "):
+            sent.append(base64.b64decode(auth[6:]).decode(errors="replace"))
+        with contextlib.suppress(httpx2.RequestNotRead):  # a streamed body - not one of ours
+            sent.append(unquote_plus(request.content.decode(errors="replace")))  # form bodies encode * as %2A
+        if any(_MASKED in value for value in sent):
+            hits.append(f"{request.method} {request.url}")
+
+    async_send = httpx2.AsyncClient._send_single_request
+    sync_send = httpx2.Client._send_single_request
+
+    async def checked_async_send(self, request, *args, **kwargs):
+        check(request)
+        return await async_send(self, request, *args, **kwargs)
+
+    def checked_sync_send(self, request, *args, **kwargs):
+        check(request)
+        return sync_send(self, request, *args, **kwargs)
+
+    monkeypatch.setattr(httpx2.AsyncClient, "_send_single_request", checked_async_send)
+    monkeypatch.setattr(httpx2.Client, "_send_single_request", checked_sync_send)
+    yield hits
+    assert not hits, f"masked secret (**********) sent: {hits} - read it with config.reveal()"

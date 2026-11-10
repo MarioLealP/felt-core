@@ -12,7 +12,7 @@ import asyncio
 import logging
 import time
 
-import httpx
+import httpx2
 
 from felt_core import features, llm_gate, local_llm, song_remarks, tts_cache
 from felt_core.brain.personality import PERSONALITY_PROMPT
@@ -105,7 +105,7 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
                 tts_resp = await client.post(f"{config.voice_url}/v1/tts", json={"text": tts_text})
                 tts_resp.raise_for_status()
             tts_cache.put(tts_text, tts_resp.content)
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             # The 2026-09-24 audit's ~76 failures/24h were all
             # httpcore.ConnectError: felt-voice on the Nitro5 was down
             # (09-23 22:30 -> 09-24 17:45), not a felt-core bug. One line,
@@ -249,7 +249,7 @@ async def music_taste_loop(config: FeltConfig) -> None:
     only for mouthing along to a chorus on the desktop.
     """
     previous: dict | None = None
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         while True:
             try:
                 if config.spotify_refresh_token:

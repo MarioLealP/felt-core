@@ -13,7 +13,7 @@ import logging
 import re
 from pathlib import Path
 
-import httpx
+import httpx2
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ def _cache_path(cache_dir: Path, key: str) -> Path:
 
 
 async def get_lyrics(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     cache_dir: Path,
     track_id: str | None,
     track_name: str,
@@ -213,7 +213,7 @@ async def get_lyrics(
             # below). Anything else - 429, 5xx - is transient.
             logger.warning("LRCLIB returned %s for track_id=%s - not caching", response.status_code, track_id)
             return None
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.warning("LRCLIB request failed for track_id=%s", track_id, exc_info=True)
         return None
 

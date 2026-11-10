@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime
 
-import httpx
+import httpx2
 
 from felt_core.config import FeltConfig
 from felt_core.ha_calendar import (
@@ -23,14 +23,14 @@ CONFIG = FeltConfig(ha_url="http://ha", ha_token="t")
 
 
 def _client(handler):
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
 async def test_calendars_mark_the_default_as_primary():
     def handler(request):
         assert request.url.path == "/api/calendars"
         assert request.headers["authorization"] == "Bearer t"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json=[
                 {"entity_id": "calendar.feriados_em_portugal", "name": "Feriados"},
@@ -52,7 +52,7 @@ async def test_calendars_mark_the_default_as_primary():
 async def test_events_get_an_id_per_occurrence():
     def handler(request):
         assert request.url.params["start"] == "2026-10-20T00:00:00+01:00"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json=[
                 {"uid": "once", "recurrence_id": None, "summary": "TAC"},
@@ -73,8 +73,8 @@ async def test_get_event_refreshes_first_and_finds_it_by_id():
         seen.append(f"{request.method} {request.url.path}")
         if request.method == "POST":
             assert json.loads(request.content) == {"entity_id": "calendar.x"}
-            return httpx.Response(200, json=[])
-        return httpx.Response(200, json=[{"uid": "a", "summary": "A"}])
+            return httpx2.Response(200, json=[])
+        return httpx2.Response(200, json=[{"uid": "a", "summary": "A"}])
 
     around = datetime(2026, 10, 20, 16, 30, tzinfo=TZ)
     async with _client(handler) as client:
@@ -91,7 +91,7 @@ async def test_get_event_refreshes_first_and_finds_it_by_id():
 async def test_writable_reads_the_create_feature():
     def handler(request):
         features = 3 if request.url.path.endswith("mario") else None
-        return httpx.Response(200, json={"attributes": {"supported_features": features}})
+        return httpx2.Response(200, json={"attributes": {"supported_features": features}})
 
     async with _client(handler) as client:
         assert await writable(client, CONFIG, "calendar.mario")

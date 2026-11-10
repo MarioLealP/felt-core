@@ -1,12 +1,12 @@
 """WP-54: streamed chat replies + the chunk long-poll endpoint + emotion
-reaching felt-voice. felt-voice is faked by replacing `api.httpx.AsyncClient`
+reaching felt-voice. felt-voice is faked by replacing `api.httpx2.AsyncClient`
 (after the test's own ASGI client exists)."""
 
 import asyncio
 import json
 from urllib.parse import quote, unquote
 
-import httpx
+import httpx2
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -70,7 +70,7 @@ class _FakeVoice:
                 if voice.gate is not None and len(voice.bodies) > 1:
                     await voice.gate.wait()
                 if json["text"] in voice.fail_on:
-                    raise httpx.ConnectError("voice down")
+                    raise httpx2.ConnectError("voice down")
                 return _FakeResponse(b"WAV:" + json["text"].encode())
 
         return Client
@@ -89,8 +89,8 @@ async def env(tmp_path, monkeypatch):
         return ChatResult(reply=reply["text"])
 
     monkeypatch.setattr(api, "chat", fake_chat)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api.app), base_url="http://t") as client:
-        monkeypatch.setattr(api.httpx, "AsyncClient", voice.client_class())
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=api.app), base_url="http://t") as client:
+        monkeypatch.setattr(api.httpx2, "AsyncClient", voice.client_class())
         yield client, voice, reply
     reply_stream.clear()
 

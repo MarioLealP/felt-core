@@ -12,7 +12,7 @@ model call: the GPUs are shared, and it keeps the caller's class (a screen
 reaction stays ambient, "look at this" is his).
 """
 
-import httpx
+import httpx2
 
 from felt_core import llm_gate
 from felt_core.config import FeltConfig
@@ -52,7 +52,7 @@ async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, 
     url = f"{config.vision_url.rstrip('/')}/v1/chat/completions"
 
     async def call() -> dict:
-        async with httpx.AsyncClient(timeout=config.vision_timeout_s) as client:
+        async with httpx2.AsyncClient(timeout=config.vision_timeout_s) as client:
             response = await client.post(url, json=payload)
             response.raise_for_status()
             return response.json()
@@ -62,7 +62,7 @@ async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, 
         text = (body["choices"][0]["message"].get("content") or "").strip()
     except llm_gate.Skipped as e:
         raise AmbientSkipped(str(e)) from e
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
+    except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
         raise LocalLLMUnavailable(f"felt-vision call failed: {e!r}") from e
     if not text:
         raise LocalLLMUnavailable("felt-vision described nothing")

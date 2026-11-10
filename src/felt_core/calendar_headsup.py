@@ -32,7 +32,7 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 
-import httpx
+import httpx2
 from pydantic import BaseModel, ConfigDict
 
 from felt_core import db, features, ha_calendar, leave_by, llm_gate, local_llm, phone
@@ -251,7 +251,7 @@ async def _fresh(config: FeltConfig, calendar_id: str, event: dict) -> dict | No
     """The event as it is now, or None if it's gone."""
     start = event_start(event)
     assert start is not None
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx2.AsyncClient(timeout=15) as client:
         return await ha_calendar.get_event(client, config, calendar_id, event["id"], start)
 
 
@@ -405,7 +405,7 @@ def same_event_key(event: dict) -> tuple:
 
 
 async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, dict]]:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx2.AsyncClient(timeout=15) as client:
         calendars = await ha_calendar.list_calendars(client, config)
         out: list[tuple[str, dict]] = []
         seen: set[tuple] = set()

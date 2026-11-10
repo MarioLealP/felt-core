@@ -3,8 +3,9 @@ existing monitoring (Docker-by-Zabbix-agent-2 template already tracks
 every container) rather than building a separate health-check path.
 """
 
-import httpx
+import httpx2
 
+from felt_core.config import reveal
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 from felt_core.zabbix_client import (
@@ -22,13 +23,13 @@ parameters_schema = {
 }
 
 
-async def _zabbix_call(client: httpx.AsyncClient, config, method: str, params: dict):
+async def _zabbix_call(client: httpx2.AsyncClient, config, method: str, params: dict):
     response = await client.post(
         f"{config.zabbix_url}/api_jsonrpc.php",
         json={"jsonrpc": "2.0", "method": method, "params": params, "id": 1},
         headers={
             "Content-Type": "application/json-rpc",
-            "Authorization": f"Bearer {config.zabbix_api_token}",
+            "Authorization": f"Bearer {reveal(config.zabbix_api_token)}",
         },
     )
     response.raise_for_status()
@@ -40,7 +41,7 @@ async def handle(params, ctx):
     if not config.zabbix_url or not config.zabbix_api_token:
         return SkillResult(text="Container status check isn't configured (no Zabbix URL/token set).")
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         try:
             hosts = await _zabbix_call(
                 client,
@@ -56,7 +57,7 @@ async def handle(params, ctx):
                 "item.get",
                 {"output": ["key_", "lastvalue", "lastclock"], "hostids": hosts[0]["hostid"]},
             )
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text="Couldn't reach Zabbix right now.")
 
     containers = parse_container_items(items)

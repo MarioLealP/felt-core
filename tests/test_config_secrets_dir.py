@@ -29,14 +29,14 @@ def test_probe_read_from_secrets_dir(tmp_path, monkeypatch):
     (tmp_path / "FELT_VAULT_PROBE").write_text("fake-value")
     (tmp_path / ".heartbeat").write_text("2026-10-06T21:00:00Z acc 900")
     cfg = _reload(monkeypatch, tmp_path).FeltConfig(_env_file=None)
-    assert cfg.vault_probe == "fake-value"
+    assert config_module.reveal(cfg.vault_probe) == "fake-value"
 
 
 def test_env_beats_secrets_dir(tmp_path, monkeypatch):
     (tmp_path / "FELT_VAULT_PROBE").write_text("from-vault")
     monkeypatch.setenv("FELT_VAULT_PROBE", "from-env")
     cfg = _reload(monkeypatch, tmp_path).FeltConfig(_env_file=None)
-    assert cfg.vault_probe == "from-env"
+    assert config_module.reveal(cfg.vault_probe) == "from-env"
 
 
 def test_no_secrets_dir_means_no_probe(monkeypatch):

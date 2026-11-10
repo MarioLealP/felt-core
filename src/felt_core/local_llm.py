@@ -20,7 +20,7 @@ import logging
 import re
 from collections.abc import Callable
 
-import httpx
+import httpx2
 from pydantic import BaseModel, Field
 
 from felt_core import llm_gate
@@ -175,7 +175,7 @@ async def chat(
     url = f"{config.local_llm_url.rstrip('/')}/v1/chat/completions"
 
     async def call() -> dict:
-        async with httpx.AsyncClient(timeout=config.local_llm_timeout_s) as client:
+        async with httpx2.AsyncClient(timeout=config.local_llm_timeout_s) as client:
             response = await client.post(url, json=payload)
             response.raise_for_status()
             return response.json()
@@ -188,7 +188,7 @@ async def chat(
         finish_reason = choice.get("finish_reason")
         tool_calls = message.get("tool_calls") or []
         timings = body.get("timings") or {}
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
+    except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
         raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
 
     return _reply(text, tool_calls, finish_reason, timings, max_tokens=max_tokens, json_schema=json_schema)
@@ -250,7 +250,7 @@ async def chat_stream(
     async def call() -> None:
         nonlocal finish_reason, timings
         async with (
-            httpx.AsyncClient(timeout=config.local_llm_timeout_s) as client,
+            httpx2.AsyncClient(timeout=config.local_llm_timeout_s) as client,
             client.stream("POST", url, json=payload) as response,
         ):
             response.raise_for_status()
@@ -277,7 +277,7 @@ async def chat_stream(
 
     try:
         await _gated(call)
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
+    except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
         raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
 
     return _reply(
@@ -297,9 +297,9 @@ async def is_healthy(config: FeltConfig) -> bool:
     if not config.local_llm_url:
         return False
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx2.AsyncClient(timeout=5) as client:
             response = await client.get(f"{config.local_llm_url.rstrip('/')}/health")
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return False
     return response.status_code == 200
 

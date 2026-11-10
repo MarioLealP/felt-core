@@ -16,9 +16,9 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 
-import httpx
+import httpx2
 
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def leave_time(start: datetime, drive_min: float) -> datetime:
     return start - timedelta(minutes=math.ceil(drive_min) + BUFFER_MIN)
 
 
-async def _origin(client: httpx.AsyncClient, config: FeltConfig, now: datetime) -> str:
+async def _origin(client: httpx2.AsyncClient, config: FeltConfig, now: datetime) -> str:
     """Mario's phone position if HA has a fresh one, else home."""
     try:
         r = await client.get(f"{config.ha_url}/api/states/person.mario")
@@ -51,7 +51,7 @@ async def _origin(client: httpx.AsyncClient, config: FeltConfig, now: datetime) 
             updated = datetime.fromisoformat(s["last_updated"])
             if "latitude" in a and now - updated < _FRESH and s.get("state") != "home":
                 return f"{a['latitude']},{a['longitude']}"
-    except httpx.HTTPError, KeyError, ValueError:
+    except httpx2.HTTPError, KeyError, ValueError:
         pass
     return "zone.home"
 
@@ -61,9 +61,9 @@ async def drive_minutes(config: FeltConfig, destination: str, now: datetime | No
     if not (config.ha_url and config.ha_token):
         return None
     now = now or datetime.now(UTC)
-    headers = {"Authorization": f"Bearer {config.ha_token}"}
+    headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     try:
-        async with httpx.AsyncClient(timeout=30, headers=headers) as client:
+        async with httpx2.AsyncClient(timeout=30, headers=headers) as client:
             origin = await _origin(client, config, now)
             r = await client.post(
                 f"{config.ha_url}/api/services/waze_travel_time/get_travel_times?return_response",
@@ -76,7 +76,7 @@ async def drive_minutes(config: FeltConfig, destination: str, now: datetime | No
             )
         r.raise_for_status()
         routes = (r.json().get("service_response") or {}).get("routes") or []
-    except (httpx.HTTPError, ValueError) as e:
+    except (httpx2.HTTPError, ValueError) as e:
         logger.warning("leave-by: travel time for %r failed (%r)", destination[:60], e)
         return None
     times = [float(x["duration"]) for x in routes if x.get("duration")]

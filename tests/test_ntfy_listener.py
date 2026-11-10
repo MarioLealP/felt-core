@@ -11,7 +11,7 @@ def test_basic_auth_none_when_neither_set():
 
 def test_basic_auth_none_when_user_set_but_password_missing():
     # WP-40 audit fix: a user without a password used to build a
-    # half-`None` auth tuple that httpx would reject at connection time -
+    # half-`None` auth tuple that httpx2 would reject at connection time -
     # not authenticating at all is the correct fallback, same as "ntfy
     # not configured".
     assert _basic_auth("mario", None) is None

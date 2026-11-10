@@ -3,7 +3,7 @@ about a third new to him, a line as each comes on, learning from his skips.
 Also "more like this" / "not this" about the current song.
 """
 
-import httpx
+import httpx2
 
 from felt_core.dj import control
 from felt_core.params import get_single_param
@@ -42,5 +42,5 @@ async def handle(params, ctx):
         if "more" in action or "like" in action:
             return SkillResult(text=await control.feedback(config, liked=True))
         return SkillResult(text=await control.start(config))
-    except httpx.HTTPError:  # never a crashed chat turn over a Spotify hiccup
+    except httpx2.HTTPError:  # never a crashed chat turn over a Spotify hiccup
         return SkillResult(text="Spotify didn't take that right now.")

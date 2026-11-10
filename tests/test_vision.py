@@ -3,7 +3,7 @@ words (vision spike 2026-10-21)."""
 
 import json
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import local_llm, vision
@@ -15,25 +15,25 @@ def _config(tmp_path, **kwargs):
     return FeltConfig(db_path=str(tmp_path / "felt.db"), **kwargs)
 
 
-_REAL_CLIENT = httpx.AsyncClient
+_REAL_CLIENT = httpx2.AsyncClient
 
 
 def _mock_vision(monkeypatch, handler):
     def factory(*args, **kwargs):
-        return _REAL_CLIENT(transport=httpx.MockTransport(handler), **kwargs)
+        return _REAL_CLIENT(transport=httpx2.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(vision.httpx, "AsyncClient", factory)
+    monkeypatch.setattr(vision.httpx2, "AsyncClient", factory)
 
 
-def _reply(text: str) -> httpx.Response:
-    return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
+def _reply(text: str) -> httpx2.Response:
+    return httpx2.Response(200, json={"choices": [{"message": {"content": text}}]})
 
 
 async def test_describe_sends_the_image_with_its_window(tmp_path, monkeypatch):
     config = _config(tmp_path, vision_url="http://felt-vision:8080/")
     seen = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         seen["url"] = str(request.url)
         seen["body"] = json.loads(request.content)
         return _reply("  Firefox shows the\nWikipedia page   'Lighthouse'. ")
@@ -58,7 +58,7 @@ async def test_a_tooltip_keeps_its_lines(tmp_path, monkeypatch):
 
 async def test_felt_vision_down_is_unavailable(tmp_path, monkeypatch):
     config = _config(tmp_path, vision_url="http://felt-vision:8080")
-    _mock_vision(monkeypatch, lambda r: httpx.Response(503))
+    _mock_vision(monkeypatch, lambda r: httpx2.Response(503))
     with pytest.raises(local_llm.LocalLLMUnavailable):
         await vision.describe(b"jpeg", "firefox", "x", config, poe=False)
     _mock_vision(monkeypatch, lambda r: _reply("   "))

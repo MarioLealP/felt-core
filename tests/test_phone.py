@@ -4,7 +4,7 @@ reached."""
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from conftest import load_plugin_module
 
@@ -36,15 +36,15 @@ def ha(monkeypatch):
         if request.method == "GET":
             entity = request.url.path.rsplit("/", 1)[1]
             if entity not in HA.states:
-                return httpx.Response(404)
-            return httpx.Response(200, json={"state": HA.states[entity]})
-        return httpx.Response(HA.status, json=[])
+                return httpx2.Response(404)
+            return httpx2.Response(200, json={"state": HA.states[entity]})
+        return httpx2.Response(HA.status, json=[])
 
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
     monkeypatch.setattr(
-        phone.httpx,
+        phone.httpx2,
         "AsyncClient",
-        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+        lambda **kw: real(transport=httpx2.MockTransport(handler), **kw),
     )
     HA.calls = []
     return HA

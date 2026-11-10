@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 
-import httpx
+import httpx2
 from pydantic import BaseModel, Field
 
 from felt_core import features, llm_gate
@@ -60,7 +60,7 @@ def _uri(snapshot: dict | None) -> str | None:
 
 
 async def start(config: FeltConfig) -> str:
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         picks = await picker.pick(client, config, AHEAD + 1, avoid=set())
         if not picks:
             return "I couldn't line anything up right now."
@@ -71,7 +71,7 @@ async def start(config: FeltConfig) -> str:
                 await sp.queue_track(client, config, p["uri"])
         except sp.NoActivePlayer:
             return NOT_AWAKE
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             logger.warning("dj: Spotify refused the start", exc_info=True)
             return "Spotify didn't take that right now."
     for p in picks:
@@ -137,7 +137,7 @@ async def feedback(config: FeltConfig, liked: bool) -> str:
     """ "more like this" / "not this": remembered for her next picks; "not
     this" also skips it.
     """
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx2.AsyncClient(timeout=20) as client:
         now = await sp.get_currently_playing(client, config)
         if now is None:
             return "Nothing's playing right now."
@@ -155,10 +155,10 @@ async def feedback(config: FeltConfig, liked: bool) -> str:
 
 async def _skip_leftover(config: FeltConfig) -> None:
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx2.AsyncClient(timeout=20) as client:
             await sp.next_track(client, config)
         logger.info("dj: skipped a leftover from an earlier set")
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.warning("dj: couldn't skip a leftover", exc_info=True)
 
 
@@ -170,7 +170,7 @@ async def _refill(config: FeltConfig) -> None:
         queued = {p["uri"] for p in SESSION.ahead}
         if SESSION.current:
             queued.add(SESSION.current["uri"])
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx2.AsyncClient(timeout=20) as client:
             picks = await picker.pick(client, config, AHEAD - len(SESSION.ahead), avoid=queued)
             for p in picks:
                 if not SESSION.on:

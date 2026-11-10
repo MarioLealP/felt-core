@@ -25,11 +25,11 @@ import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-import httpx
+import httpx2
 import websockets
 
 from felt_core import db
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 TZ = ZoneInfo("Europe/Lisbon")
 # the appointment create_calendar_event made last, for "where is it?"
@@ -49,7 +49,7 @@ def connected(config: FeltConfig) -> bool:
 
 
 def _headers(config: FeltConfig) -> dict[str, str]:
-    return {"Authorization": f"Bearer {config.ha_token}"}
+    return {"Authorization": f"Bearer {reveal(config.ha_token)}"}
 
 
 def _event(raw: dict) -> dict:
@@ -57,7 +57,7 @@ def _event(raw: dict) -> dict:
     return {**raw, "id": raw.get("recurrence_id") or raw.get("uid") or ""}
 
 
-async def list_calendars(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:
+async def list_calendars(client: httpx2.AsyncClient, config: FeltConfig) -> list[dict]:
     """Every calendar HA has, as {"id": entity_id, "summary": name}; the
     default one (`ha_calendar_default`) is marked "primary".
     """
@@ -74,7 +74,7 @@ async def list_calendars(client: httpx.AsyncClient, config: FeltConfig) -> list[
 
 
 async def list_events(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     config: FeltConfig,
     calendar_id: str,
     time_min: datetime,
@@ -89,7 +89,7 @@ async def list_events(
     return [_event(e) for e in response.json()]
 
 
-async def refresh(client: httpx.AsyncClient, config: FeltConfig, calendar_id: str) -> None:
+async def refresh(client: httpx2.AsyncClient, config: FeltConfig, calendar_id: str) -> None:
     """Have HA re-sync the calendar from Google now, not on its timer."""
     response = await client.post(
         f"{config.ha_url}/api/services/homeassistant/update_entity",
@@ -100,7 +100,7 @@ async def refresh(client: httpx.AsyncClient, config: FeltConfig, calendar_id: st
 
 
 async def get_event(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     config: FeltConfig,
     calendar_id: str,
     event_id: str,
@@ -118,7 +118,7 @@ async def get_event(
     return None
 
 
-async def writable(client: httpx.AsyncClient, config: FeltConfig, calendar_id: str) -> bool:
+async def writable(client: httpx2.AsyncClient, config: FeltConfig, calendar_id: str) -> bool:
     """Whether HA can add events to it (the holidays calendar can't)."""
     response = await client.get(f"{config.ha_url}/api/states/{calendar_id}", headers=_headers(config))
     response.raise_for_status()
@@ -132,7 +132,7 @@ async def _ws_call(config: FeltConfig, message: dict) -> dict:
     try:
         async with websockets.connect(url, open_timeout=10) as ws:
             await ws.recv()
-            await ws.send(json.dumps({"type": "auth", "access_token": config.ha_token}))
+            await ws.send(json.dumps({"type": "auth", "access_token": reveal(config.ha_token)}))
             if json.loads(await ws.recv()).get("type") != "auth_ok":
                 raise CalendarUnavailable("HA refused the token")
             await ws.send(json.dumps({"id": 1, **message}))

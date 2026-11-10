@@ -9,7 +9,7 @@ import threading
 from types import SimpleNamespace
 from urllib.parse import parse_qs
 
-import httpx
+import httpx2
 import pytest
 
 from felt_core import meru
@@ -110,7 +110,7 @@ async def test_mtls_with_her_meru_cert(pki):
 @needs_openssl
 async def test_server_outside_merus_ca_refused(pki):
     port, _ = _server(pki, "rogue")
-    with pytest.raises(httpx.ConnectError, match="CERTIFICATE_VERIFY_FAILED"):
+    with pytest.raises(httpx2.ConnectError, match="CERTIFICATE_VERIFY_FAILED"):
         await _get(SimpleNamespace(meru_tls_dir=str(pki / "tls")), port)
 
 
@@ -134,10 +134,10 @@ def authentik(monkeypatch, tmp_path):
     def handler(request):
         form = {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
         seen.append(form)
-        return httpx.Response(200, json={"access_token": f"tok-{len(seen)}", "expires_in": 600})
+        return httpx2.Response(200, json={"access_token": f"tok-{len(seen)}", "expires_in": 600})
 
-    orig = httpx.AsyncClient
-    monkeypatch.setattr(meru.httpx, "AsyncClient", lambda **kw: orig(transport=httpx.MockTransport(handler), **kw))
+    orig = httpx2.AsyncClient
+    monkeypatch.setattr(meru.httpx2, "AsyncClient", lambda **kw: orig(transport=httpx2.MockTransport(handler), **kw))
     login = tmp_path / "token"
     login.write_text("sa-token-1\n")
     cfg = SimpleNamespace(authentik_token_file=str(login), authentik_token_url="https://auth.test/token/")

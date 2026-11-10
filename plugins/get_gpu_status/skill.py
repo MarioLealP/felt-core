@@ -3,7 +3,7 @@ on felt-voice, which already runs there as a systemd service, via its
 `/v1/gpu-status` endpoint.
 """
 
-import httpx
+import httpx2
 
 from felt_core.plugin import SkillResult
 
@@ -17,10 +17,10 @@ async def handle(params, ctx):
     if not config.voice_url:
         return SkillResult(text="GPU status check isn't configured (no voice service URL set).")
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx2.AsyncClient(timeout=15) as client:
         try:
             response = await client.get(f"{config.voice_url}/v1/gpu-status")
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return SkillResult(text="Couldn't reach the Nitro5 right now.")
 
     if response.status_code != 200:

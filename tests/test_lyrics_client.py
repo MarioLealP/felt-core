@@ -1,11 +1,11 @@
 """Pure LRC parsing/chorus-detection/current-line logic, plus the disk
-cache behaviour of get_lyrics with a monkeypatched httpx layer (no real
+cache behaviour of get_lyrics with a monkeypatched httpx2 layer (no real
 network - see test_lyrics_client_integration.py for the real LRCLIB call,
 recorded via VCR)."""
 
 import json
 
-import httpx
+import httpx2
 
 from felt_core.lyrics_client import current_line, find_chorus, get_lyrics, parse_lrc
 
@@ -113,9 +113,9 @@ async def test_get_lyrics_caches_a_hit_to_disk(tmp_path, monkeypatch):
     async def fake_get(self, url, params, headers):
         return _FakeResponse(200, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_lyrics(client, tmp_path, "track1", "Song", "Artist", "Album", 200)
 
     assert result is not None
@@ -131,9 +131,9 @@ async def test_get_lyrics_caches_a_miss_to_disk(tmp_path, monkeypatch):
         calls.append(1)
         return _FakeResponse(404, {})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         first = await get_lyrics(client, tmp_path, "track2", "Song", "Artist", "Album", 200)
         second = await get_lyrics(client, tmp_path, "track2", "Song", "Artist", "Album", 200)
 
@@ -144,11 +144,11 @@ async def test_get_lyrics_caches_a_miss_to_disk(tmp_path, monkeypatch):
 
 async def test_get_lyrics_does_not_cache_a_network_failure(tmp_path, monkeypatch):
     async def fake_get(self, url, params, headers):
-        raise httpx.ConnectError("boom", request=httpx.Request("GET", url))
+        raise httpx2.ConnectError("boom", request=httpx2.Request("GET", url))
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_lyrics(client, tmp_path, "track3", "Song", "Artist", "Album", 200)
 
     assert result is None
@@ -159,9 +159,9 @@ async def test_get_lyrics_falls_back_to_plain_only_when_no_synced_lyrics(tmp_pat
     async def fake_get(self, url, params, headers):
         return _FakeResponse(200, {"syncedLyrics": None, "plainLyrics": "Just plain text"})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         result = await get_lyrics(client, tmp_path, "track4", "Song", "Artist", "Album", 200)
 
     assert result == {"synced": [], "plain": "Just plain text"}
@@ -179,9 +179,9 @@ async def test_get_lyrics_does_not_cache_a_429_or_5xx(tmp_path, monkeypatch):
         status = next(statuses)
         return _FakeResponse(status, {"syncedLyrics": "[00:01.00]Hi", "plainLyrics": "Hi"} if status == 200 else {})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         first = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
         second = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
         third = await get_lyrics(client, tmp_path, "track5", "Song", "Artist", "Album", 200)
@@ -200,9 +200,9 @@ async def test_get_lyrics_sends_the_configured_user_agent(tmp_path, monkeypatch)
         seen.update(headers)
         return _FakeResponse(404, {})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         await get_lyrics(client, tmp_path, "track6", "Song", "Artist", "Album", 200, user_agent="custom-ua/1")
 
     assert seen["User-Agent"] == "custom-ua/1"
@@ -212,9 +212,9 @@ async def test_null_track_ids_do_not_share_one_cache_file(tmp_path, monkeypatch)
     async def fake_get(self, url, params, headers):
         return _FakeResponse(200, {"syncedLyrics": None, "plainLyrics": params["track_name"]})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx2.AsyncClient, "get", fake_get)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         a = await get_lyrics(client, tmp_path, None, "Local A", "Artist", "Album", 200)
         b = await get_lyrics(client, tmp_path, None, "Local B", "Artist", "Album", 200)
 

@@ -35,22 +35,25 @@ def _token(key=KEY, **over):
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def said():
+    """What reached Felt's chat(): (text, session_id) pairs."""
+    return []
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch, said):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_HA_AGENT_ISSUER", ISS)
     monkeypatch.setenv("FELT_HA_AGENT_CLIENT_ID", AUD)
     jwks = SimpleNamespace(get_signing_key_from_jwt=lambda t: SimpleNamespace(key=KEY.public_key()))
     monkeypatch.setattr(ha_auth, "_jwks", lambda url: jwks)
-    said = []
 
     async def fake_chat(text, config, session_id):
         said.append((text, session_id))
         return ChatResult(reply="shelf's off.")
 
     monkeypatch.setattr(ha_api, "chat", fake_chat)
-    c = TestClient(api.app)
-    c.said = said
-    return c
+    return TestClient(api.app)
 
 
 def _post(client, token, **headers):
@@ -61,11 +64,11 @@ def _post(client, token, **headers):
     )
 
 
-def test_a_valid_token_reaches_felt(client):
+def test_a_valid_token_reaches_felt(client, said):
     r = _post(client, _token())
     assert r.status_code == 200
     assert r.json() == {"reply": "shelf's off."}
-    assert client.said == [("turn off the shelf", "ha")]
+    assert said == [("turn off the shelf", "ha")]
 
 
 @pytest.mark.parametrize(
@@ -93,9 +96,9 @@ def test_a_valid_token_reaches_felt(client):
         "not-a-jwt",
     ],
 )
-def test_bad_tokens_are_refused(client, token):
+def test_bad_tokens_are_refused(client, said, token):
     assert _post(client, token).status_code == 401
-    assert client.said == []
+    assert said == []
 
 
 def test_no_token_is_refused(client):
