@@ -5,6 +5,8 @@ import httpx2
 from fastapi.testclient import TestClient
 
 import felt_core.api.app as api
+import felt_core.api.proactive as proactive_api
+import felt_core.api.reply as reply_api
 from felt_core.config import FeltConfig
 from felt_core.core.proactive import clamp_timeout, enqueue_proactive, wait_for_next
 
@@ -167,7 +169,7 @@ def test_audio_endpoint_404_for_unknown_item(tmp_path, monkeypatch):
 
 def test_audio_endpoint_returns_wav_from_the_tts_cache(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch, debug=True)
-    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
+    monkeypatch.setattr(reply_api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
     item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]
 
     response = client.get(f"/v1/proactive/{item_id}/audio")
@@ -185,7 +187,7 @@ def test_audio_endpoint_503_when_felt_voice_is_off(tmp_path, monkeypatch):
     async def unreachable(config, text, emotion=None):
         raise httpx2.ConnectError("All connection attempts failed")
 
-    monkeypatch.setattr(api, "proactive_audio", unreachable)
+    monkeypatch.setattr(proactive_api, "proactive_audio", unreachable)
     item_id = client.post("/v1/proactive/debug", json={"kind": "diary", "text": "hi there"}).json()["id"]
 
     response = client.get(f"/v1/proactive/{item_id}/audio")

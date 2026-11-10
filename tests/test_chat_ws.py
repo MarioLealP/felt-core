@@ -9,7 +9,8 @@ import logging
 
 from fastapi.testclient import TestClient
 
-import felt_core.api.app as api
+import felt_core.api.chat as chat_api
+import felt_core.api.reply as reply_api
 from felt_core.api.app import app
 from felt_core.clients.local_llm import LocalLLMUnavailable
 
@@ -32,7 +33,9 @@ def test_chat_ws_reports_felt_llm_offline_and_stays_open(tmp_path, monkeypatch):
     async def offline_chat(message, config, session_id="default", tone=None):
         raise LocalLLMUnavailable("down")
 
-    monkeypatch.setattr(api, "chat", offline_chat)
+    monkeypatch.setattr(chat_api, "chat", offline_chat)
+
+    monkeypatch.setattr(reply_api, "chat", offline_chat)
 
     with TestClient(app) as client, client.websocket_connect("/v1/chat/ws") as ws:
         ws.send_json({"message": "hello"})
@@ -47,7 +50,9 @@ def test_chat_ws_logs_and_closes_on_an_unexpected_error(tmp_path, monkeypatch, c
     async def broken_chat(message, config, session_id="default", tone=None):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(api, "chat", broken_chat)
+    monkeypatch.setattr(chat_api, "chat", broken_chat)
+
+    monkeypatch.setattr(reply_api, "chat", broken_chat)
 
     with (
         caplog.at_level(logging.ERROR, logger="felt_core.api.app"),

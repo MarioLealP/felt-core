@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import felt_core.api.app as api
+import felt_core.api.reply as reply_api
 import felt_core.core.events as events
 from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
@@ -216,7 +217,7 @@ def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_VOICE_URL", "http://voice.invalid")
     monkeypatch.delenv("FELT_SPOTIFY_REFRESH_TOKEN", raising=False)
-    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
+    monkeypatch.setattr(reply_api.tts_cache, "get", lambda text, emotion=None: b"RIFF-fake-wav")
     return TestClient(api.app)  # no lifespan - no background loops
 
 

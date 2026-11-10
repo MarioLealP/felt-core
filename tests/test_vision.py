@@ -123,6 +123,7 @@ async def test_a_description_from_the_desktop_skips_the_image(tmp_path, fake_llm
 def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
+    import felt_core.api.react as react_api
     from felt_core.api import app as api
 
     got = {}
@@ -131,7 +132,7 @@ def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
         got.update(jpeg=jpeg, seen=kwargs["seen"])
         return screen_reactions.ChatResult(reply="", animation_tag=None)
 
-    monkeypatch.setattr(api, "react_to_screen", fake_react)
+    monkeypatch.setattr(react_api, "react_to_screen", fake_react)
     with TestClient(api.app) as client:
         ok = client.post(
             "/v1/react/screen",

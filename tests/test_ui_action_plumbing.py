@@ -11,6 +11,7 @@ from urllib.parse import unquote
 from fastapi.testclient import TestClient
 
 import felt_core.api.app as api
+import felt_core.api.reply as reply_api
 
 
 def test_v1_chat_carries_felt_presence_ui_action(tmp_path, monkeypatch, fake_llm):
@@ -40,7 +41,7 @@ def test_v1_text_chat_puts_ui_action_in_the_header(tmp_path, monkeypatch, fake_l
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
     monkeypatch.setenv("FELT_VOICE_URL", "http://fake-voice")
     fake_llm.default = "okay okay, I'll zip it"
-    monkeypatch.setattr(api.tts_cache, "get", lambda text, emotion=None: b"fake-wav-bytes")
+    monkeypatch.setattr(reply_api.tts_cache, "get", lambda text, emotion=None: b"fake-wav-bytes")
 
     with TestClient(api.app) as client:
         response = client.post("/v1/text-chat", json={"message": "shut up", "session_id": "wp09-test"})

@@ -1,4 +1,4 @@
-import felt_core.api.app as api
+import felt_core.api.reply as reply_api
 from felt_core.core import tts_cache
 
 
@@ -13,9 +13,9 @@ class _ExplodingClient:
 
 async def test_tts_cache_hit_skips_the_felt_voice_call():
     text = "cached weather reply"
-    tts_cache.put(api.strip_for_tts(text), b"FAKE-WAV-BYTES")
+    tts_cache.put(reply_api.strip_for_tts(text), b"FAKE-WAV-BYTES")
 
-    response = await api._synthesize_reply(text, None, None, _FakeConfig(), _ExplodingClient())
+    response = await reply_api._synthesize_reply(text, None, None, _FakeConfig(), _ExplodingClient())
 
     assert response.body == b"FAKE-WAV-BYTES"
 
@@ -35,8 +35,8 @@ async def test_cache_miss_calls_felt_voice_and_warms_the_cache():
             calls.append((url, json))
             return FakeResponse()
 
-    response = await api._synthesize_reply(text, None, None, _FakeConfig(), FakeClient())
+    response = await reply_api._synthesize_reply(text, None, None, _FakeConfig(), FakeClient())
 
     assert response.body == b"REAL-WAV-BYTES"
     assert len(calls) == 1
-    assert tts_cache.get(api.strip_for_tts(text)) == b"REAL-WAV-BYTES"
+    assert tts_cache.get(reply_api.strip_for_tts(text)) == b"REAL-WAV-BYTES"
