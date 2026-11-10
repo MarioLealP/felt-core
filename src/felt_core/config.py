@@ -60,6 +60,13 @@ class FeltConfig(BaseSettings):
     # from the server's vault service dir). With voice_url on https:// she
     # talks mTLS to felt-voice with it. Unset = no Felt certs (as before).
     identity_dir: str | None = None
+    # D127 (k3s): Meru's machine-to-machine standard (felt_core/meru.py). Her pki_meru
+    # certificate dir (nuwa-app certificate: tls.crt, tls.key, ca.crt) for drive-rag, and her pod's
+    # Authentik login token (nuwa-app authentikLogin) for per-callee Authentik tokens.
+    # Unset = compose (Felt certs, no tokens).
+    meru_tls_dir: str | None = None
+    authentik_token_file: str | None = None
+    authentik_token_url: str = "https://auth.clockmost.com/application/o/token/"
     # B5.4 (D3): Felt machine certs revoked before their 2h expiry, as Caddy's
     # decimal serials (X-Felt-Serial); felt-core refuses them at once.
     machine_deny_serials: list[str] = []

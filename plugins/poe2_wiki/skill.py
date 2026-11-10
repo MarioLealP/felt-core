@@ -6,6 +6,7 @@ model to answer from.
 """
 
 from felt_core.felt_tls import machine_client
+from felt_core.meru import auth_headers
 from felt_core.plugin import SkillResult
 
 name = "poe2_wiki"
@@ -29,10 +30,12 @@ _PASSAGE_CHARS = 700
 async def handle(params, ctx):
     query = params.get("query") or ctx.original_message
     # WP-62 M2b B5.3 (D10.1): poe2rag via Caddy's machine host with her Felt
-    # cert once FELT_POE2_SEARCH_URL is https://poe2-api.clockmost.com/...
+    # cert once FELT_POE2_SEARCH_URL is https://poe2-api.clockmost.com/... On k3s (D127) she
+    # calls poe2rag's Service directly with an Authentik token for audience poe2rag.
     url = ctx.config.poe2_search_url
+    headers = await auth_headers(ctx.config, "poe2rag")
     async with machine_client(ctx.config, url, timeout=20) as client:
-        response = await client.post(url, json={"query": query, "k": _TOP_K})
+        response = await client.post(url, json={"query": query, "k": _TOP_K}, headers=headers)
         response.raise_for_status()
         hits = response.json().get("hits", [])
 
