@@ -5,21 +5,19 @@ discovered and loaded at startup. Dropping a new folder in adds a skill;
 deleting one removes it — no core code changes needed.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
-if TYPE_CHECKING:
-    from felt_core.config import FeltConfig
+from pydantic import BaseModel
+
+from felt_core.config import FeltConfig  # a runtime import: pydantic validates the field against it
 
 
-@dataclass
-class UIAction:
+class UIAction(BaseModel):
     kind: str  # e.g. "toast", "show_image"
     payload: dict[str, Any]
 
 
-@dataclass
-class SkillResult:
+class SkillResult(BaseModel):
     text: str | None = None
     voice_line: str | None = None
     ui_action: UIAction | None = None
@@ -32,8 +30,7 @@ class SkillResult:
     animation_tag: str | None = None
 
 
-@dataclass
-class ExecutionContext:
+class ExecutionContext(BaseModel):
     """What a skill gets at call time.
 
     `original_message` exists because the router (a small model) doesn't

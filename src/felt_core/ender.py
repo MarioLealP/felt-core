@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import httpx
+from pydantic import BaseModel
 
 from felt_core import db, features, llm_gate, phone
 from felt_core.config import FeltConfig
@@ -57,8 +57,7 @@ class EnderUnavailable(Exception):
     """HA not configured or unreachable."""
 
 
-@dataclass
-class Snapshot:
+class Snapshot(BaseModel):
     state: str
     file: str = ""
     progress: float | None = None

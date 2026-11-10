@@ -18,20 +18,20 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _RequestMetrics:
+class _RequestMetrics(BaseModel):
     request_id: str
     endpoint: str
     db_path: str
     session_id: str | None
     # (stage, ms, tags) in the order they were recorded - both the
     # Server-Timing header and the SQLite rows are built from this.
-    stages: list[tuple[str, float, dict]] = field(default_factory=list)
+    stages: list[tuple[str, float, dict]] = Field(default_factory=list)
 
 
 _current: ContextVar[_RequestMetrics | None] = ContextVar("felt_core_metrics", default=None)

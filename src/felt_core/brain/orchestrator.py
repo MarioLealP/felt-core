@@ -430,7 +430,7 @@ async def _chat_local(
     result, tool_output = await _run_skill_call(call, registry, config, message)
     if speaker is not None:  # WP-65: the hush / reaction goes out with her first words
         early = _skill_chat_result("", result, skill_name, registry)
-        speaker.tell(ReplyMeta(early.ui_action, early.animation_tag))
+        speaker.tell(ReplyMeta(ui_action=early.ui_action, animation_tag=early.animation_tag))
 
     reply = ""
     steps = [(call, tool_output)]
@@ -609,7 +609,7 @@ async def chat_streamed(
             yield chunk
         result = turn.result()
         if not speaker.said and not speaker.told:  # e.g. the weather fast line's tag
-            speaker.tell(ReplyMeta(result.ui_action, result.animation_tag))
+            speaker.tell(ReplyMeta(ui_action=result.ui_action, animation_tag=result.animation_tag))
             while not speaker.chunks.empty():
                 if (meta := speaker.chunks.get_nowait()) is not None:
                     yield meta

@@ -22,10 +22,10 @@ import asyncio
 import logging
 import sqlite3
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 from felt_core.brain.router_examples import EXAMPLES
 from felt_core.config import FeltConfig
@@ -43,15 +43,17 @@ _MUSIC_ROUTES = ("media_control", "now_playing", "dj_mode/feedback")
 _NO_MUSIC_PENALTY = 0.05
 
 
-@dataclass(frozen=True)
-class Context:
+class Context(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     previous: str | None = None
     music_playing: bool | None = None  # None = unknown
     dj_on: bool = False
 
 
-@dataclass(frozen=True)
-class Pick:
+class Pick(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     skill: str | None  # None = plain chat, no tool
     route: str | None
     score: float
@@ -98,7 +100,7 @@ class Router:
             joined = _top(self._scores(f"{ctx.previous} {message}", ctx))
             if joined[0] is not None and joined[1] > score + _FOLLOW_UP_MARGIN:
                 route, score, via = joined[0], joined[1], "follow-up"
-        return Pick(skill_of(route), route, score, score >= self.bar, via)
+        return Pick(skill=skill_of(route), route=route, score=score, sure=score >= self.bar, via=via)
 
 
 def _top(scores: dict[str | None, float]) -> tuple[str | None, float]:

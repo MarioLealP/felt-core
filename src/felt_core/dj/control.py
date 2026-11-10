@@ -8,9 +8,9 @@ leaves it paused.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
 
 import httpx
+from pydantic import BaseModel, Field
 
 from felt_core import features, llm_gate
 from felt_core import spotify_client as sp
@@ -26,11 +26,10 @@ _LINE_TTL_S = 90.0
 NOT_AWAKE = "Spotify's asleep on your desktop - hit play on anything once, then ask me again."
 
 
-@dataclass
-class _Session:
+class _Session(BaseModel):
     on: bool = False
     current: dict | None = None  # her pick playing now
-    ahead: list[dict] = field(default_factory=list)  # queued in Spotify, not started yet
+    ahead: list[dict] = Field(default_factory=list)  # queued in Spotify, not started yet
     paused_since: float | None = None
     refilling: bool = False
 

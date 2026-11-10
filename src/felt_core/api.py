@@ -16,7 +16,6 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, Protocol
 from urllib.parse import quote
@@ -436,7 +435,7 @@ async def chat_endpoint(req: ChatRequest) -> ChatResponse:
     result = await chat(req.message, config, req.session_id, req.tone)
     return ChatResponse(
         reply=result.reply,
-        ui_action=asdict(result.ui_action) if result.ui_action else None,
+        ui_action=result.ui_action.model_dump() if result.ui_action else None,
         animation_tag=result.animation_tag,
     )
 
@@ -629,7 +628,7 @@ def _result_body(result: ChatResult) -> dict:
     return {
         "done": True,
         "text": result.reply,
-        "ui_action": asdict(result.ui_action) if result.ui_action else None,
+        "ui_action": result.ui_action.model_dump() if result.ui_action else None,
         "animation_tag": result.animation_tag,
         "emotion": result.emotion,
     }
@@ -718,7 +717,7 @@ async def _reply_v2(
             on_result(result)
         return await _synthesize_reply(
             result.reply,
-            asdict(result.ui_action) if result.ui_action else None,
+            result.ui_action.model_dump() if result.ui_action else None,
             result.animation_tag,
             config,
             client,
@@ -734,7 +733,7 @@ async def _reply_v2(
         **(extra_headers or {}),
     }
     if meta.ui_action is not None:
-        headers["X-UI-Action"] = quote(json.dumps(asdict(meta.ui_action)))
+        headers["X-UI-Action"] = quote(json.dumps(meta.ui_action.model_dump()))
     if meta.animation_tag is not None:
         headers["X-Animation-Tag"] = quote(meta.animation_tag)
     return Response(content=wav, media_type="audio/wav", headers=headers)
@@ -777,7 +776,7 @@ async def voice_chat_endpoint(
         if transcribed.strip():
             result = await chat(transcribed, config, session_id, tone)
             reply = result.reply
-            ui_action = asdict(result.ui_action) if result.ui_action else None
+            ui_action = result.ui_action.model_dump() if result.ui_action else None
             animation_tag = result.animation_tag
         else:
             # Real bug found live, 2026-09-12: an empty/silent recording
@@ -828,7 +827,7 @@ async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
     async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
-            asdict(result.ui_action) if result.ui_action else None,
+            result.ui_action.model_dump() if result.ui_action else None,
             result.animation_tag,
             config,
             client,
@@ -902,7 +901,7 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
     async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
-            asdict(result.ui_action) if result.ui_action else None,
+            result.ui_action.model_dump() if result.ui_action else None,
             result.animation_tag,
             config,
             client,
@@ -961,7 +960,7 @@ async def react_screen_endpoint(
     async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,
-            asdict(result.ui_action) if result.ui_action else None,
+            result.ui_action.model_dump() if result.ui_action else None,
             result.animation_tag,
             config,
             client,
@@ -1413,7 +1412,7 @@ async def chat_ws(websocket: WebSocket) -> None:
             await websocket.send_json(
                 {
                     "reply": result.reply,
-                    "ui_action": asdict(result.ui_action) if result.ui_action else None,
+                    "ui_action": result.ui_action.model_dump() if result.ui_action else None,
                     "animation_tag": result.animation_tag,
                 }
             )

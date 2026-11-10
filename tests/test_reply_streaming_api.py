@@ -4,11 +4,11 @@ reaching felt-voice. felt-voice is faked by replacing `api.httpx.AsyncClient`
 
 import asyncio
 import json
-from dataclasses import dataclass, field
 from urllib.parse import quote, unquote
 
 import httpx
 import pytest
+from pydantic import BaseModel, ConfigDict, Field
 
 import felt_core.api as api
 from felt_core import local_llm, reply_stream, tts_cache
@@ -226,18 +226,19 @@ _CHUNKS = [
 ]
 
 
-@dataclass
-class _Script:
+class _Script(BaseModel):
     """chat_streamed() faked: yields `chunks` (chunk 1 waits for `gate` if
     set), then raises `error` or yields `result`."""
 
-    chunks: list[str] = field(default_factory=lambda: list(_CHUNKS))
-    result: ChatResult = field(
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # gate and error: checked with isinstance
+
+    chunks: list[str] = Field(default_factory=lambda: list(_CHUNKS))
+    result: ChatResult = Field(
         default_factory=lambda: ChatResult(reply=" ".join(_CHUNKS), animation_tag="emotion/happy")
     )
     gate: asyncio.Event | None = None
     error: Exception | None = None
-    seen: list[str] = field(default_factory=list)
+    seen: list[str] = Field(default_factory=list)
     meta: ReplyMeta | None = None
 
 

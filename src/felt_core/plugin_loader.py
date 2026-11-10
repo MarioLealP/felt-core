@@ -13,17 +13,17 @@ import importlib.util
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel
 
 from felt_core.plugin import SkillResult
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class LoadedSkill:
+class LoadedSkill(BaseModel):
     name: str
     description: str
     parameters_schema: dict[str, Any]

@@ -24,10 +24,10 @@ import re
 import sys
 import tempfile
 import time
-from dataclasses import dataclass, field
 from urllib.parse import parse_qs
 
 import httpx
+from pydantic import BaseModel, Field
 
 from felt_core import appointment_hold, features, ha_calendar
 from felt_core.brain import router
@@ -50,13 +50,12 @@ LLM_HOSTS = _llm_hosts()
 FAKE_URI = "spotify:track:{:022d}"
 
 
-@dataclass
-class Case:
+class Case(BaseModel):
     say: str
     # the Spotify writes expected, e.g. "PUT /me/player/pause"; None = any
     writes: list[str] | None
     # writes that must not happen (checked when `writes` is None)
-    never: list[str] = field(default_factory=list)
+    never: list[str] = Field(default_factory=list)
     note: str = ""
     # lookups: one of these skills has to be called (a reply from memory fails)
     skills: tuple[str, ...] = ()
@@ -110,233 +109,253 @@ PLAY_NOW = ["POST /me/player/queue", "POST /me/player/next"]
 
 CASES: list[Case] = [
     # fixed commands
-    Case("skip", ["POST /me/player/next"]),
-    Case("can u pause the song?", ["PUT /me/player/pause"]),
-    Case("resume", ["PUT /me/player/play"]),
-    Case("restart this", ["PUT /me/player/seek"]),
-    Case("volume 30", ["PUT /me/player/volume"]),
-    Case("turn it up", ["PUT /me/player/volume"]),
-    Case("save this song", ["PUT /me/library"]),
-    Case("what's this song?", []),
+    Case(say="skip", writes=["POST /me/player/next"]),
+    Case(say="can u pause the song?", writes=["PUT /me/player/pause"]),
+    Case(say="resume", writes=["PUT /me/player/play"]),
+    Case(say="restart this", writes=["PUT /me/player/seek"]),
+    Case(say="volume 30", writes=["PUT /me/player/volume"]),
+    Case(say="turn it up", writes=["PUT /me/player/volume"]),
+    Case(say="save this song", writes=["PUT /me/library"]),
+    Case(say="what's this song?", writes=[]),
     # play by name - one queue, then nexts up to it
-    Case("can you play birdbrain jamie paige", PLAY_NOW),
-    Case("play some daft punk", PLAY_NOW),
+    Case(say="can you play birdbrain jamie paige", writes=PLAY_NOW),
+    Case(say="play some daft punk", writes=PLAY_NOW),
     # queue only - nothing skipped
-    Case("queue birdbrain", ["POST /me/player/queue"]),
-    Case("add one more time by daft punk to the queue", ["POST /me/player/queue"]),
-    Case("play crossfaith next", ["POST /me/player/queue"]),
-    Case("can you stick some zutomayo in the queue for later?", ["POST /me/player/queue"], note="llm"),
+    Case(say="queue birdbrain", writes=["POST /me/player/queue"]),
+    Case(say="add one more time by daft punk to the queue", writes=["POST /me/player/queue"]),
+    Case(say="play crossfaith next", writes=["POST /me/player/queue"]),
+    Case(say="can you stick some zutomayo in the queue for later?", writes=["POST /me/player/queue"], note="llm"),
     # said loosely - felt-llm picks the tool
-    Case("could you throw on some bring me the horizon", PLAY_NOW, note="llm"),
-    Case("ugh this song sucks, next", ["POST /me/player/next"], note="llm"),
-    Case("hold the music a sec", ["PUT /me/player/pause"], note="llm"),
-    Case("it's way too loud", ["PUT /me/player/volume"]),
-    Case("ugh it's too quiet", ["PUT /me/player/volume"]),
-    Case("can you make it a bit quieter", ["PUT /me/player/volume"], note="llm"),
+    Case(say="could you throw on some bring me the horizon", writes=PLAY_NOW, note="llm"),
+    Case(say="ugh this song sucks, next", writes=["POST /me/player/next"], note="llm"),
+    Case(say="hold the music a sec", writes=["PUT /me/player/pause"], note="llm"),
+    Case(say="it's way too loud", writes=["PUT /me/player/volume"]),
+    Case(say="ugh it's too quiet", writes=["PUT /me/player/volume"]),
+    Case(say="can you make it a bit quieter", writes=["PUT /me/player/volume"], note="llm"),
     # DJ, in order (state carries over)
-    Case("be my DJ", None, never=["PUT /me/player/pause"], note="dj"),
-    Case("less like this", ["POST /me/player/next"], note="dj"),  # skips + learns
-    Case("less llike this", ["POST /me/player/next"], note="dj"),  # Mario's typo, live
-    Case("play birdbrain by jamie paige", PLAY_NOW, note="dj"),  # mid-set: an interlude
-    Case("more like this", [], note="dj"),
-    Case("not this one", ["POST /me/player/next"], note="dj"),  # skips + learns
-    Case("dj mode off", [], note="dj"),
+    Case(say="be my DJ", writes=None, never=["PUT /me/player/pause"], note="dj"),
+    Case(say="less like this", writes=["POST /me/player/next"], note="dj"),  # skips + learns
+    Case(say="less llike this", writes=["POST /me/player/next"], note="dj"),  # Mario's typo, live
+    Case(say="play birdbrain by jamie paige", writes=PLAY_NOW, note="dj"),  # mid-set: an interlude
+    Case(say="more like this", writes=[], note="dj"),
+    Case(say="not this one", writes=["POST /me/player/next"], note="dj"),  # skips + learns
+    Case(say="dj mode off", writes=[], note="dj"),
     # not music at all
     # with music on, pausing is a fair reading; anything more isn't
-    Case("stop it", None, never=["POST /me/player/", "PUT /me/player/volume"]),
-    Case("what's this song about?", None, never=ANY_PLAYER_WRITE),
-    Case("play a game with me", None, never=ANY_PLAYER_WRITE),
-    Case("I skipped breakfast", None, never=ANY_PLAYER_WRITE),
+    Case(say="stop it", writes=None, never=["POST /me/player/", "PUT /me/player/volume"]),
+    Case(say="what's this song about?", writes=None, never=ANY_PLAYER_WRITE),
+    Case(say="play a game with me", writes=None, never=ANY_PLAYER_WRITE),
+    Case(say="I skipped breakfast", writes=None, never=ANY_PLAYER_WRITE),
     # the phone, through the Home Assistant app (fake - the real one never rings)
-    Case("set a timer for 10 minutes", ["POST /phone/SET_TIMER"], note="phone"),
-    Case("can you time 25 min for my pasta", ["POST /phone/SET_TIMER"], note="phone"),
-    Case("wake me up at 7:30", ["POST /phone/SET_ALARM"], note="phone"),
-    Case("set an alarm for 6am tomorrow", ["POST /phone/SET_ALARM"], note="phone"),
-    Case("where's my phone", ["POST /phone/NOTIFY"], note="phone"),
-    Case("ring my phone pls", ["POST /phone/NOTIFY"], note="phone"),
-    Case("how much battery does my phone have?", [], [], "phone", ("get_phone_battery",)),
-    Case("when's my alarm?", [], [], "phone", ("list_alarms",)),
-    Case("what time is my alarm set for tomorrow", [], [], "phone", ("list_alarms",)),
+    Case(say="set a timer for 10 minutes", writes=["POST /phone/SET_TIMER"], note="phone"),
+    Case(say="can you time 25 min for my pasta", writes=["POST /phone/SET_TIMER"], note="phone"),
+    Case(say="wake me up at 7:30", writes=["POST /phone/SET_ALARM"], note="phone"),
+    Case(say="set an alarm for 6am tomorrow", writes=["POST /phone/SET_ALARM"], note="phone"),
+    Case(say="where's my phone", writes=["POST /phone/NOTIFY"], note="phone"),
+    Case(say="ring my phone pls", writes=["POST /phone/NOTIFY"], note="phone"),
+    Case(say="how much battery does my phone have?", writes=[], never=[], note="phone", skills=("get_phone_battery",)),
+    Case(say="when's my alarm?", writes=[], never=[], note="phone", skills=("list_alarms",)),
+    Case(say="what time is my alarm set for tomorrow", writes=[], never=[], note="phone", skills=("list_alarms",)),
     # the shopping list: Home Assistant's todo list (fake - the real one stays untouched)
-    Case("add milk to the shopping list", ["POST /todo/add_item"], note="shop"),
+    Case(say="add milk to the shopping list", writes=["POST /todo/add_item"], note="shop"),
     # several at once: her skill, one add each (cm-fmy; HA's matcher made it one item)
     Case(
-        "put eggs and bread on my shopping list",
-        ["POST /todo/add_item", "POST /todo/add_item"],
+        say="put eggs and bread on my shopping list",
+        writes=["POST /todo/add_item", "POST /todo/add_item"],
         note="shop",
     ),
     Case(
-        "add coffee, oat milk and bananas to the list",
-        ["POST /todo/add_item", "POST /todo/add_item", "POST /todo/add_item"],
+        say="add coffee, oat milk and bananas to the list",
+        writes=["POST /todo/add_item", "POST /todo/add_item", "POST /todo/add_item"],
         note="shop",
     ),
-    Case("we're out of coffee, add it to the list", ["POST /todo/add_item"], note="shop"),
+    Case(say="we're out of coffee, add it to the list", writes=["POST /todo/add_item"], note="shop"),
     # router shadow 2026-10-18..25: answered in words, nothing added (cm-6b0 act mode)
-    Case("add baguette to the shopping list", ["POST /todo/add_item"], note="shop"),
-    Case("what's on my shopping list?", [], [], "shop", ("shopping_list",)),
-    Case("take oat milk off the shopping list", ["POST /todo/remove_item"], note="shop"),
+    Case(say="add baguette to the shopping list", writes=["POST /todo/add_item"], note="shop"),
+    Case(say="what's on my shopping list?", writes=[], never=[], note="shop", skills=("shopping_list",)),
+    Case(say="take oat milk off the shopping list", writes=["POST /todo/remove_item"], note="shop"),
     # the Ender, read from HA (2026-10-19)
-    Case("how's the 3d printer doing?", [], [], "printer", ("printer_status",)),
-    Case("is my print done yet?", [], [], "printer", ("printer_status",)),
-    Case("how long left on the ender", [], [], "printer", ("printer_status",)),
+    Case(say="how's the 3d printer doing?", writes=[], never=[], note="printer", skills=("printer_status",)),
+    Case(say="is my print done yet?", writes=[], never=[], note="printer", skills=("printer_status",)),
+    Case(say="how long left on the ender", writes=[], never=[], note="printer", skills=("printer_status",)),
     # home: plain commands go to HA's matcher (ha_assist), the rest to the model
-    Case("turn off the shelf light", ["POST /ha-assist turn off the shelf light"], note="home"),
+    Case(say="turn off the shelf light", writes=["POST /ha-assist turn off the shelf light"], note="home"),
     Case(
-        "Felt, turn off the chandelure please",
-        ["POST /ha-assist turn off the chandelure"],
+        say="Felt, turn off the chandelure please",
+        writes=["POST /ha-assist turn off the chandelure"],
         note="home",
     ),
-    Case("lights off", ["POST /ha-assist lights off"], note="home"),
-    Case("turn on my shelf light please :)", ["POST /ha-assist turn on my shelf light"], note="home"),
-    Case("set the chandelure to 30%", ["POST /ha-assist set the chandelure to 30%"], note="home"),
-    Case("turn off the dehumidifier", ["POST /ha-assist turn off the dehumidifier"], note="home"),
-    Case("turn front left on, thanks!", ["POST /ha-assist turn front left on"], note="home"),
-    Case("is the fan on?", [], note="home"),
+    Case(say="lights off", writes=["POST /ha-assist lights off"], note="home"),
+    Case(say="turn on my shelf light please :)", writes=["POST /ha-assist turn on my shelf light"], note="home"),
+    Case(say="set the chandelure to 30%", writes=["POST /ha-assist set the chandelure to 30%"], note="home"),
+    Case(say="turn off the dehumidifier", writes=["POST /ha-assist turn off the dehumidifier"], note="home"),
+    Case(say="turn front left on, thanks!", writes=["POST /ha-assist turn front left on"], note="home"),
+    Case(say="is the fan on?", writes=[], note="home"),
     # HA doesn't match these: her model and smart_home_control do
-    Case("could you please turn the lights back off", None, [], "home", ("smart_home_control",)),
     Case(
-        "turn off the shelf light and tell me a joke about it",
-        None,
-        [],
-        "home",
-        ("smart_home_control",),
+        say="could you please turn the lights back off",
+        writes=None,
+        never=[],
+        note="home",
+        skills=("smart_home_control",),
     ),
-    Case("are the lights still on", [], [], "home", ("smart_home_control",)),
+    Case(
+        say="turn off the shelf light and tell me a joke about it",
+        writes=None,
+        never=[],
+        note="home",
+        skills=("smart_home_control",),
+    ),
+    Case(say="are the lights still on", writes=[], never=[], note="home", skills=("smart_home_control",)),
     # router shadow 2026-10-18..25: no match in HA, then a reply with no tool
-    Case("lights on", None, [], "home", ("smart_home_control",)),
+    Case(say="lights on", writes=None, never=[], note="home", skills=("smart_home_control",)),
     # dimming (2026-10-19): HA's matcher misses these, her skill dims
     Case(
-        "chandelure to 30 percente please",
-        ["POST /home/turn_on ['light.chandelure'] 30%"],
+        say="chandelure to 30 percente please",
+        writes=["POST /home/turn_on ['light.chandelure'] 30%"],
         note="home",
     ),
-    Case("dim the chandelure", ["POST /home/turn_on ['light.chandelure'] 30%"], note="home"),
+    Case(say="dim the chandelure", writes=["POST /home/turn_on ['light.chandelure'] 30%"], note="home"),
     Case(
-        "dim the lights",
-        ["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] 30%"],
+        say="dim the lights",
+        writes=["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] 30%"],
         note="home",
     ),
     # colour (cm-7gf): HA's matcher misses these too
     Case(
-        "make the chandelure blue",
-        ["POST /home/turn_on ['light.chandelure'] colour=blue"],
+        say="make the chandelure blue",
+        writes=["POST /home/turn_on ['light.chandelure'] colour=blue"],
         note="home",
     ),
     Case(
-        "lights warm white please",
-        ["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] colour=2700"],
+        say="lights warm white please",
+        writes=["POST /home/turn_on ['light.chandelure', 'light.yeelight_colorb_0x1be53fa1'] colour=2700"],
         note="home",
     ),
     # not commands: nothing switched
-    Case("can you turn around?", None, HOME_WRITES, "home"),
-    Case("is the server on fire?", None, HOME_WRITES, "home"),
+    Case(say="can you turn around?", writes=None, never=HOME_WRITES, note="home"),
+    Case(say="is the server on fire?", writes=None, never=HOME_WRITES, note="home"),
     # reminders -> calendar events the phone notifies for (WP-46)
-    Case("remind me friday at 3pm to call the dentist", ["POST /calendar/reminder"], note="remind"),
+    Case(say="remind me friday at 3pm to call the dentist", writes=["POST /calendar/reminder"], note="remind"),
     # short and relative: a labelled phone timer rings just the same
     Case(
-        "remind me in 20 minutes to check the oven",
-        None,
-        [],
-        "remind",
-        ("set_reminder", "set_timer"),
+        say="remind me in 20 minutes to check the oven",
+        writes=None,
+        never=[],
+        note="remind",
+        skills=("set_reminder", "set_timer"),
     ),
     Case(
-        "every monday at 9 remind me to take the bins out",
-        ["POST /calendar/reminder weekly"],
+        say="every monday at 9 remind me to take the bins out",
+        writes=["POST /calendar/reminder weekly"],
         note="remind",
     ),
     Case(
-        "remind me every day at 10pm to take my meds",
-        ["POST /calendar/reminder daily"],
+        say="remind me every day at 10pm to take my meds",
+        writes=["POST /calendar/reminder daily"],
         note="remind",
     ),
-    Case("add a dentist appointment friday at 3pm", ["POST /calendar/event"], note="remind"),
+    Case(say="add a dentist appointment friday at 3pm", writes=["POST /calendar/event"], note="remind"),
     # live 2026-10-21: "I can't make an appointment, no calendar access" - a date-only
     # event: all day, no midnight hour, no "where?" (cm-0vl)
     Case(
-        "make an appointment so i know 4th november is WoW forever release",
-        ["POST /calendar/event all-day"],
+        say="make an appointment so i know 4th november is WoW forever release",
+        writes=["POST /calendar/event all-day"],
         note="remind",
         summary_has=("forever",),
     ),
     # live 2026-10-23: she sent "4 November 15:00" -> Wednesday 3pm and "where is it?"
     Case(
-        "put the 4th of November in my calendar as WoW Forever release",
-        ["POST /calendar/event all-day"],
+        say="put the 4th of November in my calendar as WoW Forever release",
+        writes=["POST /calendar/event all-day"],
         note="remind",
         summary_has=("forever",),
     ),
-    Case("what's on my calendar tomorrow?", [], [], "remind", ("list_calendar_events",)),
+    Case(say="what's on my calendar tomorrow?", writes=[], never=[], note="remind", skills=("list_calendar_events",)),
     # an appointment's place, Mario's four cases (2026-10-19): no place -> she
     # asks where and holds it; "none" adds it at once, a place adds it with it,
     # no answer adds it after 30 s (the case's end stands in for that)
     Case(
-        "schedule my dentist to tomorrow at 11",
-        ["POST /calendar/event"],
+        say="schedule my dentist to tomorrow at 11",
+        writes=["POST /calendar/event"],
         note="remind",
         then="none",
         place=False,
     ),
     Case(
-        "schedule my dentist to tomorrow at 11 at Clínica Sorriso in Gaia",
-        ["POST /calendar/event @place"],
+        say="schedule my dentist to tomorrow at 11 at Clínica Sorriso in Gaia",
+        writes=["POST /calendar/event @place"],
         note="remind",
         place=True,
     ),
     Case(
-        "schedule my dentist to tomorrow at 11",
-        ["POST /calendar/event @place"],
+        say="schedule my dentist to tomorrow at 11",
+        writes=["POST /calendar/event @place"],
         note="remind",
         then="it's at Clínica Sorriso in Gaia",
         place=True,
     ),
     Case(
-        "schedule my dentist to tomorrow at 11",
-        ["POST /calendar/event"],
+        say="schedule my dentist to tomorrow at 11",
+        writes=["POST /calendar/event"],
         note="remind",
         place=False,
     ),
     # live 2026-10-18 ("for 21th"), typos and all - she said "I've set that reminder" and
     # set nothing; a day + month, since a bare day number goes past within days
     Case(
-        "set an reminder for 3rd of decmber to check on teh semantic router",
-        ["POST /calendar/reminder"],
+        say="set an reminder for 3rd of decmber to check on teh semantic router",
+        writes=["POST /calendar/reminder"],
         note="remind",
     ),
     # live 2026-10-22: 'WoW Forever' became 'World of Warcraft: The War Within' - rewording
     # is fine, but the thing he named stays (Mario: "that was plain wrong") (cm-zha)
     Case(
-        "Add reminder for wow forever release on4th of novemeber",
-        ["POST /calendar/reminder"],
+        say="Add reminder for wow forever release on4th of novemeber",
+        writes=["POST /calendar/reminder"],
         note="remind",
         summary_has=("forever",),
     ),
-    Case("set a timer for 5 minutes", ["POST /phone/SET_TIMER"], note="remind"),
+    Case(say="set a timer for 5 minutes", writes=["POST /phone/SET_TIMER"], note="remind"),
     # lookups (cm-hry): Mario's two live misses from 2026-10-07 + kin
-    Case("what does the Chaos Orb do in poe2", None, ANY_PLAYER_WRITE, "look", ("poe2_wiki",)),
     Case(
-        "how does the gemling legionnaire work in poe 2",
-        None,
-        ANY_PLAYER_WRITE,
-        "look",
-        ("poe2_wiki",),
-    ),
-    Case("my cv on google drive", None, ANY_PLAYER_WRITE, "look", ("search_documents",)),
-    Case("find my cv in my documents", None, ANY_PLAYER_WRITE, "look", ("search_documents",)),
-    Case("what's the weather like tomorrow?", None, ANY_PLAYER_WRITE, "look", ("get_weather",)),
-    Case(
-        "who won the last f1 race?",
-        None,
-        ANY_PLAYER_WRITE,
-        "look",
-        ("web_search", "news_digest"),
+        say="what does the Chaos Orb do in poe2",
+        writes=None,
+        never=ANY_PLAYER_WRITE,
+        note="look",
+        skills=("poe2_wiki",),
     ),
     Case(
-        "is anything down on the server?",
-        None,
-        ANY_PLAYER_WRITE,
-        "look",
-        ("get_container_status", "get_recent_alerts"),
+        say="how does the gemling legionnaire work in poe 2",
+        writes=None,
+        never=ANY_PLAYER_WRITE,
+        note="look",
+        skills=("poe2_wiki",),
+    ),
+    Case(say="my cv on google drive", writes=None, never=ANY_PLAYER_WRITE, note="look", skills=("search_documents",)),
+    Case(
+        say="find my cv in my documents", writes=None, never=ANY_PLAYER_WRITE, note="look", skills=("search_documents",)
+    ),
+    Case(
+        say="what's the weather like tomorrow?",
+        writes=None,
+        never=ANY_PLAYER_WRITE,
+        note="look",
+        skills=("get_weather",),
+    ),
+    Case(
+        say="who won the last f1 race?",
+        writes=None,
+        never=ANY_PLAYER_WRITE,
+        note="look",
+        skills=("web_search", "news_digest"),
+    ),
+    Case(
+        say="is anything down on the server?",
+        writes=None,
+        never=ANY_PLAYER_WRITE,
+        note="look",
+        skills=("get_container_status", "get_recent_alerts"),
     ),
 ]
 
