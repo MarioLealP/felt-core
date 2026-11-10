@@ -5,6 +5,7 @@ every container) rather than building a separate health-check path.
 
 import httpx
 
+from felt_core.config import reveal
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 from felt_core.zabbix_client import (
@@ -28,7 +29,7 @@ async def _zabbix_call(client: httpx.AsyncClient, config, method: str, params: d
         json={"jsonrpc": "2.0", "method": method, "params": params, "id": 1},
         headers={
             "Content-Type": "application/json-rpc",
-            "Authorization": f"Bearer {config.zabbix_api_token}",
+            "Authorization": f"Bearer {reveal(config.zabbix_api_token)}",
         },
     )
     response.raise_for_status()

@@ -25,7 +25,7 @@ import re
 import httpx
 
 from felt_core.brain.command_words import POLITE, TAIL
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def handle(config: FeltConfig, message: str) -> str | None:
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.post(
                 f"{config.ha_url}/api/conversation/process",
-                headers={"Authorization": f"Bearer {config.ha_token}"},
+                headers={"Authorization": f"Bearer {reveal(config.ha_token)}"},
                 json=body,
             )
             response.raise_for_status()

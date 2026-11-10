@@ -27,6 +27,7 @@ touched.
 
 import httpx
 
+from felt_core.config import reveal
 from felt_core.params import get_single_param
 from felt_core.plugin import SkillResult
 
@@ -239,7 +240,7 @@ async def handle(params, ctx):
     if not device:
         return SkillResult(text="Which device?")
 
-    headers = {"Authorization": f"Bearer {config.ha_token}"}
+    headers = {"Authorization": f"Bearer {reveal(config.ha_token)}"}
     async with httpx.AsyncClient(timeout=15, headers=headers) as client:
         try:
             states = await _fetch_allowed_states(client, config)

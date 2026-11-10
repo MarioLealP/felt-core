@@ -29,7 +29,7 @@ import httpx
 import websockets
 
 from felt_core import db
-from felt_core.config import FeltConfig
+from felt_core.config import FeltConfig, reveal
 
 TZ = ZoneInfo("Europe/Lisbon")
 # the appointment create_calendar_event made last, for "where is it?"
@@ -49,7 +49,7 @@ def connected(config: FeltConfig) -> bool:
 
 
 def _headers(config: FeltConfig) -> dict[str, str]:
-    return {"Authorization": f"Bearer {config.ha_token}"}
+    return {"Authorization": f"Bearer {reveal(config.ha_token)}"}
 
 
 def _event(raw: dict) -> dict:
@@ -132,7 +132,7 @@ async def _ws_call(config: FeltConfig, message: dict) -> dict:
     try:
         async with websockets.connect(url, open_timeout=10) as ws:
             await ws.recv()
-            await ws.send(json.dumps({"type": "auth", "access_token": config.ha_token}))
+            await ws.send(json.dumps({"type": "auth", "access_token": reveal(config.ha_token)}))
             if json.loads(await ws.recv()).get("type") != "auth_ok":
                 raise CalendarUnavailable("HA refused the token")
             await ws.send(json.dumps({"id": 1, **message}))
