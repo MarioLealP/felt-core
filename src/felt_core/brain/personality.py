@@ -37,7 +37,8 @@ def daily_persona() -> str:
     fresh sample per call and carried the memory block and tone in here too,
     so felt-llm re-read the whole persona for each one (~12 s a screen
     reaction); what changes per call goes in the user turn now
-    (per_call_context)."""
+    (per_call_context).
+    """
     return compile_persona(rng=random.Random(date.today().toordinal()))
 
 
@@ -53,7 +54,8 @@ def per_call_context(
     diary)" + "Who you've become" block, ranked against `context_text`
     (whatever's on screen/in the message right now) when given, else by
     pinned+recency alone; `config=None` skips it (no DB touched). "" when
-    there's nothing."""
+    there's nothing.
+    """
     parts = []
     if config is not None:
         block = memory_block(config, context_text)

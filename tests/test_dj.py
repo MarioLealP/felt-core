@@ -106,9 +106,7 @@ async def test_discoveries_are_new_artists_with_real_tracks(tmp_path, monkeypatc
 
     monkeypatch.setattr(sp, "artist_tracks", tracks)
     async with httpx.AsyncClient() as client:  # every Spotify call is faked
-        picks = await picker.discoveries(
-            client, config, "profile", {"jonathanyoung"}, 1, avoid=set()
-        )
+        picks = await picker.discoveries(client, config, "profile", {"jonathanyoung"}, 1, avoid=set())
     assert picks == [
         {
             "uri": "u:gd",
@@ -158,9 +156,7 @@ def _on(config, current, ahead, monkeypatch, spawned):
     for p in [current, *ahead]:
         store.add_pick(config.db_path, p["uri"], p["title"], p["artist"], p["discovery"])
     control.SESSION.on, control.SESSION.current, control.SESSION.ahead = True, current, ahead
-    monkeypatch.setattr(
-        control, "_spawn", lambda coro: (spawned.append(coro.__name__), coro.close())
-    )
+    monkeypatch.setattr(control, "_spawn", lambda coro: (spawned.append(coro.__name__), coro.close()))
 
 
 def test_her_next_pick_coming_on_records_says_and_refills(tmp_path, monkeypatch):
@@ -168,7 +164,8 @@ def test_her_next_pick_coming_on_records_says_and_refills(tmp_path, monkeypatch)
     a, b, c = _p("u:a", False), _p("u:b", True), _p("u:c", False)
     _on(config, a, [b, c], monkeypatch, spawned)
     control.on_poll(config, _snap("u:a", "u:a", progress=30_000), _snap("u:b", "u:b"))
-    assert control.SESSION.current == b and control.SESSION.ahead == [c]
+    assert control.SESSION.current == b
+    assert control.SESSION.ahead == [c]
     assert spawned == ["_say", "_refill"]
     assert store.pick_outcomes(config.db_path, 5)[0]["outcome"] == "skipped"  # 15% in
 
@@ -177,7 +174,8 @@ def test_something_else_playing_ends_dj_mode(tmp_path, monkeypatch):
     config, spawned = _config(tmp_path), []
     _on(config, _p("u:a", False), [_p("u:b", False)], monkeypatch, spawned)
     control.on_poll(config, _snap("u:a", "u:a"), _snap("u:mario", "His Pick"))
-    assert not control.is_on() and spawned == []
+    assert not control.is_on()
+    assert spawned == []
 
 
 def test_a_song_he_asked_for_is_an_interlude(tmp_path, monkeypatch):
@@ -190,9 +188,11 @@ def test_a_song_he_asked_for_is_an_interlude(tmp_path, monkeypatch):
         sp._felt_skipped[uri] = time.monotonic()
     sp._felt_started["u:his"] = time.monotonic()
     control.on_poll(config, _snap("u:a", "u:a", progress=30_000), _snap("u:his", "His"))
-    assert control.is_on() and control.SESSION.current is None
+    assert control.is_on()
+    assert control.SESSION.current is None
     control.on_poll(config, _snap("u:his", "His"), _snap("u:c", "u:c"))
-    assert control.SESSION.current == c and control.SESSION.ahead == []
+    assert control.SESSION.current == c
+    assert control.SESSION.ahead == []
     assert all(o["outcome"] != "skipped" for o in store.pick_outcomes(config.db_path, 5))
 
 
@@ -246,8 +246,11 @@ def test_dj_phrases(message, action):
 def test_dj_line_prompt_sells_a_discovery():
     new = build_prompt("dj_track", {"title": "Fresh", "artist": "Newbie", "new": True})
     old = build_prompt("dj_track", {"title": "Fave", "artist": "Known", "new": False})
-    assert new is not None and "new to him" in new and '"Fresh" by Newbie' in new
-    assert old is not None and "already likes" in old
+    assert new is not None
+    assert "new to him" in new
+    assert '"Fresh" by Newbie' in new
+    assert old is not None
+    assert "already likes" in old
     assert build_prompt("dj_track", {"artist": "x"}) is None
 
 
@@ -304,14 +307,16 @@ async def test_start_track_queues_then_skips(tmp_path, monkeypatch):
     player = _Player()
     assert await _start(monkeypatch, tmp_path, player) == 1
     assert player.now == "u:x"
-    assert sp.felt_started("u:x") and sp.felt_skipped("u:now")
+    assert sp.felt_started("u:x")
+    assert sp.felt_skipped("u:now")
 
 
 async def test_start_track_skips_past_what_was_queued_before(tmp_path, monkeypatch):
     # Mario, 2026-10-18: "can you play X just adds it to the queue"
     player = _Player(up_next=("u:pick", "u:old"))
     assert await _start(monkeypatch, tmp_path, player) == 3
-    assert player.now == "u:x" and sp.felt_skipped("u:pick")
+    assert player.now == "u:x"
+    assert sp.felt_skipped("u:pick")
 
 
 async def test_a_lagging_player_is_not_overshot(tmp_path, monkeypatch):
@@ -357,7 +362,8 @@ def test_a_leftover_from_an_earlier_set_is_skipped_not_the_end(tmp_path, monkeyp
     store.add_pick(config.db_path, "u:old", "Old", "a", False)  # an earlier set's pick
     _on(config, _p("u:a", False), [_p("u:b", False)], monkeypatch, spawned)
     control.on_poll(config, _snap("u:a", "u:a"), _snap("u:old", "Old"))
-    assert control.is_on() and spawned == ["_skip_leftover"]
+    assert control.is_on()
+    assert spawned == ["_skip_leftover"]
 
 
 # --- search by "<title> by/from <artist>" (live 2026-10-18) -----------------
@@ -388,7 +394,8 @@ async def test_search_uses_title_and_artist_fields(tmp_path, monkeypatch):
         "voices in my head from nijuugo*a",
         {'track:"voices in my head" artist:"nijuugo*a"': [voices]},
     )
-    assert track == voices and len(seen) == 1
+    assert track == voices
+    assert len(seen) == 1
 
 
 async def test_search_skips_hits_that_dont_look_like_it(tmp_path, monkeypatch):
@@ -405,10 +412,9 @@ async def test_search_skips_hits_that_dont_look_like_it(tmp_path, monkeypatch):
 
 async def test_search_falls_back_to_the_top_hit(tmp_path, monkeypatch):
     top = _hit("Daddy! Daddy! Do!", "Masayuki Suzuki")
-    track, seen = await _search(
-        monkeypatch, tmp_path, "daddy daddy do from kaguya", {"daddy daddy do kaguya": [top]}
-    )
-    assert track == top and len(seen) == 3
+    track, seen = await _search(monkeypatch, tmp_path, "daddy daddy do from kaguya", {"daddy daddy do kaguya": [top]})
+    assert track == top
+    assert len(seen) == 3
 
 
 async def test_no_match_prefers_the_plain_searchs_top_hit(tmp_path, monkeypatch):
@@ -430,4 +436,5 @@ async def test_no_match_prefers_the_plain_searchs_top_hit(tmp_path, monkeypatch)
 async def test_plain_search_drops_some(tmp_path, monkeypatch):
     dp = _hit("One More Time", "Daft Punk")
     track, seen = await _search(monkeypatch, tmp_path, "some daft punk", {"daft punk": [dp]})
-    assert track == dp and seen == ["daft punk"]
+    assert track == dp
+    assert seen == ["daft punk"]

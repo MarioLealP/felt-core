@@ -44,9 +44,7 @@ _NOW_PLAYING_CACHE_TTL_S = 10.0
 
 
 async def _get_access_token(client: httpx.AsyncClient, config: FeltConfig) -> str:
-    basic = base64.b64encode(
-        f"{config.spotify_client_id}:{config.spotify_client_secret}".encode()
-    ).decode()
+    basic = base64.b64encode(f"{config.spotify_client_id}:{config.spotify_client_secret}".encode()).decode()
     return await refresh_access_token(
         client,
         _token_cache,
@@ -105,7 +103,8 @@ def _looks_like(track: dict, title: str, artist: str) -> bool:
 
 def music_playing_cached() -> bool | None:
     """Whether music is playing per the last poll (no API call); None when
-    nothing's been read yet or the read is stale."""
+    nothing's been read yet or the read is stale.
+    """
     data = _now_playing_cache["data"]
     if data == "unset" or time.monotonic() > _now_playing_cache["cached_at"] + 60:
         return None
@@ -118,12 +117,10 @@ async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -
     both happen, e.g. an empty queue after the last track ends). `track`
     is the raw Spotify track object (same shape search_track returns), so
     callers can reuse format_track_name directly instead of re-flattening
-    it themselves."""
+    it themselves.
+    """
     now = time.monotonic()
-    if (
-        _now_playing_cache["data"] != "unset"
-        and now < _now_playing_cache["cached_at"] + _NOW_PLAYING_CACHE_TTL_S
-    ):
+    if _now_playing_cache["data"] != "unset" and now < _now_playing_cache["cached_at"] + _NOW_PLAYING_CACHE_TTL_S:
         return _now_playing_cache["data"]
 
     token = await _get_access_token(client, config)
@@ -154,18 +151,15 @@ async def get_currently_playing(client: httpx.AsyncClient, config: FeltConfig) -
 
 async def list_devices(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:
     token = await _get_access_token(client, config)
-    response = await client.get(
-        f"{_API_BASE}/me/player/devices", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = await client.get(f"{_API_BASE}/me/player/devices", headers={"Authorization": f"Bearer {token}"})
     response.raise_for_status()
     return response.json().get("devices", [])
 
 
-async def _player_call(
-    client: httpx.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs
-) -> None:
+async def _player_call(client: httpx.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs) -> None:
     """One player/library change; the now-playing cache is dropped so the
-    next read sees it."""
+    next read sees it.
+    """
     token = await _get_access_token(client, config)
     response = await client.request(
         method, f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, **kwargs
@@ -176,11 +170,10 @@ async def _player_call(
 
 async def get_player(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
     """The playback state (`is_playing`, `device.volume_percent`, ...), or
-    None when no device is active (204)."""
+    None when no device is active (204).
+    """
     token = await _get_access_token(client, config)
-    response = await client.get(
-        f"{_API_BASE}/me/player", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = await client.get(f"{_API_BASE}/me/player", headers={"Authorization": f"Bearer {token}"})
     if response.status_code == 204:
         return None
     response.raise_for_status()
@@ -209,14 +202,13 @@ async def restart_track(client: httpx.AsyncClient, config: FeltConfig) -> None:
 
 async def set_volume(client: httpx.AsyncClient, config: FeltConfig, percent: int) -> None:
     percent = max(0, min(100, percent))
-    await _player_call(
-        client, config, "PUT", "/me/player/volume", params={"volume_percent": percent}
-    )
+    await _player_call(client, config, "PUT", "/me/player/volume", params={"volume_percent": percent})
 
 
 async def save_to_library(client: httpx.AsyncClient, config: FeltConfig, uri: str) -> None:
     """The generic library endpoint (Spotify's February 2026 change replaced
-    PUT /me/tracks); scope user-library-modify."""
+    PUT /me/tracks); scope user-library-modify.
+    """
     await _player_call(client, config, "PUT", "/me/library", params={"uris": uri})
 
 
@@ -228,9 +220,7 @@ class NoActivePlayer(Exception):
     """Spotify has no awake player to start the song on."""
 
 
-async def start_track(
-    client: httpx.AsyncClient, config: FeltConfig, uri: str, name: str | None = None
-) -> None:
+async def start_track(client: httpx.AsyncClient, config: FeltConfig, uri: str, name: str | None = None) -> None:
     """Plays `uri` now: queued, then skipped to. Not PUT /me/player/play with
     uris - on Mario's Linux desktop client that's accepted (204) and loads
     nothing, and while playing it stops the music (2026-10-18). Queue + next
@@ -239,7 +229,8 @@ async def start_track(
     The queued song lands behind anything already queued (DJ picks, his own
     adds), and Spotify's queue list lags a fresh add - so it skips one at a
     time, each time waiting for the change to show, until the song is on
-    (`name` too: Spotify can relink a track to another uri)."""
+    (`name` too: Spotify can relink a track to another uri).
+    """
     await add_to_queue(client, config, uri)
     _felt_started[uri] = time.monotonic()
     playing = await _playing(client, config)
@@ -258,9 +249,7 @@ async def start_track(
 def _is(track: dict | None, uri: str, name: str | None) -> bool:
     if track is None:
         return False
-    return track.get("uri") == uri or (
-        name is not None and norm_name(track.get("name", "")) == norm_name(name)
-    )
+    return track.get("uri") == uri or (name is not None and norm_name(track.get("name", "")) == norm_name(name))
 
 
 async def _playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None:
@@ -275,9 +264,7 @@ async def _playing(client: httpx.AsyncClient, config: FeltConfig) -> dict | None
     return response.json().get("item")
 
 
-async def _settled(
-    client: httpx.AsyncClient, config: FeltConfig, before: dict | None
-) -> dict | None:
+async def _settled(client: httpx.AsyncClient, config: FeltConfig, before: dict | None) -> dict | None:
     """The track once it differs from `before`; None if it never does."""
     old = (before or {}).get("uri")
     for _ in range(_SKIP_SETTLE_TRIES):
@@ -310,9 +297,7 @@ async def add_to_queue(client: httpx.AsyncClient, config: FeltConfig, uri: str) 
 
 async def _get(client: httpx.AsyncClient, config: FeltConfig, path: str, **params) -> Any:
     token = await _get_access_token(client, config)
-    response = await client.get(
-        f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, params=params
-    )
+    response = await client.get(f"{_API_BASE}{path}", headers={"Authorization": f"Bearer {token}"}, params=params)
     response.raise_for_status()
     return response.json()
 
@@ -324,9 +309,7 @@ async def top_artists(client: httpx.AsyncClient, config: FeltConfig, limit: int 
     return [a["name"] for a in items if a.get("name")]
 
 
-async def library_contains(
-    client: httpx.AsyncClient, config: FeltConfig, uris: list[str]
-) -> list[bool]:
+async def library_contains(client: httpx.AsyncClient, config: FeltConfig, uris: list[str]) -> list[bool]:
     """Which of `uris` (max 40) Mario has saved (scope user-library-read)."""
     if not uris:
         return []
@@ -341,19 +324,19 @@ def norm_name(text: str) -> str:
 
 async def artist_tracks(client: httpx.AsyncClient, config: FeltConfig, artist: str) -> list[dict]:
     """Tracks whose main artist is `artist` (by name, Spotify's search order -
-    roughly the popular ones first); empty if Spotify has no such artist."""
+    roughly the popular ones first); empty if Spotify has no such artist.
+    """
     data = await _get(client, config, "/search", q=f'artist:"{artist}"', type="track", limit=10)
     want = norm_name(artist)
     items = data.get("tracks", {}).get("items", []) if isinstance(data, dict) else []
-    return [
-        t for t in items if t.get("artists") and norm_name(t["artists"][0].get("name", "")) == want
-    ]
+    return [t for t in items if t.get("artists") and norm_name(t["artists"][0].get("name", "")) == want]
 
 
 def pick_device(devices: list[dict]) -> dict | None:
     """Pure: prefer whichever device Spotify already reports as active
     (same "prefer Playing over paused" precedent as media_control's own
-    MPRIS player selection), otherwise just the first available one."""
+    MPRIS player selection), otherwise just the first available one.
+    """
     if not devices:
         return None
     return next((d for d in devices if d.get("is_active")), devices[0])

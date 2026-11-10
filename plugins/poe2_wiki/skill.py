@@ -50,6 +50,5 @@ async def handle(params, ctx):
             text = text[:_PASSAGE_CHARS].rsplit(" ", 1)[0] + "..."
         blocks.append(f"[{where}] {text}")
     return SkillResult(
-        text="PoE2 wiki passages (answer only from these; PoE1 mechanics don't apply):\n"
-        + "\n".join(blocks)
+        text="PoE2 wiki passages (answer only from these; PoE1 mechanics don't apply):\n" + "\n".join(blocks)
     )

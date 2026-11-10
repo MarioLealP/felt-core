@@ -72,7 +72,8 @@ def test_asides_older_than_six_hours_stop_waiting(tmp_path):
         )
     conn.close()
     got = asides.current_asides(db)
-    assert [a["content"] for a in got["asides"]] == ["this morning"] and got["more"] == 0
+    assert [a["content"] for a in got["asides"]] == ["this morning"]
+    assert got["more"] == 0
     assert "last night" in [m["content"] for m in _all(db)]  # still stored
 
 
@@ -98,7 +99,8 @@ async def test_her_pick_is_stored_and_shown(tmp_path, monkeypatch):
     monkeypatch.setattr(asides.local_llm, "chat", fake_chat)
     ids = await asides.pick(config)
     assert ids == [_ids(config.db_path)["I have standards, Mario."]]
-    assert "2. (" in seen["ask"] and "I have standards, Mario." in seen["ask"]
+    assert "2. (" in seen["ask"]
+    assert "I have standards, Mario." in seen["ask"]
     got = asides.current_asides(config.db_path)
     assert [a["content"] for a in got["asides"]] == ["I have standards, Mario."]
     assert got["more"] == 3
@@ -164,7 +166,8 @@ def test_asides_route_is_sso_gated(tmp_path, monkeypatch):
         _remark(str(tmp_path / "felt.db"), "psst")
         assert c.get("/v1/app/asides").status_code == 401
         got = c.get("/v1/app/asides", headers=SSO).json()
-        assert [a["content"] for a in got["asides"]] == ["psst"] and got["more"] == 0
+        assert [a["content"] for a in got["asides"]] == ["psst"]
+        assert got["more"] == 0
 
 
 def test_answering_an_aside_tells_her_and_links_it(tmp_path, monkeypatch):
@@ -180,9 +183,7 @@ def test_answering_an_aside_tells_her_and_links_it(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
         _remark(db, "You're redesigning my entire world, aren't you?")
         remark_id = c.get("/v1/app/asides", headers=SSO).json()["asides"][0]["id"]
-        r = c.post(
-            "/v1/app/chat", json={"message": "a bit, yeah", "answering": remark_id}, headers=SSO
-        )
+        r = c.post("/v1/app/chat", json={"message": "a bit, yeah", "answering": remark_id}, headers=SSO)
         assert r.status_code == 200
         assert seen["answering"] == "You're redesigning my entire world, aren't you?"
         mine = r.json()["messages"][0]

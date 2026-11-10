@@ -83,7 +83,8 @@ async def test_unmarked_calls_are_chat_and_errors_pass_through():
 
     with pytest.raises(RuntimeError):
         await llm_gate.run(boom)
-    assert llm_gate._gate.chat_active == 0 and llm_gate._gate.running is None
+    assert llm_gate._gate.chat_active == 0
+    assert llm_gate._gate.running is None
 
 
 def test_a_skipped_screen_reaction_is_no_reaction_not_an_outage(tmp_path, monkeypatch):
@@ -104,5 +105,6 @@ def test_a_skipped_screen_reaction_is_no_reaction_not_an_outage(tmp_path, monkey
             files={"image": ("s.jpg", b"jpeg", "image/jpeg")},
             data={"app": "firefox", "title": "wiki", "trigger": "periodic"},
         )
-    assert r.status_code == 200 and r.content == b""
+    assert r.status_code == 200
+    assert r.content == b""
     assert r.headers["X-Reaction-Skipped"] == "llm-gate"

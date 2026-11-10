@@ -113,7 +113,8 @@ class FeltClient:
 
     async def app_stream(self) -> AsyncIterator[tuple[str, dict]]:
         """The app's live notices (server-sent events) as (event, data), until
-        felt-core closes the stream or it breaks (FeltError)."""
+        felt-core closes the stream or it breaks (FeltError).
+        """
         for attempt in (0, 1):
             token = await self._access_token(fresh=attempt == 1)
             try:

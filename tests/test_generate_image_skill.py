@@ -46,11 +46,7 @@ def test_apply_prompt_does_not_mutate_the_template():
 
 def test_extract_first_image_returns_the_image_info():
     module = _load_skill()
-    history_entry = {
-        "outputs": {
-            "7": {"images": [{"filename": "felt_00001_.png", "subfolder": "", "type": "output"}]}
-        }
-    }
+    history_entry = {"outputs": {"7": {"images": [{"filename": "felt_00001_.png", "subfolder": "", "type": "output"}]}}}
     assert module._extract_first_image(history_entry) == {
         "filename": "felt_00001_.png",
         "subfolder": "",

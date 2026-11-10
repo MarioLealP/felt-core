@@ -45,7 +45,8 @@ async def test_calendars_mark_the_default_as_primary():
         ("calendar.lealmario47_gmail_com", True),
     ]
     primary = resolve_calendar(cals, None)
-    assert primary is not None and primary["summary"] == "Mario"
+    assert primary is not None
+    assert primary["summary"] == "Mario"
 
 
 async def test_events_get_an_id_per_occurrence():
@@ -78,7 +79,8 @@ async def test_get_event_refreshes_first_and_finds_it_by_id():
     around = datetime(2026, 10, 20, 16, 30, tzinfo=TZ)
     async with _client(handler) as client:
         found = await get_event(client, CONFIG, "calendar.x", "a", around)
-        assert found is not None and found["summary"] == "A"
+        assert found is not None
+        assert found["summary"] == "A"
         assert await get_event(client, CONFIG, "calendar.x", "gone", around) is None
     assert seen[:2] == [
         "POST /api/services/homeassistant/update_entity",
@@ -98,9 +100,7 @@ async def test_writable_reads_the_create_feature():
 
 def test_link_is_the_first_web_link_in_place_or_description():
     assert link({"location": "https://zoom.us/j/1", "description": "x"}) == "https://zoom.us/j/1"
-    assert link({"description": "join (https://meet.google.com/abc)."}) == (
-        "https://meet.google.com/abc"
-    )
+    assert link({"description": "join (https://meet.google.com/abc)."}) == ("https://meet.google.com/abc")
     assert link({"location": "Hospital da Luz", "description": None}) is None
 
 

@@ -1,7 +1,8 @@
 """The shared result shape every brain entry point returns - its own leaf
 module (no other brain internals imported) so every submodule (chat
 orchestration, screen reactions, ...) can depend on it with no risk of a
-circular import."""
+circular import.
+"""
 
 from dataclasses import dataclass
 
@@ -14,7 +15,8 @@ class ChatResult:
     output the triggered skill (if any) wants relayed: a UI action (e.g.
     a toast) and/or an animation tag for felt-overlay. A plain
     conversational reply (no tool call) has neither - there's nothing to
-    react to."""
+    react to.
+    """
 
     reply: str
     ui_action: UIAction | None = None

@@ -39,7 +39,8 @@ def test_history_pages_backwards_with_ids_and_times(tmp_path, monkeypatch):
         save_message(db, "other", "user", "elsewhere")
         page = c.get("/v1/app/history?limit=3", headers=SSO).json()
         assert [m["content"] for m in page] == ["line 2", "line 3", "line 4"]
-        assert page[0]["created_at"].endswith("Z") and "T" in page[0]["created_at"]
+        assert page[0]["created_at"].endswith("Z")
+        assert "T" in page[0]["created_at"]
         older = c.get(f"/v1/app/history?limit=3&before={page[0]['id']}", headers=SSO).json()
         assert [m["content"] for m in older] == ["line 0", "line 1"]
 

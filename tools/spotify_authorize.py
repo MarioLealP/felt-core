@@ -67,9 +67,7 @@ def main() -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
-            self.wfile.write(
-                b"Done - you can close this tab." if ok else b"Spotify said no - see the terminal."
-            )
+            self.wfile.write(b"Done - you can close this tab." if ok else b"Spotify said no - see the terminal.")
 
         def log_message(self, *args) -> None:
             pass

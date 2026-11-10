@@ -48,6 +48,4 @@ async def handle(params, ctx):
     except PhoneUnavailable:
         pass  # phone offline: a push when it's done instead
     asyncio.create_task(_fire_after(ctx.config, minutes, label))
-    return SkillResult(
-        text=f"Timer set for {minutes:g} minutes (phone unreachable - I'll ping you)."
-    )
+    return SkillResult(text=f"Timer set for {minutes:g} minutes (phone unreachable - I'll ping you).")

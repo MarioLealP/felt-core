@@ -38,10 +38,7 @@ async def test_new_lines_picks_and_marks_become_notices(tmp_path):
     conn = marks_connect(db)
     ensure_marks(conn)
     with conn:
-        conn.execute(
-            "INSERT INTO message_marks (id, message_id, type, quote)"
-            " VALUES ('m1', 1, 'circle', 'hi')"
-        )
+        conn.execute("INSERT INTO message_marks (id, message_id, type, quote) VALUES ('m1', 1, 'circle', 'hi')")
     conn.close()
     rounds += 1
     assert _parse(await anext(stream)) == ("marks", {})

@@ -12,9 +12,7 @@ from felt_core.config import FeltConfig
 
 
 def _config(tmp_path):
-    return FeltConfig(
-        db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="t", phone="pocox7"
-    )
+    return FeltConfig(db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="t", phone="pocox7")
 
 
 @pytest.fixture
@@ -57,9 +55,7 @@ def said(monkeypatch):
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     lines: list[str] = []
-    monkeypatch.setattr(
-        ender, "enqueue_proactive", lambda config, kind, text, **kw: lines.append(text)
-    )
+    monkeypatch.setattr(ender, "enqueue_proactive", lambda config, kind, text, **kw: lines.append(text))
     return lines
 
 
@@ -183,7 +179,8 @@ async def test_ha_unconfigured(tmp_path):
 def test_prompt_carries_the_facts():
     s = ender.snapshot_from({"file": "Cube.gcode", "elapsed": "687", "message": "Filament runout"})
     done = ender.build_prompt("complete", s)
-    assert 'finished printing "Cube"' in done and "11m" in done
+    assert 'finished printing "Cube"' in done
+    assert "11m" in done
     assert 'Klipper says: "Filament runout"' in ender.build_prompt("paused", s)
     assert "error" in ender.build_prompt("error", s)
     assert "cancelled" in ender.build_prompt("cancelled", ender.snapshot_from({}))
@@ -223,7 +220,8 @@ async def test_a_runout_pause_says_why(tmp_path, ha, said):
     ha.states = {"state": "paused", "file": "Cube.gcode", "filament": "off"}
     line = "The Ender ran out of filament (Cube) - it's paused; load more and hit Resume."
     assert await ender.check(config) == line
-    assert said == [line] and len(ha.posts) == 1
+    assert said == [line]
+    assert len(ha.posts) == 1
 
 
 async def test_a_plain_pause_with_filament_in(tmp_path, ha, said):
@@ -235,4 +233,5 @@ async def test_a_plain_pause_with_filament_in(tmp_path, ha, said):
 
 def test_the_runout_prompt():
     prompt = ender.build_prompt("runout", ender.snapshot_from({"file": "Cube.gcode"}))
-    assert "ran out of filament" in prompt and "Resume" in prompt
+    assert "ran out of filament" in prompt
+    assert "Resume" in prompt

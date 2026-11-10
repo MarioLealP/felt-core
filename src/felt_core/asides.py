@@ -43,9 +43,7 @@ _LINE_CHARS = 300
 
 PICK_SCHEMA = {
     "type": "object",
-    "properties": {
-        "picks": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 2}
-    },
+    "properties": {"picks": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 2}},
     "required": ["picks"],
     "additionalProperties": False,
 }
@@ -67,26 +65,22 @@ def _ensure(conn: sqlite3.Connection) -> None:
         " picked_at TEXT NOT NULL DEFAULT (datetime('now')))"
     )
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS answered_remarks ("
-        " user_message_id INTEGER PRIMARY KEY, remark_id INTEGER NOT NULL)"
+        "CREATE TABLE IF NOT EXISTS answered_remarks ( user_message_id INTEGER PRIMARY KEY, remark_id INTEGER NOT NULL)"
     )
 
 
 def _last_user_id(conn: sqlite3.Connection, session_id: str) -> int:
-    row = conn.execute(
-        "SELECT MAX(id) FROM messages WHERE session_id = ? AND role = 'user'", (session_id,)
-    ).fetchone()
+    row = conn.execute("SELECT MAX(id) FROM messages WHERE session_id = ? AND role = 'user'", (session_id,)).fetchone()
     return row[0] or 0
 
 
 def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> list[tuple]:
     """(id, content, created_at) of her remarks after message `after_id` and
-    younger than MAX_AGE, oldest first."""
+    younger than MAX_AGE, oldest first.
+    """
     return conn.execute(
         "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"
-        " AND created_at >= datetime('now', ?) AND dismissed_at IS NULL AND "
-        + _IS_REMARK_SQL
-        + " ORDER BY id",
+        " AND created_at >= datetime('now', ?) AND dismissed_at IS NULL AND " + _IS_REMARK_SQL + " ORDER BY id",
         (session_id, after_id, MAX_AGE),
     ).fetchall()
 
@@ -99,18 +93,14 @@ def current_asides(db_path: str, session_id: str = APP_SESSION) -> dict:
     """What Talk shows under the transcript: {"asides": [up to 2 of her remarks
     since his last message, oldest first], "more": how many others}. Her pick
     when she has made one for this batch; otherwise (two or fewer, or a pick
-    still running) the newest."""
+    still running) the newest.
+    """
     conn = _connect(db_path)
     try:
         _ensure(conn)
         after = _last_user_id(conn, session_id)
         remarks = _remarks_since(conn, session_id, after)
-        picked = {
-            r[0]
-            for r in conn.execute(
-                "SELECT message_id FROM aside_picks WHERE after_user_id = ?", (after,)
-            )
-        }
+        picked = {r[0] for r in conn.execute("SELECT message_id FROM aside_picks WHERE after_user_id = ?", (after,))}
     finally:
         conn.close()
     shown = [r for r in remarks if r[0] in picked] or remarks[-SHOWN:]
@@ -132,7 +122,8 @@ def parse_picks(text: str, count: int) -> list[int]:
 
 async def pick(config: FeltConfig, session_id: str = APP_SESSION) -> list[int]:
     """Ask her which of her remarks since his last message she'd most like him
-    to answer, and store it. Returns the picked message ids."""
+    to answer, and store it. Returns the picked message ids.
+    """
     conn = _connect(config.db_path)
     try:
         _ensure(conn)
@@ -146,9 +137,7 @@ async def pick(config: FeltConfig, session_id: str = APP_SESSION) -> list[int]:
     # imports this module to schedule picks
     from felt_core.brain.personality import daily_persona, per_call_context, with_context
 
-    lines = "\n".join(
-        f"{i}. ({r[2][11:16]}) {r[1][:_LINE_CHARS]}" for i, r in enumerate(remarks, 1)
-    )
+    lines = "\n".join(f"{i}. ({r[2][11:16]}) {r[1][:_LINE_CHARS]}" for i, r in enumerate(remarks, 1))
     reply = await local_llm.chat(
         [
             {"role": "system", "content": daily_persona()},
@@ -203,7 +192,8 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
 
 def schedule_pick(config: FeltConfig, session_id: str) -> None:
     """After a remark is saved: re-pick in the background. Only the app's
-    session has asides; a remark landing mid-pick reruns it once afterwards."""
+    session has asides; a remark landing mid-pick reruns it once afterwards.
+    """
     if session_id != APP_SESSION or not features.enabled(config.db_path, "ambient.asides"):
         return
     if session_id in _running:
@@ -221,7 +211,8 @@ def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> 
     """The text of one of her remarks (or alert lines) in this session, or
     None if that id isn't one (so a client can't pass off any message as
     hers). An alert line comes with the incident's facts and Claude's
-    conclusion, so she can answer questions about it."""
+    conclusion, so she can answer questions about it.
+    """
     conn = _connect(db_path)
     try:
         row = conn.execute(
@@ -249,8 +240,7 @@ def link_answer(db_path: str, user_message_id: int, remark_id: int) -> None:
         _ensure(conn)
         with conn:
             conn.execute(
-                "INSERT OR REPLACE INTO answered_remarks (user_message_id, remark_id)"
-                " VALUES (?, ?)",
+                "INSERT OR REPLACE INTO answered_remarks (user_message_id, remark_id) VALUES (?, ?)",
                 (user_message_id, remark_id),
             )
     finally:
@@ -258,7 +248,7 @@ def link_answer(db_path: str, user_message_id: int, remark_id: int) -> None:
 
 
 def answered(db_path: str, user_message_ids: list[int]) -> dict[int, dict]:
-    """user message id -> the remark it answers (id, content, created_at)."""
+    """User message id -> the remark it answers (id, content, created_at)."""
     if not user_message_ids:
         return {}
     conn = _connect(db_path)

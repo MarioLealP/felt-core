@@ -24,7 +24,8 @@ _VISIBLE_SQL = (
 def _source(kind: str, source_ref: str | None) -> str:
     """A short label for where the line came from: the event name for event
     lines ("song", "guest"), the push kind for pushes ("diary",
-    "calendar_15"), else the kind ("remark", "email", "alarm")."""
+    "calendar_15"), else the kind ("remark", "email", "alarm").
+    """
     parts = (source_ref or "").split(":")
     if kind in ("event", "proactive") and len(parts) >= 2 and parts[1]:
         return parts[1]
@@ -35,11 +36,10 @@ def _iso(ts: str | None) -> str | None:
     return ts.replace(" ", "T") + "Z" if ts else None
 
 
-def page(
-    db_path: str, session_id: str = APP_SESSION, *, before_id: int | None = None, limit: int = 50
-) -> list[dict]:
+def page(db_path: str, session_id: str = APP_SESSION, *, before_id: int | None = None, limit: int = 50) -> list[dict]:
     """Up to `limit` visible lines older than `before_id` (newest page when
-    None), oldest first."""
+    None), oldest first.
+    """
     limit = max(1, min(limit, MAX_PAGE))
     before = " AND id < ?" if before_id is not None else ""
     params: tuple = (session_id,) + ((before_id,) if before_id is not None else ()) + (limit,)
@@ -81,7 +81,8 @@ def unread(db_path: str, session_id: str = APP_SESSION) -> int:
 
 def read_all(db_path: str, session_id: str = APP_SESSION) -> int:
     """Every unread line on the page marked read ("mark all read", 2026-10-19:
-    1200+ old ones kept the badge up); returns how many changed."""
+    1200+ old ones kept the badge up); returns how many changed.
+    """
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
     try:
@@ -105,7 +106,8 @@ def mark(
 ) -> int:
     """Applies `action` to those of `ids` that are her non-chat lines in this
     session; returns how many changed. Dismissing also marks read; snoozing
-    clears it, so the line comes back unread, to be noticed again."""
+    clears it, so the line comes back unread, to be noticed again.
+    """
     if action not in ACTIONS or not ids:
         return 0
     now = datetime.now(UTC)

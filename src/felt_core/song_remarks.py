@@ -34,7 +34,8 @@ def new_track_details(previous: dict | None, current: dict | None) -> dict | Non
     """Pure: the music_new_track details when one playing track gave way to
     another between two polls; None otherwise - including the first poll
     (the server starting mid-song isn't a change) and a start from silence
-    (same rule felt-tray had)."""
+    (same rule felt-tray had).
+    """
     before, now = _key(previous), _key(current)
     if before is None or now is None or before == now:
         return None
@@ -53,16 +54,12 @@ async def remark_on(config: FeltConfig, details: dict) -> None:
 
     try:
         with llm_gate.ambient("song", lifetime_s=SAY_WITHIN_S):
-            result = await react_to_event(
-                "music_new_track", details, config, session_id=APP_SESSION
-            )
+            result = await react_to_event("music_new_track", details, config, session_id=APP_SESSION)
     except Exception:
         logger.warning("song remark: no line (%s)", details.get("title"), exc_info=True)
         return
     if result.line:
-        enqueue_proactive(
-            config, "music", result.line, emotion=result.emotion, ttl_s=SAY_WITHIN_S, record=False
-        )
+        enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=SAY_WITHIN_S, record=False)
 
 
 def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:

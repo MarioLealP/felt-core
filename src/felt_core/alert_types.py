@@ -45,9 +45,7 @@ CATALOGUE: tuple[AlertType, ...] = (
     # security -> Claude
     AlertType("wazuh-test", r"^Wazuh .*TEST", "low", "drop"),
     AlertType("wazuh-oom", r"^Wazuh .*running out of memory", "default", "felt"),
-    AlertType(
-        "wazuh-fim", r"^Wazuh ", "high", "claude", fold_s=30 * _M, group=r"^Wazuh L\d+ \[[^\]]+\]"
-    ),
+    AlertType("wazuh-fim", r"^Wazuh ", "high", "claude", fold_s=30 * _M, group=r"^Wazuh L\d+ \[[^\]]+\]"),
     AlertType("honeypot", r"^HONEYPOT", "urgent", "claude"),
     AlertType("authentik-bruteforce", r"authentication-flow execution spike", "high", "claude"),
     AlertType("crowdsec", r"CrowdSec", "high", "claude", wait_s=10 * _M),
@@ -60,9 +58,7 @@ CATALOGUE: tuple[AlertType, ...] = (
     AlertType("update-reverting", r"auto-reverting an update", "high", "claude"),
     AlertType("ci-failed", r"CI failed|deploy pipeline failed", "high", "claude"),
     # expected events -> told, not acted on
-    AlertType(
-        "update-deployed", r"update deployed", "default", "felt", expected=True, fold_s=60 * _M
-    ),
+    AlertType("update-deployed", r"update deployed", "default", "felt", expected=True, fold_s=60 * _M),
     AlertType("pre-update-backup", r"pre-update backup", "low", "felt", expected=True),
     AlertType("weekly-reboot", r"weekly reboot", "default", "felt", expected=True),
     AlertType("ntfy-upgraded", r"ntfy upgraded", "default", "felt", expected=True),
@@ -111,9 +107,7 @@ CATALOGUE: tuple[AlertType, ...] = (
     AlertType("nitro-gpu-hot", r"GPU overheating", "default", "felt"),
     AlertType("smart", r"SMART:", "default", "felt", wait_s=15 * _M),
     AlertType("health-check", r"health check: ", "default", "felt"),
-    AlertType(
-        "router-network", r"Network Generic Device|Interface Intel", "low", "felt", wait_s=15 * _M
-    ),
+    AlertType("router-network", r"Network Generic Device|Interface Intel", "low", "felt", wait_s=15 * _M),
     AlertType(
         "host-load",
         r"(Windows|Linux): (The Memory Pages|High memory|High CPU|CPU privileged|"
@@ -130,9 +124,7 @@ UNKNOWN = AlertType("unknown", "", "default", "claude")
 
 _BY_NAME = {t.name: t for t in CATALOGUE}
 # Zabbix: "clockmost High: <subject>" ... "clockmost RESOLVED: <subject>"
-_ZABBIX = re.compile(
-    r"^clockmost (RESOLVED|Disaster|High|Average|Warning|Information|Not classified): (.+)$"
-)
+_ZABBIX = re.compile(r"^clockmost (RESOLVED|Disaster|High|Average|Warning|Information|Not classified): (.+)$")
 
 
 def by_name(name: str) -> AlertType:
@@ -157,7 +149,8 @@ class Parsed:
 def parse(title: str | None) -> Parsed:
     """The alert's type, its matching key, and whether it's a RESOLVED.
     Zabbix's severity can change between firings (Warning, then High), so
-    the key is the subject without it."""
+    the key is the subject without it.
+    """
     text = (title or "").strip()
     match = _ZABBIX.match(text)
     subject = match.group(2) if match else text

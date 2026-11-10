@@ -54,7 +54,8 @@ def normalize_at(at: str | None) -> str:
     with a 'Z' suffix and no offset - treated as local Europe/Lisbon time
     - or nothing at all) into the UTC 'YYYY-MM-DD HH:MM:SS' string every
     other timestamp column in this DB is stored as, so date-range queries
-    stay a plain string comparison."""
+    stay a plain string comparison.
+    """
     if at:
         try:
             parsed = datetime.fromisoformat(at.replace("Z", "+00:00"))
@@ -71,7 +72,8 @@ def normalize_at(at: str | None) -> str:
 def cap_event_data(data: dict) -> str:
     """Pure: `data` json-encoded, or a stand-in marker if it's too big
     ("cap data size" - WP-26's spec) - never a chopped, invalid-JSON
-    string."""
+    string.
+    """
     try:
         encoded = json.dumps(data, default=str)
     except (TypeError, ValueError):
@@ -99,7 +101,8 @@ def _num(data: dict, key: str) -> float | None:
 def _event_line(kind: str, data: dict) -> str | None:
     """Pure: one compact, cloud-safe line for a logged event, or None for
     a kind with nothing worth saying. Whitelisted fields only - same
-    discipline as events.py's build_prompt, never dumps `data` wholesale."""
+    discipline as events.py's build_prompt, never dumps `data` wholesale.
+    """
     if kind == "game_start":
         name = _text(data, "name")
         return f'started playing "{name}"' if name else None
@@ -170,7 +173,8 @@ class RawMaterial:
 def compact_material(raw: RawMaterial) -> str:
     """Pure: dedupes and caps raw rows into one compact block for the
     writer prompt. Never touches facts - this whole module never reads
-    the facts table at all."""
+    the facts table at all.
+    """
     lines: list[str] = []
     for obs in raw.seen:
         description = obs.get("description") or ""
@@ -199,7 +203,8 @@ def compact_material(raw: RawMaterial) -> str:
 def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
     """Pure: the [start, end) of one Europe/Lisbon calendar date, as UTC
     'YYYY-MM-DD HH:MM:SS' strings - what every created_at/at column in
-    this DB is stored as, so a plain string comparison works."""
+    this DB is stored as, so a plain string comparison works.
+    """
     day_start = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=LISBON)
     start = day_start.astimezone(UTC)
     end = (day_start + timedelta(days=1)).astimezone(UTC)
@@ -209,7 +214,8 @@ def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
 async def gather_material(config: FeltConfig, date_str: str) -> str:
     """Material for one Europe/Lisbon calendar date: screen `seen` text
     plus her spoken replies, logged desktop events, and chat as whole
-    session windows."""
+    session windows.
+    """
     start, end = _lisbon_date_bounds_utc(date_str)
     seen = db.get_screen_observations_between(config.db_path, start, end)
     events = db.get_events_between(config.db_path, start, end)
@@ -250,9 +256,7 @@ _WRITING_INSTRUCTIONS = (
 )
 
 
-def _build_writer_prompt(
-    material: str, active_memories: list[dict], vetoed_texts: list[str]
-) -> str:
+def _build_writer_prompt(material: str, active_memories: list[dict], vetoed_texts: list[str]) -> str:
     parts = [f"What happened yesterday:\n{material}"]
     if active_memories:
         existing = "\n".join(f"- {m['text']}" for m in active_memories)
@@ -277,11 +281,10 @@ def _parse_writer_json(raw: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-async def _generate_json(
-    config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int
-) -> str:
+async def _generate_json(config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int) -> str:
     """One felt-llm call for the nightly writers. Raises LocalLLMUnavailable
-    when it's down; callers log and skip."""
+    when it's down; callers log and skip.
+    """
     reply = await local_llm.chat(
         [{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
         max_tokens=max_tokens,
@@ -296,7 +299,8 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     morning greeting all at once. Returns whether an entry was actually
     written - False if there was no material (Mario was AFK/away the whole
     day), felt-llm was unavailable, the response didn't parse, or the diary
-    is switched off."""
+    is switched off.
+    """
     if not features.enabled(config.db_path, "memory.diary"):
         return False
     if db.get_diary(config.db_path, date_str) is not None:
@@ -329,9 +333,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
         return False
 
     callbacks = [
-        {"text": str(c).strip(), "uses": 0}
-        for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS]
-        if str(c).strip()
+        {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
     ]
     mood_word = str(parsed.get("mood_word") or "").strip()
     db.insert_diary(config.db_path, date_str, entry, json.dumps(callbacks), mood_word)
@@ -379,7 +381,8 @@ _WEEKLY_INSTRUCTIONS = (
 async def _compress_week(config: FeltConfig, date_str: str) -> None:
     """The week ending on `date_str` (inclusive, 7 days back) condensed
     into one diary_weeks row - kept simple per WP-26's spec ("keep it
-    simple; monthly can be a TODO note")."""
+    simple; monthly can be a TODO note").
+    """
     end = datetime.strptime(date_str, "%Y-%m-%d").date()
     week_dates = [(end - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
     rows = [r for d in week_dates if (r := db.get_diary(config.db_path, d)) is not None]
@@ -401,9 +404,7 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
     if not summary:
         return
     callbacks = [
-        {"text": str(c).strip(), "uses": 0}
-        for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS]
-        if str(c).strip()
+        {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
     ]
     week = _iso_week(date_str)
     db.insert_or_update_diary_week(config.db_path, week, summary, json.dumps(callbacks))
@@ -421,7 +422,8 @@ async def _maybe_compress_week(config: FeltConfig, date_str: str) -> None:
 def _target_date_for_trigger(kind: str, at_utc_str: str) -> str | None:
     """Pure: given a logged event's kind and its normalized UTC `at`,
     which date's diary this should try to write - None if this event
-    isn't a trigger at all (wrong kind, or before 05:00 local)."""
+    isn't a trigger at all (wrong kind, or before 05:00 local).
+    """
     if kind not in _TRIGGER_KINDS:
         return None
     at_utc = datetime.strptime(at_utc_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
@@ -437,7 +439,8 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
     local for a date with no diary row yet) and writes that date's entry
     if so. A no-op for every other event kind or time of day. Errors are
     logged, never raised - a diary-writer failure must never break the
-    (silent, best-effort) event log itself."""
+    (silent, best-effort) event log itself.
+    """
     target_date = _target_date_for_trigger(kind, at_utc_str)
     if target_date is None:
         return
@@ -462,7 +465,8 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
 
 async def _brief(config: FeltConfig) -> None:
     """The morning brief after the diary (WP-45, brief.py) - its greeting
-    is the brief's opening. Once a day; errors logged, never raised."""
+    is the brief's opening. Once a day; errors logged, never raised.
+    """
     from felt_core import brief
 
     try:
@@ -489,7 +493,8 @@ _tasks: set = set()
 def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
     """Fire-and-forget day-start trigger: yesterday's diary entry if it's
     missing (not retried within RETRY_S), then the morning brief if it's
-    still due today. A no-op before 05:00 local."""
+    still due today. A no-op before 05:00 local.
+    """
     import asyncio
 
     from felt_core import brief

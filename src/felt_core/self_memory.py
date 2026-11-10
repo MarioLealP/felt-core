@@ -59,18 +59,18 @@ def _similarity(a: str, b: str) -> float:
 
 def is_duplicate(text: str, existing_texts: list[str]) -> bool:
     """Pure: whether `text` is close enough to something in
-    `existing_texts` that adding it again would just be noise."""
+    `existing_texts` that adding it again would just be noise.
+    """
     return any(_similarity(text, existing) >= _DEDUPE_SIMILARITY for existing in existing_texts)
 
 
-def add_self_memory(
-    config: FeltConfig, kind: str, text: str, keywords: list[str], source_date: str
-) -> int | None:
+def add_self_memory(config: FeltConfig, kind: str, text: str, keywords: list[str], source_date: str) -> int | None:
     """Adds one self-memory the nightly writer proposed - skipped if it's
     a near-duplicate of an existing active one, or matches something Mario
     already vetoed (vetoed text never comes back, WP-26's spec). Returns
     the new row's id, or None if it was skipped. Enforces the <=30 active
-    cap afterward by retiring the least-used, oldest, unpinned actives."""
+    cap afterward by retiring the least-used, oldest, unpinned actives.
+    """
     text = " ".join(text.split()).strip()
     if not text:
         return None
@@ -105,9 +105,7 @@ def _enforce_active_cap(config: FeltConfig) -> None:
     to_retire = [m["id"] for m in unpinned[:overflow]]
     db.retire_self_memories(config.db_path, to_retire)
     if to_retire:
-        logger.info(
-            "self-memory: retired %d memory(ies) over the %d-active cap", len(to_retire), MAX_ACTIVE
-        )
+        logger.info("self-memory: retired %d memory(ies) over the %d-active cap", len(to_retire), MAX_ACTIVE)
 
 
 def rank_self_memories(
@@ -119,7 +117,8 @@ def rank_self_memories(
     """Pure: pinned first, then keyword overlap with `context_text` (the
     SillyTavern lorebook idea - an opinion only fires when its topic is
     live), then recency. A memory used within `cooldown_s` is excluded
-    from the pool unless that would empty it. Caps to MAX_IN_PROMPT."""
+    from the pool unless that would empty it. Caps to MAX_IN_PROMPT.
+    """
     context_words = _words(context_text) if context_text else set()
 
     def keyword_hits(memory: dict) -> int:
@@ -140,14 +139,10 @@ def rank_self_memories(
 
     pool = [m for m in memories if is_cool(m)] or list(memories)
 
-    recency_order = sorted(
-        pool, key=lambda m: m.get("last_used") or m.get("created_at") or "", reverse=True
-    )
+    recency_order = sorted(pool, key=lambda m: m.get("last_used") or m.get("created_at") or "", reverse=True)
     recency_rank = {m["id"]: i for i, m in enumerate(recency_order)}
 
-    ranked = sorted(
-        pool, key=lambda m: (0 if m.get("pinned") else 1, -keyword_hits(m), recency_rank[m["id"]])
-    )
+    ranked = sorted(pool, key=lambda m: (0 if m.get("pinned") else 1, -keyword_hits(m), recency_rank[m["id"]]))
     return ranked[:MAX_IN_PROMPT]
 
 
@@ -155,10 +150,9 @@ def _pick_callbacks(callbacks: list[dict], max_n: int = 2) -> tuple[list[str], l
     """Pure: from a diary row's callbacks_json ({"text", "uses"} objects),
     picks up to `max_n` with uses < 2 ("each callback is used at most
     twice, then retired" - WP-26), least-used first, and returns (the
-    picked texts, the full list with their uses incremented)."""
-    eligible = sorted(
-        (c for c in callbacks if c.get("uses", 0) < 2), key=lambda c: c.get("uses", 0)
-    )
+    picked texts, the full list with their uses incremented).
+    """
+    eligible = sorted((c for c in callbacks if c.get("uses", 0) < 2), key=lambda c: c.get("uses", 0))
     picked_ids = {id(c) for c in eligible[:max_n]}
     picked_texts = [c["text"] for c in eligible[:max_n]]
     updated = [{**c, "uses": c.get("uses", 0) + 1} if id(c) in picked_ids else c for c in callbacks]
@@ -191,14 +185,13 @@ def _recently_block(config: FeltConfig, yesterday: str) -> str:
     return "Recently: " + "; ".join(part.rstrip(". ") for part in parts) + "."
 
 
-def memory_block(
-    config: FeltConfig, context_text: str | None = None, now: datetime | None = None
-) -> str:
+def memory_block(config: FeltConfig, context_text: str | None = None, now: datetime | None = None) -> str:
     """The compiled "Recently (from your diary)" + "Who you've become"
     block every reply carries (via brain.personality.per_call_context),
     hard-capped at MAX_BLOCK_CHARS (~200 tokens). Each self-memory placed
     in the prompt has its use count/last_used bumped (db.touch_self_memories)
-    - what the next call's cooldown/recency ranking is computed from."""
+    - what the next call's cooldown/recency ranking is computed from.
+    """
     now = now or datetime.now(UTC)
     yesterday = ((now.astimezone(LISBON)).date() - timedelta(days=1)).isoformat()
     recently = _recently_block(config, yesterday)

@@ -60,9 +60,7 @@ async def test_names_the_current_track(monkeypatch):
     config = FeltConfig(spotify_refresh_token="dummy-token")
     ctx = ExecutionContext(config=config)
 
-    async def fake_get_lyrics(
-        client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs
-    ):
+    async def fake_get_lyrics(client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs):
         return None
 
     monkeypatch.setattr(skill, "get_currently_playing", _fake_now_playing)
@@ -79,9 +77,7 @@ async def test_quotes_the_current_lyric_line_when_available(monkeypatch):
     config = FeltConfig(spotify_refresh_token="dummy-token")
     ctx = ExecutionContext(config=config)
 
-    async def fake_get_lyrics(
-        client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs
-    ):
+    async def fake_get_lyrics(client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs):
         return {
             "synced": [{"time_ms": 1000, "text": "A quotable line"}],
             "plain": "A quotable line",
@@ -100,9 +96,7 @@ async def test_omits_the_quote_when_no_lyrics_found(monkeypatch):
     config = FeltConfig(spotify_refresh_token="dummy-token")
     ctx = ExecutionContext(config=config)
 
-    async def fake_get_lyrics(
-        client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs
-    ):
+    async def fake_get_lyrics(client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs):
         return None
 
     monkeypatch.setattr(skill, "get_currently_playing", _fake_now_playing)
@@ -118,9 +112,7 @@ async def test_a_lyrics_fetch_error_does_not_break_the_basic_answer(monkeypatch)
     config = FeltConfig(spotify_refresh_token="dummy-token")
     ctx = ExecutionContext(config=config)
 
-    async def fake_get_lyrics(
-        client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs
-    ):
+    async def fake_get_lyrics(client, cache_dir, track_id, track_name, artist_name, album_name, duration_s, **kwargs):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(skill, "get_currently_playing", _fake_now_playing)

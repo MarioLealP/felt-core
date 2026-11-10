@@ -7,16 +7,11 @@ def test_empty_text_has_no_chunks():
 
 
 def test_one_sentence_is_one_chunk():
-    assert speech_chunks("Just a single sentence here, nothing more.") == [
-        "Just a single sentence here, nothing more."
-    ]
+    assert speech_chunks("Just a single sentence here, nothing more.") == ["Just a single sentence here, nothing more."]
 
 
 def test_short_first_sentence_merges_forward_until_first_chunk_is_long_enough():
-    text = (
-        "Hm. Okay then. That is a decent amount of text to say out loud. "
-        "Another one, and this time a bit longer!"
-    )
+    text = "Hm. Okay then. That is a decent amount of text to say out loud. Another one, and this time a bit longer!"
     assert speech_chunks(text) == [
         "Hm. Okay then. That is a decent amount of text to say out loud.",
         "Another one, and this time a bit longer!",

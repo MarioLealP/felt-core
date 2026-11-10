@@ -58,21 +58,15 @@ def _config(tmp_path, **kwargs):
 async def test_both_entry_points_go_silent_on_the_same_cooldown_state(tmp_path, fake_llm):
     config = _config(tmp_path)
     session_id = "shared-cooldown-test"
-    fake_llm.default = json.dumps(
-        {"seen": "x", "line": "should not be reached", "emotion": "happy"}
-    )
+    fake_llm.default = json.dumps({"seen": "x", "line": "should not be reached", "emotion": "happy"})
 
     # Prime the cooldown exactly once, via whichever entry point - both read
     # the same screen_observations table through the same helper.
     obs = save_observation(config.db_path, session_id, "priming")
     set_observation_reply(config.db_path, obs, "already reacted")
 
-    screen_result = await screen_reactions.process_screen_context(
-        "new thing", config, session_id=session_id
-    )
-    image_result = await screen_reactions.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id=session_id
-    )
+    screen_result = await screen_reactions.process_screen_context("new thing", config, session_id=session_id)
+    image_result = await screen_reactions.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id=session_id)
 
     assert screen_result.reply == ""
     assert screen_result.animation_tag is None
@@ -85,15 +79,11 @@ async def test_both_entry_points_react_once_cooldown_has_passed(tmp_path, fake_l
     config = _config(tmp_path, screen_reaction_cooldown_s=0)
 
     fake_llm.script = ["a local-style reaction"]
-    screen_result = await screen_reactions.process_screen_context(
-        "new thing", config, session_id="s1"
-    )
+    screen_result = await screen_reactions.process_screen_context("new thing", config, session_id="s1")
     assert screen_result.reply == "a local-style reaction"
 
     fake_llm.script = [json.dumps({"seen": "x", "line": "nice!", "emotion": "happy"})]
-    image_result = await screen_reactions.react_to_screen(
-        b"jpeg", "app.exe", "Title", config, session_id="s2"
-    )
+    image_result = await screen_reactions.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="s2")
     assert image_result.reply == "nice!"
 
     assert len(fake_llm.calls) == 2

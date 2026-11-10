@@ -102,9 +102,7 @@ _SKILL_GUARDS: dict[str, Callable[[str], bool]] = {
 # fast path, same shape as _looks_affirmative above, checked before the
 # model is ever called (see _chat_local); the model's own felt_presence
 # tool call is only a fallback for phrasing this doesn't catch.
-_HUSH_RE = re.compile(
-    r"^\s*(shut up|shh+|be quiet|quiet please|stop talking)[.!]?\s*$", re.IGNORECASE
-)
+_HUSH_RE = re.compile(r"^\s*(shut up|shh+|be quiet|quiet please|stop talking)[.!]?\s*$", re.IGNORECASE)
 _UNHUSH_RE = re.compile(r"^\s*(you can talk again|ok(ay)? talk)[.!]?\s*$", re.IGNORECASE)
 
 
@@ -159,7 +157,8 @@ def _apply_call_guards(
     """The presence guard and the per-skill guards, shared by the router
     path and the WP-36 local tool-calling path: a model's pick only stands
     if it clears them. `fast_call` (the deterministic presence regex) is
-    never second-guessed."""
+    never second-guessed.
+    """
     if (
         fast_call is None
         and call is not None
@@ -224,7 +223,8 @@ _LOOKUP_SKILLS = frozenset(
 
 def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
     """WP-06 fast path: the precomputed "weather right now" line, if the
-    picked call is that question and a fresh one exists."""
+    picked call is that question and a fresh one exists.
+    """
     if call is None or call[0] != "get_weather":
         return None
     day = str(call[1].get("day", "now") or "now").lower()
@@ -233,13 +233,12 @@ def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
     return _weather_precompute_fresh()
 
 
-async def _run_skill_call(
-    call: tuple[str, dict], registry: dict[str, LoadedSkill], config: FeltConfig, message: str
-):
+async def _run_skill_call(call: tuple[str, dict], registry: dict[str, LoadedSkill], config: FeltConfig, message: str):
     """Runs the picked skill; returns (SkillResult | None, tool_output).
     None (not the ValueError branch's job alone) so the animation/ui_action
     lookup has something safe to check regardless of which path was taken -
-    a skill that raised never gets a reaction."""
+    a skill that raised never gets a reaction.
+    """
     skill_name, params = call
     result = None
     logger.info("skill call: %s", skill_name)
@@ -265,9 +264,7 @@ async def _run_skill_call(
     return result, tool_output
 
 
-def _skill_chat_result(
-    reply: str, result, skill_name: str, registry: dict[str, LoadedSkill]
-) -> ChatResult:
+def _skill_chat_result(reply: str, result, skill_name: str, registry: dict[str, LoadedSkill]) -> ChatResult:
     if result is None:
         return ChatResult(reply=reply)
     return ChatResult(
@@ -287,24 +284,20 @@ async def _reply_turn(
 ) -> local_llm.LocalReply:
     """A felt-llm call that may be her answer: streamed through the
     speaker when chat_streamed() is running the turn (WP-65), else the
-    plain call. `guard` spots a fake claim in the streamed opening."""
+    plain call. `guard` spots a fake claim in the streamed opening.
+    """
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
         if speaker is None:
-            return await local_llm.chat(
-                messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config
-            )
-        return await speaker.turn(
-            messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, guard=guard, config=config
-        )
+            return await local_llm.chat(messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, config=config)
+        return await speaker.turn(messages, max_tokens=_REPLY_MAX_TOKENS, tools=tools, guard=guard, config=config)
 
 
-async def _forced_tool_turn(
-    messages: list[dict], tools: list[dict], config: FeltConfig
-) -> local_llm.LocalReply | None:
+async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: FeltConfig) -> local_llm.LocalReply | None:
     """FELT-108: the same call again with a tool call required, after a
     reply claimed a lookup or action it never did. None when that fails or
     still calls nothing - the caller keeps the plain reply (never worse than
-    before)."""
+    before).
+    """
     try:
         async with metrics.timed("reply", route="local", model=config.local_llm_model):
             forced = await local_llm.chat(
@@ -325,7 +318,8 @@ async def _forced_tool_turn(
 
 def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
     """The reply as she said it (with anything already let out in front,
-    WP-65), written to the history - once per turn, at the end."""
+    WP-65), written to the history - once per turn, at the end.
+    """
     if speaker is not None:
         reply = speaker.full_reply(reply)
     save_message(config.db_path, session_id, "assistant", reply)
@@ -355,7 +349,8 @@ async def _chat_local(
     call goes through the guards, the weather fast path and run_skill,
     then a SECOND call on the same prefix (+ the tool_call and its result)
     phrases the answer. Raises LocalLLMUnavailable if felt-llm is down at
-    any point (the API answers 503)."""
+    any point (the API answers 503).
+    """
     prefix = local_turn_messages(message, history, config, tone)
     tools = skill_tools(registry)
     # cm-6b0: the semantic router's pick (a few ms, in a thread while
@@ -401,9 +396,7 @@ async def _chat_local(
             # or do it ("turning the shelf light off") but called nothing.
             # Ask again with a tool call required, so the claim is true or
             # the answer honest.
-            logger.warning(
-                "reply claimed a lookup or action without a tool call - retrying with a tool required"
-            )
+            logger.warning("reply claimed a lookup or action without a tool call - retrying with a tool required")
             forced = await _forced_tool_turn(prefix, tools, config)
             if forced is not None:
                 first = forced
@@ -413,9 +406,7 @@ async def _chat_local(
             call = (name, params) if name else None
 
     call = _apply_call_guards(call, fast_call, message)
-    router.record_pick(
-        config, pick_task, message, call[0] if call else None, fast=fast_call is not None
-    )
+    router.record_pick(config, pick_task, message, call[0] if call else None, fast=fast_call is not None)
 
     precompute = _weather_fast_line(call)
     if precompute is not None:
@@ -470,9 +461,7 @@ async def _chat_local(
             late = False
             if check is not None and not nxt.tool_calls and check(nxt.text):
                 # cm-p6a: "I've got it set for you" with no set_reminder call
-                logger.warning(
-                    "follow-up claimed an action without a tool call - retrying with a tool required"
-                )
+                logger.warning("follow-up claimed an action without a tool call - retrying with a tool required")
                 forced = await _forced_tool_turn(followup, tools, config)
                 if forced is not None:
                     nxt = forced
@@ -509,9 +498,7 @@ async def _chat_local(
     return _skill_chat_result(reply, result, skill_name, registry)
 
 
-async def _summarize_mentioned_emails(
-    config: FeltConfig, session_id: str, message: str, mails: list[dict]
-) -> str:
+async def _summarize_mentioned_emails(config: FeltConfig, session_id: str, message: str, mails: list[dict]) -> str:
     # Same shape as every other local reply (personality prompt + the
     # spoken-length cap). No facts: the email body is all the context needed.
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
@@ -570,9 +557,7 @@ async def chat(
     # would be a stale, misleading answer.
     current_screen = get_current_screen_description(config.db_path, session_id, max_age_seconds=120)
     if current_screen:
-        history = history + [
-            {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}
-        ]
+        history = history + [{"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}]
 
     # WP-42.2: he tapped one of her asides in the app to answer it; without
     # this, a reply like "a bit, yeah" lands with nothing to refer to.
@@ -614,7 +599,8 @@ async def chat_streamed(
     said. Same turn, same tools, guards
     and history (written once, at the end); only the felt-llm calls that can
     be her answer stream. Raises LocalLLMUnavailable like chat(), possibly
-    after some chunks."""
+    after some chunks.
+    """
     speaker = ReplySpeaker(config)
     turn = asyncio.create_task(chat(message, config, session_id, tone, answering, speaker))
     turn.add_done_callback(lambda _: speaker.chunks.put_nowait(None))

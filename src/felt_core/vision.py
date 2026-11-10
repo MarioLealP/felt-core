@@ -35,19 +35,16 @@ _SCREEN_MAX_TOKENS = 90
 _POE_MAX_TOKENS = 260
 
 
-async def describe(
-    jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, *, poe: bool
-) -> str:
+async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, *, poe: bool) -> str:
     """felt-vision's description of the screenshot. Raises LocalLLMUnavailable
     when it is down or answers nothing usable (AmbientSkipped when the gate
-    made an ambient call give way)."""
+    made an ambient call give way).
+    """
     if not config.vision_url:
         raise LocalLLMUnavailable("vision_url is not configured")
     prompt = (POE_PROMPT if poe else SCREEN_PROMPT).format(app=app, title=title)
     payload = {
-        "messages": [
-            {"role": "user", "content": [image_part(jpeg_bytes), {"type": "text", "text": prompt}]}
-        ],
+        "messages": [{"role": "user", "content": [image_part(jpeg_bytes), {"type": "text", "text": prompt}]}],
         "max_tokens": _POE_MAX_TOKENS if poe else _SCREEN_MAX_TOKENS,
         "temperature": 0,
     }

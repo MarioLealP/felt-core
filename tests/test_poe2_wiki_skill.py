@@ -11,7 +11,8 @@ from felt_core.plugin import ExecutionContext
 _spec = importlib.util.spec_from_file_location(
     "poe2_wiki_skill", Path(__file__).parents[1] / "plugins/poe2_wiki/skill.py"
 )
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 skill = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill)
 
@@ -23,9 +24,7 @@ def _mock(monkeypatch, hits, seen):
 
     transport = httpx.MockTransport(handler)
     orig = httpx.AsyncClient
-    monkeypatch.setattr(
-        skill, "machine_client", lambda config, url, **kw: orig(transport=transport, **kw)
-    )
+    monkeypatch.setattr(skill, "machine_client", lambda config, url, **kw: orig(transport=transport, **kw))
 
 
 async def test_passages_are_trimmed_and_labelled(monkeypatch):
@@ -39,9 +38,7 @@ async def test_passages_are_trimmed_and_labelled(monkeypatch):
         ],
         seen,
     )
-    r = await skill.handle(
-        {"query": "what does grim feast do"}, ExecutionContext(config=FeltConfig())
-    )
+    r = await skill.handle({"query": "what does grim feast do"}, ExecutionContext(config=FeltConfig()))
     assert "[Grim Feast] Grim Feast is a buff." in r.text
     assert "[Minions - Revive]" in r.text
     assert len(r.text) < 1000

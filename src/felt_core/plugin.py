@@ -39,7 +39,8 @@ class ExecutionContext:
     `original_message` exists because the router (a small model) doesn't
     always populate structured params correctly (2026-09-11 finding) — a
     skill that needs a query string can fall back to the raw message
-    rather than KeyError-ing on a missing param."""
+    rather than KeyError-ing on a missing param.
+    """
 
     config: "FeltConfig"
     original_message: str = ""

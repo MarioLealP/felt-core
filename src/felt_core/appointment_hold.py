@@ -52,7 +52,8 @@ def _spawn(coro) -> asyncio.Task:
 
 def hold(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime):
     """Hold an appointment for its place; an earlier one still held goes in now.
-    The wait starts at start_wait, once she has asked."""
+    The wait starts at start_wait, once she has asked.
+    """
     global _held
     earlier = claim()
     if earlier is not None:
@@ -75,7 +76,8 @@ def no_place(answer: str) -> bool:
 def claim_same(start: datetime) -> dict | None:
     """Take the held appointment if it's at `start`: create_calendar_event
     called again for it (e2e 2026-10-19: felt-llm answered "none" that way)
-    is his answer, not a second appointment."""
+    is his answer, not a second appointment.
+    """
     if _held is None or _held["start"] != start:
         return None
     return claim()
@@ -84,7 +86,8 @@ def claim_same(start: datetime) -> dict | None:
 def just_added(config: FeltConfig, summary: str, start: datetime) -> dict | None:
     """The appointment create_calendar_event added in the last 10 min, if it's
     this one (`start`, and the title one inside the other: "dentist" / "Dentist
-    appointment") - being called again for it is his answer, not a second one."""
+    appointment") - being called again for it is his answer, not a second one.
+    """
     now = datetime.now(ha_calendar.TZ)
     last = ha_calendar.last_created(config, now)
     if last is None or datetime.fromisoformat(last["start"]) != start:
@@ -122,9 +125,7 @@ async def add(config: FeltConfig, held: dict, place: str | None) -> bool:
     except ha_calendar.CalendarUnavailable:
         logger.warning("appointment hold: couldn't add %r", held["summary"])
         return False
-    ha_calendar.remember_created(
-        config, held["calendar"], held["summary"], held["start"], held["end"]
-    )
+    ha_calendar.remember_created(config, held["calendar"], held["summary"], held["start"], held["end"])
     return True
 
 
@@ -135,9 +136,7 @@ def _same(event: dict, summary: str, start: datetime) -> bool:
 async def _matching(config, calendar_id: str, summary: str, start: datetime) -> list[dict]:
     async with httpx.AsyncClient(timeout=20) as client:
         await ha_calendar.refresh(client, config, calendar_id)
-        events = await ha_calendar.list_events(
-            client, config, calendar_id, start, start + timedelta(minutes=1)
-        )
+        events = await ha_calendar.list_events(client, config, calendar_id, start, start + timedelta(minutes=1))
     return [e for e in events if _same(e, summary, start)]
 
 
@@ -145,7 +144,8 @@ async def change_place(config: FeltConfig, last: dict, place: str) -> str:
     """Give the appointment already added (`last`, from remember_created) a place.
     HA can't edit an event, so the one with the place goes in first and the old
     one is deleted only after: a failure halfway leaves a duplicate, never a lost
-    appointment. Returns what to tell her."""
+    appointment. Returns what to tell her.
+    """
     calendar_id, summary = last["calendar"], last["summary"]
     start = datetime.fromisoformat(last["start"])
     end = datetime.fromisoformat(last["end"])
@@ -153,9 +153,7 @@ async def change_place(config: FeltConfig, last: dict, place: str) -> str:
         old = await _matching(config, calendar_id, summary, start)
         await ha_calendar.create_event(config, calendar_id, summary, start, end, location=place)
         new = [
-            e
-            for e in await _matching(config, calendar_id, summary, start)
-            if e["uid"] not in {o["uid"] for o in old}
+            e for e in await _matching(config, calendar_id, summary, start) if e["uid"] not in {o["uid"] for o in old}
         ]
         if not new:
             return "I couldn't confirm the change in the calendar."
@@ -176,7 +174,8 @@ async def add_unanswered(config: FeltConfig) -> None:
 
 async def _add_and_say(config: FeltConfig, held: dict) -> None:
     """Add without a place; he isn't waiting on a reply, so the outcome is a
-    proactive line either way."""
+    proactive line either way.
+    """
     title, at = held["summary"], when(held["start"])
     if await add(config, held, None):
         facts = (
@@ -185,10 +184,7 @@ async def _add_and_say(config: FeltConfig, held: dict) -> None:
         )
         line = await her_line(config, facts, f"Added {title}, {at}, no place.")
     else:
-        facts = (
-            f'You tried to add "{title}" ({at}) to Mario\'s calendar and it failed - ask him '
-            "to tell you again."
-        )
+        facts = f'You tried to add "{title}" ({at}) to Mario\'s calendar and it failed - ask him to tell you again.'
         fallback = f"I couldn't add {title} ({at}) to your calendar - can you tell me again?"
         line = await her_line(config, facts, fallback)
     enqueue_proactive(config, "calendar", line)

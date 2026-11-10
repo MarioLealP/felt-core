@@ -127,11 +127,10 @@ async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]
 
 async def _filament(config: FeltConfig) -> str | None:
     """Klipper's runout sensor (binary_sensor.ender_filament, on = filament
-    in), or None when HA doesn't have it - never in the way of the line."""
+    in), or None when HA doesn't have it - never in the way of the line.
+    """
     try:
-        async with httpx.AsyncClient(
-            timeout=15, headers={"Authorization": f"Bearer {config.ha_token}"}
-        ) as client:
+        async with httpx.AsyncClient(timeout=15, headers={"Authorization": f"Bearer {config.ha_token}"}) as client:
             r = await client.get(f"{config.ha_url}/api/states/binary_sensor.ender_filament")
     except httpx.HTTPError:
         return None
@@ -187,7 +186,8 @@ def describe(s: Snapshot) -> str:
 
 def event_for(prev: str | None, cur: str) -> str | None:
     """Pure: the transition worth telling Mario about, if any. No previous
-    state (first run) is never an event - she'd announce an old print."""
+    state (first run) is never an event - she'd announce an old print.
+    """
     if prev is None or prev == cur:
         return None
     if prev in _ACTIVE and cur in _ENDED:

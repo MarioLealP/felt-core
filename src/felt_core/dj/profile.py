@@ -1,5 +1,6 @@
 """Mario's taste, written out for her model: who he plays, who he skips, what
-he told her, how her last picks went. Pure - the DJ gathers the inputs."""
+he told her, how her last picks went. Pure - the DJ gathers the inputs.
+"""
 
 _TOP = 25
 _SKIPPY_MIN_PLAYS = 3
@@ -14,15 +15,12 @@ def build_profile(
 ) -> str:
     """`history_artists`: {artist, plays, skips} from the listening history;
     `top_artists`: Spotify's ~6-month top; `feedback`: {title, artist, liked};
-    `outcomes`: her recent picks {title, artist, discovery, outcome}."""
+    `outcomes`: her recent picks {title, artist, discovery, outcome}.
+    """
     skippy = [
-        a["artist"]
-        for a in history_artists
-        if a["plays"] >= _SKIPPY_MIN_PLAYS and a["skips"] / a["plays"] >= 0.5
+        a["artist"] for a in history_artists if a["plays"] >= _SKIPPY_MIN_PLAYS and a["skips"] / a["plays"] >= 0.5
     ][:10]
-    played = [a for a in history_artists if a["plays"] > a["skips"] and a["artist"] not in skippy][
-        :_TOP
-    ]
+    played = [a for a in history_artists if a["plays"] > a["skips"] and a["artist"] not in skippy][:_TOP]
     lines = []
     if played:
         lines.append("Artists he plays most: " + ", ".join(a["artist"] for a in played) + ".")

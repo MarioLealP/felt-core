@@ -84,8 +84,10 @@ async def test_with_felt_vision_bonsai_gets_words_not_the_image(tmp_path, fake_l
     assert result.reply == "Crypto drama again?"
     assert asked == {"app": "firefox", "title": "Hacker News", "poe": False}
     user = fake_llm.calls[0]["messages"][-1]["content"]
-    assert isinstance(user, str) and "Eight Bits of Trust" in user
-    assert "Keep names and terms exactly" in user and "Look at the screenshot" not in user
+    assert isinstance(user, str)
+    assert "Eight Bits of Trust" in user
+    assert "Keep names and terms exactly" in user
+    assert "Look at the screenshot" not in user
 
 
 async def test_without_felt_vision_the_image_goes_to_bonsai(tmp_path, fake_llm):
@@ -93,7 +95,8 @@ async def test_without_felt_vision_the_image_goes_to_bonsai(tmp_path, fake_llm):
     fake_llm.script = ['{"seen": "a game", "line": "nice!", "emotion": "happy"}']
     await screen_reactions.react_to_screen(b"jpeg", "game.exe", "Game", config, trigger="manual")
     user = fake_llm.calls[0]["messages"][-1]["content"]
-    assert isinstance(user, list) and user[1]["type"] == "image_url"
+    assert isinstance(user, list)
+    assert user[1]["type"] == "image_url"
 
 
 async def test_a_description_from_the_desktop_skips_the_image(tmp_path, fake_llm, monkeypatch):
@@ -113,7 +116,8 @@ async def test_a_description_from_the_desktop_skips_the_image(tmp_path, fake_llm
 
     assert result.reply == "Again?"
     user = fake_llm.calls[0]["messages"][-1]["content"]
-    assert isinstance(user, str) and "On his screen: Hacker News front page." in user
+    assert isinstance(user, str)
+    assert "On his screen: Hacker News front page." in user
 
 
 def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
@@ -135,5 +139,6 @@ def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
         )
         neither = client.post("/v1/react/screen", data={"app": "firefox", "trigger": "manual"})
 
-    assert ok.status_code == 200 and got == {"jpeg": b"", "seen": "a wiki page"}
+    assert ok.status_code == 200
+    assert got == {"jpeg": b"", "seen": "a wiki page"}
     assert neither.status_code == 422

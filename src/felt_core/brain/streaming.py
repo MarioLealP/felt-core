@@ -33,7 +33,8 @@ class ReplyMeta:
     """What a reply does besides speak - known once the skill has run, before
     her answer streams: chat_streamed() yields it ahead of the first chunk, so
     the API can send it with chunk 0 (a hush or a reaction can't wait for the
-    reply to finish)."""
+    reply to finish).
+    """
 
     ui_action: UIAction | None = None
     animation_tag: str | None = None
@@ -46,7 +47,8 @@ def _norm(text: str) -> str:
 class ReplySpeaker:
     """Collects what she says during one streamed chat turn. `chunks` gets
     each released chunk (the reply's own text, not yet stripped for TTS);
-    `said` keeps them in order."""
+    `said` keeps them in order.
+    """
 
     def __init__(self, config: FeltConfig) -> None:
         self.first_chunk_chars = config.reply_stream_first_chunk_chars
@@ -67,7 +69,8 @@ class ReplySpeaker:
     def tell(self, meta: ReplyMeta) -> None:
         """The reply's ui_action / animation tag, as soon as they're known -
         only while nothing has been said yet (after that, the final result
-        carries them)."""
+        carries them).
+        """
         if not self.said and (meta.ui_action is not None or meta.animation_tag is not None):
             self.told = True
             self.chunks.put_nowait(meta)
@@ -92,7 +95,8 @@ class ReplySpeaker:
         `guard` (a tool-carrying call's claim check) catches a claimed lookup or
         action in the opening - then nothing more of this call is said and
         the caller's full-text check takes over. A reply that turns into a
-        tool call says nothing more either."""
+        tool call says nothing more either.
+        """
         chunker = self._chunker()
         holding = False
         self._turn_start = len(self.said)
@@ -102,9 +106,7 @@ class ReplySpeaker:
             for chunk in chunks:
                 if not holding and guard is not None and guard(chunker.text):
                     holding = True
-                    logger.info(
-                        "stream guard: the opening claims a lookup or action - holding the reply"
-                    )
+                    logger.info("stream guard: the opening claims a lookup or action - holding the reply")
                 if not holding:
                     self._release(chunk)
 
@@ -123,7 +125,8 @@ class ReplySpeaker:
     def full_reply(self, reply: str) -> str:
         """What she said this turn, as one text: `reply` plus whatever was
         let out before the call it came from (a late fake-claim hit, a few
-        words before a tool call), in front."""
+        words before a tool call), in front.
+        """
         if reply.strip() == self._turn_text:  # the answer is the latest streamed call
             before = " ".join(self.said[: self._turn_start])
         else:  # a path that didn't stream
@@ -136,7 +139,8 @@ class ReplySpeaker:
 
     def rest(self, reply: str) -> list[str]:
         """The chunks of `reply` not said yet - all of it when the answer
-        came from a path that doesn't stream (a fast path, a held reply)."""
+        came from a path that doesn't stream (a fast path, a held reply).
+        """
         said, full = _norm(self.said_text()), _norm(reply)
         remainder = full[len(said) :] if full.startswith(said) else full
         chunker = self._chunker()
@@ -146,7 +150,8 @@ class ReplySpeaker:
 def correction_note(said: str) -> str:
     """Added to the tool result when the guard caught a claim only after she
     had already said part of the reply (a late hit): she corrects herself,
-    in her own words."""
+    in her own words.
+    """
     return (
         f'You already said this out loud: "{said}" - but at that point you '
         "hadn't actually done or looked anything up. It has really happened now "

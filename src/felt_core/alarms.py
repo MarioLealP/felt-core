@@ -65,12 +65,8 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
             fire_at,
         )
     with llm_gate.timely("alarm"):
-        text = await her_line(
-            config, alarm_facts(label, fire_at, datetime.now()), plain_alarm(label)
-        )
-    save_message(
-        config.db_path, APP_SESSION, "assistant", text, kind=ALARM, source_ref=f"alarm:{alarm_id}"
-    )
+        text = await her_line(config, alarm_facts(label, fire_at, datetime.now()), plain_alarm(label))
+    save_message(config.db_path, APP_SESSION, "assistant", text, kind=ALARM, source_ref=f"alarm:{alarm_id}")
     await notify(config, text, title="Felt alarm")
     mark_alarm_fired(config.db_path, alarm_id)
     _scheduled_tasks.pop(alarm_id, None)
@@ -85,7 +81,8 @@ def schedule_alarm(config: FeltConfig, fire_at: datetime, label: str) -> int:
 def cancel_alarm(config: FeltConfig, alarm_id: int) -> bool:
     """True if a pending alarm with this id was actually cancelled. Stops
     the sleeping task first (see _scheduled_tasks above) — deleting only
-    the DB row would leave it scheduled to fire anyway."""
+    the DB row would leave it scheduled to fire anyway.
+    """
     task = _scheduled_tasks.pop(alarm_id, None)
     if task is not None:
         task.cancel()
@@ -100,9 +97,8 @@ def reschedule_pending_alarms(config: FeltConfig) -> None:
     felt-core was down fires immediately (late, but not silently
     dropped — the alternative of only ever firing on-time alarms would
     quietly lose exactly the overnight "wake me up at 7am" case this
-    exists for, if felt-core happened to restart at 6am)."""
+    exists for, if felt-core happened to restart at 6am).
+    """
     for alarm in get_pending_alarms(config.db_path):
         fire_at = datetime.fromisoformat(alarm["fire_at"])
-        _scheduled_tasks[alarm["id"]] = asyncio.create_task(
-            _fire_at(config, alarm["id"], fire_at, alarm["label"])
-        )
+        _scheduled_tasks[alarm["id"]] = asyncio.create_task(_fire_at(config, alarm["id"], fire_at, alarm["label"]))

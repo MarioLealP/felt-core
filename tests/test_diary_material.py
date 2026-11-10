@@ -13,10 +13,7 @@ def _config(tmp_path):
 
 
 def test_event_line_whitelists_known_kinds():
-    assert (
-        diary._event_line("game_start", {"name": "endfield.exe"})
-        == 'started playing "endfield.exe"'
-    )
+    assert diary._event_line("game_start", {"name": "endfield.exe"}) == 'started playing "endfield.exe"'
     assert diary._event_line("day_start", {}) is None
     assert diary._event_line("unknown_kind", {"secret": "do not send"}) is None
 

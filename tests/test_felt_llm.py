@@ -130,9 +130,7 @@ async def test_chat_hitting_max_tokens_ends_at_last_sentence(tmp_path, monkeypat
     cut = "Option three is nice. Option two feels like an office. But honestly, it feels a bit like"
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": cut}, "finish_reason": "length"}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": cut}, "finish_reason": "length"}]})
 
     _mock_client(monkeypatch, handler)
     reply = await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
@@ -146,9 +144,7 @@ async def test_chat_complete_reply_is_left_alone(tmp_path, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={
-                "choices": [{"message": {"content": "Done. On the list"}, "finish_reason": "stop"}]
-            },
+            json={"choices": [{"message": {"content": "Done. On the list"}, "finish_reason": "stop"}]},
         )
 
     _mock_client(monkeypatch, handler)
@@ -168,9 +164,7 @@ async def test_chat_connection_error_and_no_url_are_unavailable(tmp_path, monkey
 
     _mock_client(monkeypatch, handler)
     with pytest.raises(local_llm.LocalLLMUnavailable):
-        await local_llm.chat(
-            [{"role": "user", "content": "hi"}], max_tokens=8, config=_config(tmp_path)
-        )
+        await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=_config(tmp_path))
     with pytest.raises(local_llm.LocalLLMUnavailable):
         await local_llm.chat(
             [{"role": "user", "content": "hi"}],
@@ -247,9 +241,7 @@ async def test_chat_local_tool_call_runs_skill_then_phrases(tmp_path, monkeypatc
         handled.append(params)
         return SkillResult(text="12 degrees and sunny")
 
-    monkeypatch.setattr(
-        orchestrator, "load_plugins", lambda d: {"lookup_thing": _skill("lookup_thing", handle)}
-    )
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {"lookup_thing": _skill("lookup_thing", handle)})
     fake_llm.script = [
         {"text": "", "tool_calls": [_tool_call("lookup_thing", {"when": "tomorrow"})]},
         "Sunny tomorrow, twelve degrees.",
@@ -277,9 +269,7 @@ async def test_chat_local_guard_drops_an_unwarranted_tool_call(tmp_path, monkeyp
     async def handle(params, ctx):
         raise AssertionError("guarded skill must not run")
 
-    monkeypatch.setattr(
-        orchestrator, "load_plugins", lambda d: {"generate_image": _skill("generate_image", handle)}
-    )
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {"generate_image": _skill("generate_image", handle)})
     fake_llm.script = [
         {"text": "", "tool_calls": [_tool_call("generate_image", {})]},
         "Octopuses have three hearts.",
@@ -308,9 +298,7 @@ async def test_chat_presence_fast_path_skips_the_model_turn(tmp_path, monkeypatc
         ran.append(params)
         return SkillResult(text="ok, quiet")
 
-    monkeypatch.setattr(
-        orchestrator, "load_plugins", lambda d: {"felt_presence": _skill("felt_presence", handle)}
-    )
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {"felt_presence": _skill("felt_presence", handle)})
     fake_llm.script = ["Fine, fine."]
 
     result = await orchestrator.chat("shut up", config, session_id="s4")
@@ -369,9 +357,7 @@ async def test_diary_generation_uses_felt_llm(tmp_path, fake_llm):
 
 async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_llm, caplog):
     config = _config(tmp_path)
-    db.save_event(
-        config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00"
-    )
+    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
 
     with caplog.at_level(logging.INFO, logger="felt_core.diary"):
@@ -386,17 +372,13 @@ async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_l
 # -- weather precompute ------------------------------------------------------
 
 
-async def test_weather_precompute_phrases_with_felt_llm_and_skips_when_down(
-    tmp_path, monkeypatch, fake_llm
-):
+async def test_weather_precompute_phrases_with_felt_llm_and_skips_when_down(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
 
     async def handle(params, ctx):
         return SkillResult(text="15 degrees, cloudy")
 
-    monkeypatch.setattr(
-        background, "load_plugins", lambda d: {"get_weather": _skill("get_weather", handle)}
-    )
+    monkeypatch.setattr(background, "load_plugins", lambda d: {"get_weather": _skill("get_weather", handle)})
     monkeypatch.setattr(background, "_weather_precompute", None)
 
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
@@ -434,9 +416,7 @@ async def test_warm_up_sends_the_real_persona_and_tools_prefix(tmp_path, monkeyp
     async def handle(params, ctx):
         raise AssertionError("never runs")
 
-    monkeypatch.setattr(
-        background, "load_plugins", lambda d: {"lookup_thing": _skill("lookup_thing", handle)}
-    )
+    monkeypatch.setattr(background, "load_plugins", lambda d: {"lookup_thing": _skill("lookup_thing", handle)})
 
     await background.warm_up_llm(config)
 
@@ -501,7 +481,8 @@ async def test_warm_up_is_not_recorded_in_latency_metrics(tmp_path, monkeypatch,
     await background.warm_up_llm(config)
 
     current = metrics._current.get()
-    assert current is not None and current.stages == []
+    assert current is not None
+    assert current.stages == []
 
 
 # -- POST /v1/reaction-tag ---------------------------------------------------
@@ -580,8 +561,8 @@ def test_model_endpoints_answer_503_when_felt_llm_is_down(tmp_path, monkeypatch,
         screen_resp = client.post(
             "/v1/react/screen", files={"image": ("s.jpg", b"jpg", "image/jpeg")}, data={"app": "x"}
         )
-        assert screen_resp.status_code == 503 and screen_resp.json() == expected
-        event_resp = client.post(
-            "/v1/react/event", json={"event": "afk_end", "details": {"duration_s": 4000}}
-        )
-        assert event_resp.status_code == 503 and event_resp.json() == expected
+        assert screen_resp.status_code == 503
+        assert screen_resp.json() == expected
+        event_resp = client.post("/v1/react/event", json={"event": "afk_end", "details": {"duration_s": 4000}})
+        assert event_resp.status_code == 503
+        assert event_resp.json() == expected

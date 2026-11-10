@@ -27,14 +27,14 @@ _BACKTICK_RE = re.compile(r"`+")
 _ACTION_LEAD_RE = re.compile(r"(^|[.!?…]\s+)\*[^*\n]{1,40}\*[.!?…,]*\s*")
 _ACTION_TAIL_RE = re.compile(r"\s*\*[^*\n]{1,40}\*[.!?…]*\s*$")
 _EMOJI_RE = re.compile(
-    "["
+    r"["
     "\U0001f300-\U0001faff"  # misc symbols/pictographs through supplemental symbols
     "\U00002600-\U000027bf"  # misc symbols + dingbats
     "\U0001f1e6-\U0001f1ff"  # regional indicators (flag emoji)
     "\U00002b00-\U00002bff"  # misc symbols and arrows (stars, etc.)
     "\U0000fe0f"  # emoji variation selector
     "\U0000200d"  # zero-width joiner (combined emoji)
-    "]+"
+    r"]+"
 )
 _WHITESPACE_RE = re.compile(r"[ \t]+")
 _BLANK_LINES_RE = re.compile(r"\n+")
@@ -64,9 +64,7 @@ _SENTENCE_END_RE = re.compile(r"[.!?\u2026]+[\"')\]]*(?=\s|$)|\n")
 # A "." right after one of these is not a sentence end ("Dr. Smith", "e.g.
 # this"). Lower-case, without the dot. Deliberately short: a wrong split
 # just makes two chunks, a wrong merge just makes one longer one.
-_ABBREVIATIONS = frozenset(
-    {"mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "e.g", "i.e", "approx", "inc"}
-)
+_ABBREVIATIONS = frozenset({"mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "e.g", "i.e", "approx", "inc"})
 _INITIALS_RE = re.compile(r"^(?:[A-Za-z]\.)*[A-Za-z]$")  # "U.S", "J", "a.m"
 
 
@@ -86,7 +84,8 @@ def speech_chunks(text: str, first_chunk_chars: int = 40, min_chunk_chars: int =
     answering, the rest in the background. Sentences accumulate until a
     chunk reaches `first_chunk_chars` (first) / `min_chunk_chars` (later),
     so a short "Hm." never becomes a chunk of its own; a short leftover at
-    the end joins the previous chunk. One chunk back means "don't stream"."""
+    the end joins the previous chunk. One chunk back means "don't stream".
+    """
     sentences: list[str] = []
     start = 0
     for m in _SENTENCE_END_RE.finditer(text):
@@ -133,11 +132,10 @@ class SpeechChunker:
     `first_at_clause`: the first chunk may also end at a clause break (a
     comma, semicolon, colon or spaced dash) once it has `first_chunk_chars` -
     her first words wait on their TTS, and a long opening sentence made that
-    11-12 s (2026-10-21 timer); the rest still split at sentence ends."""
+    11-12 s (2026-10-21 timer); the rest still split at sentence ends.
+    """
 
-    def __init__(
-        self, first_chunk_chars: int = 40, min_chunk_chars: int = 25, first_at_clause: bool = False
-    ) -> None:
+    def __init__(self, first_chunk_chars: int = 40, min_chunk_chars: int = 25, first_at_clause: bool = False) -> None:
         self.first_chunk_chars = first_chunk_chars
         self.min_chunk_chars = min_chunk_chars
         self.first_at_clause = first_at_clause
@@ -157,11 +155,7 @@ class SpeechChunker:
                 m = None  # the run of ".!?" or the closing quotes may go on
             if self.first_at_clause and not self._first_out:
                 c = _CLAUSE_END_RE.search(self.text, pos)
-                if (
-                    c is not None
-                    and c.end() < len(self.text)
-                    and (m is None or c.end() < m.start())
-                ):
+                if c is not None and c.end() < len(self.text) and (m is None or c.end() < m.start()):
                     pos = c.end()
                     piece = self.text[self._start : c.end()].strip()
                     joined = f"{self._buffer} {piece}" if self._buffer else piece
@@ -181,7 +175,8 @@ class SpeechChunker:
     def close(self, final_text: str | None = None) -> list[str]:
         """`final_text`: the reply as it finally stands, if it differs from
         what was fed (felt-llm hit max_tokens and the reply was ended at its
-        last full sentence) - only the not-yet-chunked part is taken from it."""
+        last full sentence) - only the not-yet-chunked part is taken from it.
+        """
         if final_text is not None and final_text.startswith(self.text[: self._start]):
             self.text = final_text
         out = self._add(self.text[self._start :].strip())
@@ -215,7 +210,8 @@ class SpeechChunker:
 
 def tts_request_body(text: str, emotion: str | None = None) -> dict[str, str]:
     """The JSON body for felt-voice's /v1/tts. `emotion` (WP-54) is only
-    sent when felt-core has one - chat replies don't, and speak neutrally."""
+    sent when felt-core has one - chat replies don't, and speak neutrally.
+    """
     body = {"text": text}
     if emotion:
         body["emotion"] = emotion

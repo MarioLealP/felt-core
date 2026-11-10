@@ -195,9 +195,7 @@ async def test_chat_is_never_forced(acting, monkeypatch, fake_llm):
     assert [c["tool_choice"] for c in fake_llm.calls] == [None]
 
 
-async def test_a_forced_turn_that_calls_nothing_falls_back_to_a_normal_turn(
-    acting, monkeypatch, fake_llm
-):
+async def test_a_forced_turn_that_calls_nothing_falls_back_to_a_normal_turn(acting, monkeypatch, fake_llm):
     config = await asyncio.to_thread(acting)
     monkeypatch.setattr(orchestrator, "load_plugins", lambda d: _wiki_registry([]))
     fake_llm.script = ["no tool", "A Chaos Orb rerolls modifiers."]

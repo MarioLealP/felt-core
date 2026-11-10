@@ -51,7 +51,8 @@ def _basic_auth(user: str | None, password: str | None) -> tuple[str, str] | Non
     password (WP-40 audit: `config.ntfy_password` is independently
     Optional) used to build exactly that broken half-pair and would have
     failed at the first real connection; treat it the same as "no auth
-    configured" instead."""
+    configured" instead.
+    """
     if user and password:
         return (user, password)
     return None

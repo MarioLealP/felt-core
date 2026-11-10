@@ -29,14 +29,10 @@ def test_is_duplicate_catches_high_word_overlap():
 
 def test_add_self_memory_skips_vetoed_text(tmp_path):
     config = _config(tmp_path)
-    mid = insert_self_memory(
-        config.db_path, "opinion", "factorio is a condition", "[]", "2026-09-01"
-    )
+    mid = insert_self_memory(config.db_path, "opinion", "factorio is a condition", "[]", "2026-09-01")
     update_self_memory(config.db_path, mid, status="vetoed")
 
-    result = self_memory.add_self_memory(
-        config, "opinion", "factorio is a condition", [], "2026-09-02"
-    )
+    result = self_memory.add_self_memory(config, "opinion", "factorio is a condition", [], "2026-09-02")
 
     assert result is None
     assert get_self_memories(config.db_path, status="active") == []
@@ -44,13 +40,9 @@ def test_add_self_memory_skips_vetoed_text(tmp_path):
 
 def test_add_self_memory_skips_near_duplicate_actives(tmp_path):
     config = _config(tmp_path)
-    self_memory.add_self_memory(
-        config, "opinion", "bread is the best food", ["bread"], "2026-09-01"
-    )
+    self_memory.add_self_memory(config, "opinion", "bread is the best food", ["bread"], "2026-09-01")
 
-    result = self_memory.add_self_memory(
-        config, "opinion", "bread is truly the best food", ["bread"], "2026-09-02"
-    )
+    result = self_memory.add_self_memory(config, "opinion", "bread is truly the best food", ["bread"], "2026-09-02")
 
     assert result is None
     assert len(get_self_memories(config.db_path, status="active")) == 1
@@ -61,9 +53,7 @@ def test_add_self_memory_enforces_the_30_active_cap(tmp_path):
     for i in range(30):
         self_memory.add_self_memory(config, "opinion", f"w{i}a w{i}b w{i}c w{i}d", [], "2026-09-01")
 
-    self_memory.add_self_memory(
-        config, "opinion", "one more totally new opinion here", [], "2026-09-02"
-    )
+    self_memory.add_self_memory(config, "opinion", "one more totally new opinion here", [], "2026-09-02")
 
     active = get_self_memories(config.db_path, status="active")
     retired = get_self_memories(config.db_path, status="retired")
@@ -82,9 +72,7 @@ def test_add_self_memory_never_retires_a_pinned_one(tmp_path):
     for i in range(1, 30):
         self_memory.add_self_memory(config, "opinion", f"w{i}a w{i}b w{i}c w{i}d", [], "2026-09-01")
 
-    self_memory.add_self_memory(
-        config, "opinion", "one more totally new opinion here", [], "2026-09-02"
-    )
+    self_memory.add_self_memory(config, "opinion", "one more totally new opinion here", [], "2026-09-02")
 
     retired_texts = [m["text"] for m in get_self_memories(config.db_path, status="retired")]
     assert "opinion number 0 about something unique" not in retired_texts
@@ -154,9 +142,7 @@ def test_rank_self_memories_applies_cooldown_unless_pool_would_empty():
     assert ranked[0]["id"] == 2  # id 1 is on cooldown, excluded first
 
     ranked_only_cooled = self_memory.rank_self_memories([memories[0]], None, now)
-    assert [m["id"] for m in ranked_only_cooled] == [
-        1
-    ]  # cooldown would empty the pool - used anyway
+    assert [m["id"] for m in ranked_only_cooled] == [1]  # cooldown would empty the pool - used anyway
 
 
 def test_rank_self_memories_caps_to_max_in_prompt():
@@ -185,10 +171,12 @@ def test_pick_callbacks_decays_after_two_uses():
     callbacks = [{"text": "the boss fight", "uses": 0}]
 
     picked, updated = self_memory._pick_callbacks(callbacks)
-    assert picked == ["the boss fight"] and updated[0]["uses"] == 1
+    assert picked == ["the boss fight"]
+    assert updated[0]["uses"] == 1
 
     picked2, updated2 = self_memory._pick_callbacks(updated)
-    assert picked2 == ["the boss fight"] and updated2[0]["uses"] == 2
+    assert picked2 == ["the boss fight"]
+    assert updated2[0]["uses"] == 2
 
     picked3, _ = self_memory._pick_callbacks(updated2)
     assert picked3 == []  # retired after 2 uses
@@ -240,9 +228,7 @@ def test_memory_block_includes_yesterdays_diary_snippet(tmp_path):
 
 def test_memory_block_touches_uses_on_selected_memories(tmp_path):
     config = _config(tmp_path)
-    insert_self_memory(
-        config.db_path, "opinion", "a fresh opinion nobody used yet", "[]", "2026-09-01"
-    )
+    insert_self_memory(config.db_path, "opinion", "a fresh opinion nobody used yet", "[]", "2026-09-01")
 
     self_memory.memory_block(config)
 

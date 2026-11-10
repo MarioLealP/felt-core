@@ -57,12 +57,8 @@ async def handle(params, ctx):
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")
 
-    title = get_single_param(
-        params, "title", ignore_keys=("when", "duration_minutes", "calendar", "place")
-    )
-    when_text = get_single_param(
-        params, "when", ignore_keys=("title", "duration_minutes", "calendar", "place")
-    )
+    title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar", "place"))
+    when_text = get_single_param(params, "when", ignore_keys=("title", "duration_minutes", "calendar", "place"))
     if not title or not when_text:
         return SkillResult(text="I need both a title and a time to create a calendar event.")
 
@@ -121,15 +117,11 @@ async def handle(params, ctx):
     where = calendar.get("summary", "your calendar")
     if all_day:
         try:
-            await create_event(
-                config, calendar["id"], str(title), start, end, location=place, all_day=True
-            )
+            await create_event(config, calendar["id"], str(title), start, end, location=place, all_day=True)
         except CalendarUnavailable:
             return SkillResult(text="I couldn't reach the calendar to add it.")
         day = f"{start.strftime('%A')} {start.day} {start.strftime('%B')}"
-        return SkillResult(
-            text=f"Added '{title}', {day}, all day, to {where}. Read it back to Mario as written."
-        )
+        return SkillResult(text=f"Added '{title}', {day}, all day, to {where}. Read it back to Mario as written.")
     if not said:
         appointment_hold.hold(config, calendar["id"], str(title), start, end)
         return SkillResult(
@@ -143,6 +135,4 @@ async def handle(params, ctx):
         return SkillResult(text="I couldn't reach the calendar to add it.")
     remember_created(config, calendar["id"], str(title), start, end)
     spot = f"at {place}" if place else "no place"
-    return SkillResult(
-        text=f"Added '{title}', {at}, {spot}, to {where}. Read it back to Mario as written."
-    )
+    return SkillResult(text=f"Added '{title}', {at}, {spot}, to {where}. Read it back to Mario as written.")

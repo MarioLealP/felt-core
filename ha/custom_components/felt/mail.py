@@ -2,7 +2,8 @@
 each new unread inbox mail; this turns one into what felt-core's
 /v1/ha/email takes. Felt's own HA user isn't an admin and can't listen for
 the event itself, so this integration does. No Home Assistant imports, so it
-is testable on its own."""
+is testable on its own.
+"""
 
 from __future__ import annotations
 
@@ -27,9 +28,7 @@ def payload(data: dict[str, Any]) -> dict[str, Any] | None:
     if not sender:
         return None
     headers = data.get("headers") or {}
-    key = _header(headers, "message-id") or (
-        f"{data.get('username')}:{data.get('folder')}:{data.get('uid')}"
-    )
+    key = _header(headers, "message-id") or (f"{data.get('username')}:{data.get('folder')}:{data.get('uid')}")
     return {
         "key": key.strip(),
         "sender": str(sender),

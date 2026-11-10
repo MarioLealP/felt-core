@@ -38,12 +38,7 @@ def test_tray_refused_off_its_list(tmp_path, monkeypatch):
         assert r.status_code == 403
         assert r.json()["detail"] == "route not allowed for this identity"
         # a valid identity header never upgrades to the token's full access
-        assert (
-            c.get(
-                "/v1/history", headers=_as("tray") | {"Authorization": "Bearer s3cret"}
-            ).status_code
-            == 403
-        )
+        assert c.get("/v1/history", headers=_as("tray") | {"Authorization": "Bearer s3cret"}).status_code == 403
 
 
 def test_identities_are_separate(tmp_path, monkeypatch):
@@ -56,13 +51,15 @@ def test_identities_are_separate(tmp_path, monkeypatch):
 def test_unknown_identity_refused(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
         r = c.get("/v1/settings/temperature-unit", headers=_as("felt-core"))
-        assert r.status_code == 403 and r.json()["detail"] == "unknown identity"
+        assert r.status_code == 403
+        assert r.json()["detail"] == "unknown identity"
 
 
 def test_denied_serial_refused_at_once(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch, deny='["777"]') as c:
         r = c.get("/v1/settings/temperature-unit", headers=_as("tray", "777"))
-        assert r.status_code == 403 and r.json()["detail"] == "revoked certificate"
+        assert r.status_code == 403
+        assert r.json()["detail"] == "revoked certificate"
         assert c.get("/v1/settings/temperature-unit", headers=_as("tray", "778")).status_code == 200
 
 

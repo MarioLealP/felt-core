@@ -9,7 +9,8 @@ from pathlib import Path
 _spec = importlib.util.spec_from_file_location(
     "felt_ha_brief", Path(__file__).parent.parent / "ha/custom_components/felt/brief.py"
 )
-assert _spec and _spec.loader
+assert _spec
+assert _spec.loader
 brief = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(brief)
 
@@ -46,7 +47,9 @@ def test_finds_todays_brief_behind_newer_remarks():
         ]
     )
     got = run(fetch)
-    assert got is not None and got["text"] == "rain later" and got["at"].hour == 7
+    assert got is not None
+    assert got["text"] == "rain later"
+    assert got["at"].hour == 7
 
 
 def test_pages_back_with_before_the_oldest_id():
@@ -55,14 +58,13 @@ def test_pages_back_with_before_the_oldest_id():
         [line(5, "brief", "2026-10-26T06:30:00Z", "found")],
     )
     got = run(fetch)
-    assert got is not None and got["text"] == "found"
+    assert got is not None
+    assert got["text"] == "found"
     assert calls[1].endswith("&before=10")
 
 
 def test_yesterdays_brief_is_not_today():
-    fetch, calls = pages(
-        [line(1, "brief", "2026-10-25T07:00:00Z"), line(2, "remark", "2026-10-26T08:00:00Z")]
-    )
+    fetch, calls = pages([line(1, "brief", "2026-10-25T07:00:00Z"), line(2, "remark", "2026-10-26T08:00:00Z")])
     assert run(fetch) is None
     assert len(calls) == 1  # stopped at yesterday, no more pages
 

@@ -21,9 +21,7 @@ _DAILY_JSON = json.dumps(
         "entry": "we played endfield together, it was great.",
         "callbacks": ["endfield hype"],
         "mood_word": "cozy",
-        "self_updates": [
-            {"kind": "like", "text": "endfield's colours are gorgeous", "keywords": ["endfield"]}
-        ],
+        "self_updates": [{"kind": "like", "text": "endfield's colours are gorgeous", "keywords": ["endfield"]}],
         "greeting": "morning! still thinking about endfield.",
     }
 )
@@ -58,20 +56,14 @@ async def test_write_diary_for_date_skips_when_no_material(tmp_path):
     assert db.get_diary(config.db_path, "2026-09-22") is None
 
 
-async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(
-    tmp_path, monkeypatch, fake_llm
-):
+async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    db.save_event(
-        config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
-    )
+    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = _DAILY_JSON
     enqueued = []
 
-    monkeypatch.setattr(
-        diary, "enqueue_proactive", lambda cfg, kind, text, **kw: enqueued.append((kind, text))
-    )
+    monkeypatch.setattr(diary, "enqueue_proactive", lambda cfg, kind, text, **kw: enqueued.append((kind, text)))
 
     first = await diary.write_diary_for_date(config, "2026-09-22")
     second = await diary.write_diary_for_date(config, "2026-09-22")
@@ -93,9 +85,7 @@ async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(
 
 async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path, fake_llm):
     config = _config(tmp_path)
-    db.save_event(
-        config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
-    )
+    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
 
@@ -107,9 +97,7 @@ async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path,
 
 async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, fake_llm):
     config = _config(tmp_path)
-    db.save_event(
-        config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
-    )
+    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = "not json at all"
 
@@ -124,9 +112,7 @@ async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, fake_
 
 async def test_on_event_writes_yesterday_once_then_never_again(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    db.save_event(
-        config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00"
-    )
+    db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = _DAILY_JSON
     monkeypatch.setattr(diary, "enqueue_proactive", lambda *a, **kw: None)

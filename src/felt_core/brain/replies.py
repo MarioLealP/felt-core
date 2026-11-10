@@ -4,7 +4,8 @@ line. This is the one module events.py imports from directly instead of
 reaching into orchestrator internals (`local_reply`/`music_taste_context`
 below are public on purpose). Every function here raises
 `local_llm.LocalLLMUnavailable` when felt-llm is down - there is no
-fallback, callers let it propagate (the API maps it to a 503)."""
+fallback, callers let it propagate (the API maps it to a 503).
+"""
 
 from felt_core import local_llm
 
@@ -55,7 +56,8 @@ def music_taste_context(config: FeltConfig) -> list[dict]:
     """WP-16 Part 2 - the listening-taste note. Empty until enough listening
     history exists to say anything (see music_taste.summarize_taste).
     Public (not underscore-prefixed): events.py's event reactions use it
-    too (WP-40)."""
+    too (WP-40).
+    """
     note = summarize_taste(get_music_taste_stats(config.db_path))
     if not note:
         return []
@@ -64,13 +66,12 @@ def music_taste_context(config: FeltConfig) -> list[dict]:
 
 def _daily_persona() -> str:
     """The day's fixed persona (personality.daily_persona) - kept as a name
-    here for the chat call sites and tests that use it."""
+    here for the chat call sites and tests that use it.
+    """
     return daily_persona()
 
 
-def local_turn_messages(
-    message: str, history: list[dict], config: FeltConfig, tone: str | None
-) -> list[dict]:
+def local_turn_messages(message: str, history: list[dict], config: FeltConfig, tone: str | None) -> list[dict]:
     """The cache-stable layout for a local-first chat turn (WP-36, measured
     2026-09-29): felt-llm's template renders the tool declarations right
     AFTER the system text, so anything per-turn in the system message
@@ -78,7 +79,8 @@ def local_turn_messages(
     screen) invalidated ~5K cached tokens, persona + 29 tools, every turn
     (~20 s of prompt processing on the P104). The system message is now the
     day's fixed persona only; everything that changes per turn rides on the
-    latest user message, after the history, where only it gets processed."""
+    latest user message, after the history, where only it gets processed.
+    """
     context: list[str] = []
     block = memory_block(config, message)
     if block:
@@ -92,22 +94,13 @@ def local_turn_messages(
     user = message
     if context:
         joined = "\n\n".join(context)
-        user = (
-            f"[Background for this reply, not said by Mario]\n{joined}\n"
-            f"[End of background]\n\n{message}"
-        )
-    return (
-        [{"role": "system", "content": _daily_persona()}]
-        + conversation
-        + [{"role": "user", "content": user}]
-    )
+        user = f"[Background for this reply, not said by Mario]\n{joined}\n[End of background]\n\n{message}"
+    return [{"role": "system", "content": _daily_persona()}] + conversation + [{"role": "user", "content": user}]
 
 
 # WP-07's fixed emotion set: X-Emotion drives a small fixed set of
 # expressions client-side, not an open vocabulary
-EMOTIONS = frozenset(
-    {"happy", "excited", "amused", "sad", "annoyed", "surprised", "thinking", "sleepy", "neutral"}
-)
+EMOTIONS = frozenset({"happy", "excited", "amused", "sad", "annoyed", "surprised", "thinking", "sleepy", "neutral"})
 
 
 async def local_reply(
@@ -118,7 +111,8 @@ async def local_reply(
     opt-in per caller, since screen-reaction and event lines don't need
     them (WP-02: "Facts are not needed; don't include them"). Public: the
     orchestrator, the screen-reaction module and events.py all call this
-    directly (WP-40). Raises LocalLLMUnavailable when felt-llm is down."""
+    directly (WP-40). Raises LocalLLMUnavailable when felt-llm is down.
+    """
     facts = _facts_context(config) if include_facts else []
     taste = music_taste_context(config) if include_facts else []
     last: dict = messages_tail[-1] if messages_tail else {}
@@ -136,7 +130,8 @@ async def local_reply(
 def _tool_result_instruction(tool_output: str) -> str:
     """Shared by every phrasing call site (the tool-call follow-up, the
     presence fast path's phrasing, and the weather precompute) so they all
-    give the model the identical instruction."""
+    give the model the identical instruction.
+    """
     return (
         f"(Tool result: {tool_output})\n\n"
         "State that fact directly and naturally, as if you already knew it. "
@@ -163,7 +158,8 @@ async def phrase_skill_result(
 ) -> str:
     """Phrase a skill's result as a spoken reply (a plain felt-llm call).
     Used where there's no tool-call turn to follow up on - the presence
-    fast path, or a model turn that produced no usable text."""
+    fast path, or a model turn that produced no usable text.
+    """
     return await local_reply(
         history
         + [

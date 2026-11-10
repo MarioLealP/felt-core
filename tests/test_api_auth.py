@@ -126,21 +126,12 @@ def test_sso_mutations_reject_a_foreign_origin(tmp_path, monkeypatch, fake_ha):
         )
         # a foreign origin - a sibling subdomain or anywhere - is refused
         for origin in ("https://calc.clockmost.com", "https://evil.example"):
-            assert (
-                c.post(
-                    "/v1/shopping-list", json={"text": "x"}, headers={"Origin": origin}
-                ).status_code
-                == 403
-            ), origin
+            assert c.post("/v1/shopping-list", json={"text": "x"}, headers={"Origin": origin}).status_code == 403, (
+                origin
+            )
         # cross-site fetch metadata alone (no Origin header) is refused too
         assert (
-            c.post(
-                "/v1/shopping-list", json={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}
-            ).status_code
-            == 403
+            c.post("/v1/shopping-list", json={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
         )
         # a safe cross-origin read is unaffected (no state change)
-        assert (
-            c.get("/v1/shopping-list", headers={"Origin": "https://calc.clockmost.com"}).status_code
-            == 200
-        )
+        assert c.get("/v1/shopping-list", headers={"Origin": "https://calc.clockmost.com"}).status_code == 200

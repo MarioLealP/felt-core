@@ -89,9 +89,7 @@ async def env(tmp_path, monkeypatch):
         return ChatResult(reply=reply["text"])
 
     monkeypatch.setattr(api, "chat", fake_chat)
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=api.app), base_url="http://t"
-    ) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api.app), base_url="http://t") as client:
         monkeypatch.setattr(api.httpx, "AsyncClient", voice.client_class())
         yield client, voice, reply
     reply_stream.clear()
@@ -201,9 +199,7 @@ async def test_stream_headers_reach_same_origin_clients_without_cors(env):
     """The app is same-origin (WP-62 0.2): the stream headers are there, and
     no CORS header exposes anything to another origin."""
     client, _, _ = env
-    r = await client.post(
-        "/v1/text-chat", json={"message": "hi"}, headers={"Origin": "http://dash"}
-    )
+    r = await client.post("/v1/text-chat", json={"message": "hi"}, headers={"Origin": "http://dash"})
     assert not any(h.lower().startswith("access-control-") for h in r.headers)
 
 
@@ -356,15 +352,14 @@ async def test_v2_felt_llm_gone_mid_reply_ends_the_stream(env, streamed):
     assert (await client.get(f"/v1/reply/{sid}/chunk/1")).status_code == 200
     assert (await client.get(f"/v1/reply/{sid}/chunk/2")).status_code == 204
     body = (await client.get(f"/v1/reply/{sid}")).json()
-    assert body["done"] and body["error"] == "felt-llm offline"
+    assert body["done"]
+    assert body["error"] == "felt-llm offline"
     assert body["text"] == " ".join(_CHUNKS[:2])
 
 
 async def test_v2_voice_chat_streams_too(env, streamed):
     client, _, _ = env
-    r = await client.post(
-        "/v1/voice-chat", files={"file": ("a.wav", b"RIFF", "audio/wav")}, headers=_V2
-    )
+    r = await client.post("/v1/voice-chat", files={"file": ("a.wav", b"RIFF", "audio/wav")}, headers=_V2)
     assert r.status_code == 200
     assert r.headers["X-Reply-Chunks"] == "open"
     assert unquote(r.headers["X-Transcribed-Text"]) == "what's for dinner"

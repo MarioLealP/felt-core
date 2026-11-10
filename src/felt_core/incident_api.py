@@ -27,7 +27,8 @@ async def waiting() -> dict:
 @router.post("/handoff")
 async def handoff() -> dict:
     """Claims the next incident for Claude; {"incident": null} when there's
-    nothing to do (or today's cap is spent)."""
+    nothing to do (or today's cap is spent).
+    """
     incident = await asyncio.to_thread(responder.claim_next, load_config().db_path)
     return {"incident": incident}
 
@@ -70,7 +71,5 @@ async def report(incident_id: int, body: ReportIn) -> dict:
         body.session_id,
     )
     if not saved:
-        raise HTTPException(
-            status_code=409, detail="not handed to the responder, or already reported"
-        )
+        raise HTTPException(status_code=409, detail="not handed to the responder, or already reported")
     return {"ok": True}

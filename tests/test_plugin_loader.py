@@ -85,9 +85,7 @@ def test_manifest_comment_key_is_not_treated_as_a_skill_tag(tmp_path):
     plugin_dir = tmp_path / "example_skill"
     plugin_dir.mkdir()
     (plugin_dir / "skill.py").write_text(_VALID_SKILL)
-    (tmp_path / "tags.json").write_text(
-        '{"_comment": "not a skill", "example_skill": "reaction/weather"}'
-    )
+    (tmp_path / "tags.json").write_text('{"_comment": "not a skill", "example_skill": "reaction/weather"}')
 
     registry = load_plugins(str(tmp_path))
 

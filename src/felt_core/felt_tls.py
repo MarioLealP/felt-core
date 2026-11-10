@@ -32,7 +32,8 @@ def felt_client_context(identity_dir: str) -> ssl.SSLContext:
 def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
     """A client for one of Caddy's machine hosts (B5.3, e.g. poe2-api): Caddy
     shows its normal public certificate (verified against the public CAs, as
-    httpx does by default), and she presents her Felt cert. Plain otherwise."""
+    httpx does by default), and she presents her Felt cert. Plain otherwise.
+    """
     identity_dir = getattr(config, "identity_dir", None)
     if (url or "").startswith("https://") and identity_dir:
         ctx = ssl.create_default_context(cafile=certifi.where())
@@ -44,7 +45,8 @@ def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncCl
 
 def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx.AsyncClient:
     """A client for a Felt peer at ``url``: mTLS with her Felt cert when the URL
-    is https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before)."""
+    is https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before).
+    """
     identity_dir = getattr(config, "identity_dir", None)
     if (url or "").startswith("https://") and identity_dir:
         return httpx.AsyncClient(verify=felt_client_context(identity_dir), **kwargs)

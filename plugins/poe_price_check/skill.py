@@ -81,7 +81,8 @@ def _format_value(core: dict, primary_value: float) -> str:
     cheap. Deliberately NOT converting to a secondary currency: the API's
     'rates' field semantics aren't documented/verified, and an unverified
     conversion risks quietly showing a wrong number, which is worse than
-    an honest number in an unfamiliar-feeling unit."""
+    an honest number in an unfamiliar-feeling unit.
+    """
     primary = core.get("primary", "divine")
     decimals = 2 if primary_value >= 1 else 4
     return f"~{primary_value:.{decimals}f} {primary}"
@@ -105,9 +106,7 @@ async def _search_currency(client: httpx.AsyncClient, league: str, item_name: st
         for line in data.get("lines", []):
             display_name = names.get(line["id"], line["id"])
             if item_name.lower() in display_name.lower():
-                return (
-                    f"{display_name}: {_format_value(data.get('core', {}), line['primaryValue'])}"
-                )
+                return f"{display_name}: {_format_value(data.get('core', {}), line['primaryValue'])}"
     return None
 
 
@@ -130,7 +129,8 @@ async def _search_uniques(client: httpx.AsyncClient, league: str, item_name: str
 def _resolve_item(items_by_name: dict, query: str) -> dict | None:
     """Exact match preferred; otherwise the shortest (most specific)
     entry whose name contains, or is contained in, the query — same
-    substring-match convention as _search_uniques above."""
+    substring-match convention as _search_uniques above.
+    """
     q = query.strip().lower()
     if q in items_by_name:
         return items_by_name[q]
@@ -152,20 +152,14 @@ def _build_search_query(display_name: str, base_type: str, status_option: str) -
     }
 
 
-async def _post_trade_search(
-    client: httpx.AsyncClient, league: str, query_body: dict
-) -> dict | None:
-    response = await client.post(
-        f"{_TRADE_BASE}/search/{quote(league)}", json=query_body, headers=_TRADE_HEADERS
-    )
+async def _post_trade_search(client: httpx.AsyncClient, league: str, query_body: dict) -> dict | None:
+    response = await client.post(f"{_TRADE_BASE}/search/{quote(league)}", json=query_body, headers=_TRADE_HEADERS)
     if response.status_code != 200:
         return None
     return response.json()
 
 
-async def _fetch_trade_listings(
-    client: httpx.AsyncClient, ids: list[str], search_id: str
-) -> list[dict]:
+async def _fetch_trade_listings(client: httpx.AsyncClient, ids: list[str], search_id: str) -> list[dict]:
     response = await client.get(
         f"{_TRADE_BASE}/fetch/{','.join(ids)}", params={"query": search_id}, headers=_TRADE_HEADERS
     )
@@ -178,7 +172,8 @@ async def _currency_rates_to_divine(client: httpx.AsyncClient, league: str) -> d
     """{trade listing currency code: divine-equivalent value} — poe.ninja's
     currency overview uses the exact same short codes ("divine", "chaos",
     "exalted", ...) as the trade API's listing `currency` field, confirmed
-    live 2026-09-14, so no separate name-mapping table is needed."""
+    live 2026-09-14, so no separate name-mapping table is needed.
+    """
     response = await client.get(
         f"{_NINJA_BASE}/exchange/current/overview", params={"league": league, "type": "Currency"}
     )
@@ -186,15 +181,14 @@ async def _currency_rates_to_divine(client: httpx.AsyncClient, league: str) -> d
         return {}
     data = response.json()
     return {
-        line["id"]: line["primaryValue"]
-        for line in data.get("lines", [])
-        if "id" in line and "primaryValue" in line
+        line["id"]: line["primaryValue"] for line in data.get("lines", []) if "id" in line and "primaryValue" in line
     }
 
 
 def _convert_to_divine(listings: list[dict], rates: dict[str, float]) -> list[float]:
     """Pure: each listing's price converted to divine, skipping any whose
-    currency has no known rate rather than guessing."""
+    currency has no known rate rather than guessing.
+    """
     values = []
     for entry in listings:
         price = entry.get("listing", {}).get("price")
@@ -210,17 +204,13 @@ def _convert_to_divine(listings: list[dict], rates: dict[str, float]) -> list[fl
 async def _search_real_listings(
     client: httpx.AsyncClient, league: str, display_name: str, base_type: str
 ) -> dict | None:
-    search = await _post_trade_search(
-        client, league, _build_search_query(display_name, base_type, "online")
-    )
+    search = await _post_trade_search(client, league, _build_search_query(display_name, base_type, "online"))
     if search is None:
         return None
     if search.get("total", 0) == 0:
         # No one online selling it right now — widen to offline sellers
         # too, so Mario still gets a real number instead of nothing.
-        search = await _post_trade_search(
-            client, league, _build_search_query(display_name, base_type, "any")
-        )
+        search = await _post_trade_search(client, league, _build_search_query(display_name, base_type, "any"))
         if search is None or search.get("total", 0) == 0:
             return None
 
@@ -269,16 +259,12 @@ async def handle(params, ctx):
 
         resolved = _resolve_item(cache["items_by_name"], item_name) if cache else None
         if resolved is not None:
-            listings = await _search_real_listings(
-                client, league, resolved["display_name"], resolved["type"]
-            )
+            listings = await _search_real_listings(client, league, resolved["display_name"], resolved["type"])
             if listings is not None:
                 return SkillResult(text=listings["text"], voice_line=listings["voice_line"])
 
         fallback = await _search_uniques(client, league, item_name)
 
     if fallback is None:
-        return SkillResult(
-            text=f"Couldn't find a current price for '{item_name}' in league {league}."
-        )
+        return SkillResult(text=f"Couldn't find a current price for '{item_name}' in league {league}.")
     return SkillResult(text=f"{fallback} (league: {league})")

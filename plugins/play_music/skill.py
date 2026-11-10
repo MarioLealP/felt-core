@@ -62,9 +62,7 @@ async def handle(params, ctx):
             else:
                 await start_track(client, config, track["uri"], track.get("name"))
         except NoActivePlayer:
-            return SkillResult(
-                text="Spotify's asleep on your desktop - hit play on anything once, then ask again."
-            )
+            return SkillResult(text="Spotify's asleep on your desktop - hit play on anything once, then ask again.")
         except httpx.HTTPError:
             return SkillResult(text="Spotify didn't take that right now.")
 

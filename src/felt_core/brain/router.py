@@ -64,9 +64,7 @@ def skill_of(route: str | None) -> str | None:
 
 
 class Router:
-    def __init__(
-        self, embed: Embed, bar: float, examples: dict[str | None, list[str]] | None = None
-    ) -> None:
+    def __init__(self, embed: Embed, bar: float, examples: dict[str | None, list[str]] | None = None) -> None:
         examples = EXAMPLES if examples is None else examples
         self._embed = embed
         self.bar = bar
@@ -134,7 +132,8 @@ def fastembed_embedder(config: FeltConfig) -> Embed:
 
 async def warm(config: FeltConfig, embedder: Callable[[FeltConfig], Embed] = fastembed_embedder):
     """Load the model and example matrix off the event loop; a missing model
-    (local dev, tests) leaves the router off."""
+    (local dev, tests) leaves the router off.
+    """
     global _router
     if not config.router_enabled:
         return
@@ -147,7 +146,7 @@ async def warm(config: FeltConfig, embedder: Callable[[FeltConfig], Embed] = fas
             config.router_bar,
             config.router_mode,
         )
-    except Exception as e:  # noqa: BLE001 - optional; Felt routes as before without it
+    except Exception as e:
         logger.warning("router: not loaded (%r) - router off", e)
 
 
@@ -169,12 +168,13 @@ def start_pick(message: str, ctx: Context) -> asyncio.Task[Pick] | None:
 
 async def sure_skill(config: FeltConfig, task: asyncio.Task[Pick] | None) -> Pick | None:
     """In act mode, the pick when it's sure of a skill (not plain chat);
-    None otherwise - or if the pick failed, which never costs her the reply."""
+    None otherwise - or if the pick failed, which never costs her the reply.
+    """
     if task is None or config.router_mode != "act":
         return None
     try:
         pick = await asyncio.shield(task)
-    except Exception as e:  # noqa: BLE001 - routing goes on as without the router
+    except Exception as e:
         logger.warning("router pick failed (%r) - routing as without it", e)
         return None
     return pick if pick.sure and pick.skill is not None else None
@@ -200,7 +200,8 @@ def record_pick(
     fast: bool,
 ) -> None:
     """Record the pick next to what Felt did, whenever the pick is ready -
-    never awaited here."""
+    never awaited here.
+    """
     if task is None:
         return
 

@@ -36,9 +36,7 @@ async def _notify(config: FeltConfig, message: str, data: dict | None = None) ->
         body["data"] = data
     try:
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
-            response = await client.post(
-                f"{config.ha_url}/api/services/notify/mobile_app_{config.phone}", json=body
-            )
+            response = await client.post(f"{config.ha_url}/api/services/notify/mobile_app_{config.phone}", json=body)
     except httpx.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
@@ -64,7 +62,8 @@ def timer_extras(seconds: int, label: str = "") -> list[str]:
 
 def alarm_extras(hour: int, minute: int, label: str = "") -> list[str]:
     """Pure: SET_ALARM's extras - a time of day only (Android has no date
-    extra), so it means "the next time it's this o'clock"."""
+    extra), so it means "the next time it's this o'clock".
+    """
     extras = [f"{_EXTRA}HOUR:{hour}:int", f"{_EXTRA}MINUTES:{minute}:int"]
     extras.append(f"{_EXTRA}SKIP_UI:true:boolean")
     if _label(label):
@@ -83,7 +82,8 @@ async def set_alarm(config: FeltConfig, hour: int, minute: int, label: str = "")
 
 async def ring(config: FeltConfig) -> None:
     """Find-my-phone: a notification on the alarm stream, loud even on
-    silent."""
+    silent.
+    """
     await _notify(
         config,
         "Here! - Felt",
@@ -93,19 +93,19 @@ async def ring(config: FeltConfig) -> None:
 
 async def notify(config: FeltConfig, title: str, message: str, tag: str) -> None:
     """A plain notification on the phone (the HA app), high priority so it
-    shows at once; the same tag replaces the previous one."""
+    shows at once; the same tag replaces the previous one.
+    """
     await _notify(config, message, {"title": title, "tag": tag, "priority": "high", "ttl": 0})
 
 
 async def next_alarm(config: FeltConfig) -> datetime | None:
     """The phone's next alarm (the app's Next alarm sensor - Google Clock or
-    whatever app set it), or None when there's none set."""
+    whatever app set it), or None when there's none set.
+    """
     headers = _headers(config)
     try:
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
-            response = await client.get(
-                f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm"
-            )
+            response = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm")
     except httpx.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if response.status_code != 200:
@@ -121,12 +121,8 @@ async def battery(config: FeltConfig) -> tuple[int, bool]:
     headers = _headers(config)
     try:
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
-            level = await client.get(
-                f"{config.ha_url}/api/states/sensor.{config.phone}_battery_level"
-            )
-            state = await client.get(
-                f"{config.ha_url}/api/states/sensor.{config.phone}_battery_state"
-            )
+            level = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_level")
+            state = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_state")
     except httpx.HTTPError as e:
         raise PhoneUnavailable(repr(e)) from e
     if level.status_code != 200:

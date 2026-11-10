@@ -26,9 +26,7 @@ name = "list_calendar_events"
 description = "What's on Mario's calendars on a day (default today)."
 parameters_schema = {
     "type": "object",
-    "properties": {
-        "day": {"type": "string", "description": "The day, as Mario said it (default today)"}
-    },
+    "properties": {"day": {"type": "string", "description": "The day, as Mario said it (default today)"}},
 }
 
 

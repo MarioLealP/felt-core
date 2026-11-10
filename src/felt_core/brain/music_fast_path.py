@@ -146,9 +146,7 @@ _VOLUME = re.compile(
 
 
 # "ugh this song sucks, next" - a skip tacked onto a complaint
-_TRAILING_SKIP = re.compile(
-    r"[,.!]\s*(?:next|skip(?:\s+(?:it|this|this\s+one))?)\s*[.!?]*$", re.IGNORECASE
-)
+_TRAILING_SKIP = re.compile(r"[,.!]\s*(?:next|skip(?:\s+(?:it|this|this\s+one))?)\s*[.!?]*$", re.IGNORECASE)
 
 
 def music_fast_path(message: str) -> tuple[str, dict] | None:

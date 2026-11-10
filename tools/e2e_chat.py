@@ -39,7 +39,8 @@ from felt_core.config import load_config
 def _llm_hosts() -> set[str]:
     """The models are real; everything else is faked. Their hosts come from her settings, so
     a model moved to a fixed address (felt-vision on k3s: FELT_VISION_URL=http://10.43.0.71)
-    stays real."""
+    stays real.
+    """
     config = load_config()
     urls = (config.local_llm_url, config.vision_url)
     return {"felt-llm", "felt-vision"} | {httpx.URL(u).host for u in urls if u}
@@ -124,9 +125,7 @@ CASES: list[Case] = [
     Case("queue birdbrain", ["POST /me/player/queue"]),
     Case("add one more time by daft punk to the queue", ["POST /me/player/queue"]),
     Case("play crossfaith next", ["POST /me/player/queue"]),
-    Case(
-        "can you stick some zutomayo in the queue for later?", ["POST /me/player/queue"], note="llm"
-    ),
+    Case("can you stick some zutomayo in the queue for later?", ["POST /me/player/queue"], note="llm"),
     # said loosely - felt-llm picks the tool
     Case("could you throw on some bring me the horizon", PLAY_NOW, note="llm"),
     Case("ugh this song sucks, next", ["POST /me/player/next"], note="llm"),
@@ -188,9 +187,7 @@ CASES: list[Case] = [
         note="home",
     ),
     Case("lights off", ["POST /ha-assist lights off"], note="home"),
-    Case(
-        "turn on my shelf light please :)", ["POST /ha-assist turn on my shelf light"], note="home"
-    ),
+    Case("turn on my shelf light please :)", ["POST /ha-assist turn on my shelf light"], note="home"),
     Case("set the chandelure to 30%", ["POST /ha-assist set the chandelure to 30%"], note="home"),
     Case("turn off the dehumidifier", ["POST /ha-assist turn off the dehumidifier"], note="home"),
     Case("turn front left on, thanks!", ["POST /ha-assist turn front left on"], note="home"),
@@ -380,7 +377,8 @@ class Recorder:
 
     def _ha(self, request: httpx.Request, path: str) -> httpx.Response:
         """Home Assistant: the phone (companion app) part - recorded as
-        'POST /phone/SET_TIMER' etc., never reaching the real phone."""
+        'POST /phone/SET_TIMER' etc., never reaching the real phone.
+        """
         calendar = self._calendar(request, path)
         if calendar is not None:
             return calendar
@@ -390,9 +388,7 @@ class Recorder:
             kind = HA_MATCHES.get(text)
             if kind is None:
                 code = {"code": "no_intent_match"}
-                return httpx.Response(
-                    200, json={"response": {"response_type": "error", "data": code}}
-                )
+                return httpx.Response(200, json={"response": {"response_type": "error", "data": code}})
             self.calls.append(f"{'POST' if kind == 'action_done' else 'GET'} /ha-assist {text}")
             speech = {"plain": {"speech": "Done" if kind == "action_done" else "Yes"}}
             return httpx.Response(200, json={"response": {"response_type": kind, "speech": speech}})
@@ -402,9 +398,7 @@ class Recorder:
             if entity.startswith("light."):
                 # as HA reports the Chandelure and the Yeelights (2026-10-25)
                 attrs["supported_color_modes"] = ["color_temp", "hs", "rgb"]
-            return httpx.Response(
-                200, json={"entity_id": entity, "state": "on", "attributes": attrs}
-            )
+            return httpx.Response(200, json={"entity_id": entity, "state": "on", "attributes": attrs})
         m = re.match(r"^/api/services/(light|switch|fan)/(turn_on|turn_off|toggle)$", path)
         if m:
             body = json.loads(request.content or b"{}")
@@ -452,7 +446,8 @@ class Recorder:
 
     def _calendar(self, request: httpx.Request, path: str) -> httpx.Response | None:
         """HA's calendars: Mario's primary and the reminders one, holding only
-        what she created this case."""
+        what she created this case.
+        """
         if path == "/api/calendars":
             cals = [self.config.ha_calendar_default, self.config.ha_calendar_reminders]
             return httpx.Response(200, json=[{"entity_id": c, "name": c} for c in cals])
@@ -469,7 +464,8 @@ class Recorder:
         """ha_calendar's websocket: a created event is recorded as 'POST
         /calendar/event' (reminder when in the reminders calendar, + ' weekly'
         etc. when it repeats, + ' @place' with a place), a deleted one as
-        'POST /calendar/delete', never reaching HA."""
+        'POST /calendar/delete', never reaching HA.
+        """
         cal = message.get("entity_id", "")
         if message.get("type") == "calendar/event/delete":
             self.calls.append("POST /calendar/delete")
@@ -480,9 +476,7 @@ class Recorder:
         freq = re.search(r"FREQ=(\w+)", event.get("rrule") or "")
         place = " @place" if event.get("location") else ""
         day = " all-day" if "T" not in str(event.get("dtstart")) else ""
-        self.calls.append(
-            f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}{day}{place}"
-        )
+        self.calls.append(f"POST /calendar/{tag}{f' {freq[1].lower()}' if freq else ''}{day}{place}")
         self.events.append(
             {
                 "calendar": cal,
@@ -522,11 +516,7 @@ class Recorder:
         if path == "/search":
             q = query.get("q", [""])[0]
             m = re.match(r'artist:"(.+)"', q)
-            items = (
-                [self._track(f"{m[1]} song {i}", m[1]) for i in range(3)]
-                if m
-                else [self._track(q, q)]
-            )
+            items = [self._track(f"{m[1]} song {i}", m[1]) for i in range(3)] if m else [self._track(q, q)]
             return httpx.Response(200, json={"tracks": {"items": items}})
         if path == "/me/player/queue":
             if request.method == "POST":
@@ -571,12 +561,7 @@ class _SkillLog(logging.Handler):
 
     def emit(self, record):
         msg = record.getMessage()
-        if (
-            "skill call" in msg
-            or "fast path" in msg
-            or "claimed" in msg
-            or msg.startswith("router")
-        ):
+        if "skill call" in msg or "fast path" in msg or "claimed" in msg or msg.startswith("router"):
             self.lines.append(msg)
 
 
@@ -589,16 +574,15 @@ def _verdict(case: Case, writes: list[str], route: list[str]) -> bool:
         return False
     stripped = [w.split("?")[0] for w in writes]
     if case.writes is not None:
-        return set(stripped) == set(case.writes) and (
-            not case.writes or len(stripped) >= len(case.writes)
-        )
+        return set(stripped) == set(case.writes) and (not case.writes or len(stripped) >= len(case.writes))
     return not any(w.startswith(n) for w in stripped for n in case.never)
 
 
 async def _streamed(message: str, config, session_id: str, timing: dict) -> ChatResult:
     """chat() through chat_streamed(): the chunks must add up to the reply
     (else it's a CRASH line); `timing` gets the seconds to the first chunk
-    and the chunk count."""
+    and the chunk count.
+    """
     start = time.monotonic()
     chunks: list[str] = []
     result = None
@@ -639,9 +623,7 @@ async def main() -> int:
         from fastembed import TextEmbedding
 
         config = config.model_copy(update={"router_model_dir": "/tmp/e2e-router-model"})
-        await asyncio.to_thread(
-            TextEmbedding, config.router_model, cache_dir=config.router_model_dir
-        )
+        await asyncio.to_thread(TextEmbedding, config.router_model, cache_dir=config.router_model_dir)
     await router.warm(config)
     recorder = Recorder()
     recorder.ha_host = httpx.URL(config.ha_url or "http://-").host
@@ -655,8 +637,7 @@ async def main() -> int:
     cases = [
         c
         for c in CASES
-        if (not args.only or args.only.lower() in c.say.lower())
-        and (not args.note or c.note == args.note)
+        if (not args.only or args.only.lower() in c.say.lower()) and (not args.note or c.note == args.note)
     ]
     failed = 0
     for run in range(args.repeat):
@@ -668,7 +649,7 @@ async def main() -> int:
 
             async def say(message: str, session_id: str) -> ChatResult:
                 if args.stream:
-                    return await _streamed(message, config, session_id, timing)  # noqa: B023
+                    return await _streamed(message, config, session_id, timing)  # ruff: ignore[function-uses-loop-variable]
                 return await chat(message, config, session_id=session_id)
 
             try:
@@ -686,7 +667,7 @@ async def main() -> int:
                 await appointment_hold.add_unanswered(config)
                 # the next case is a new appointment, not this one again (cm-2hu guard)
                 ha_calendar.forget_created(config)
-            except Exception as e:  # noqa: BLE001 - a crash is a result here
+            except Exception as e:
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)
             ok = _verdict(case, writes, log.lines) and not reply.startswith("CRASH")
@@ -694,11 +675,7 @@ async def main() -> int:
                 # one appointment at the end, with or without its place
                 ok = ok and [bool(e["location"]) for e in recorder.events] == [case.place]
             if case.summary_has:
-                ok = ok and all(
-                    w in (e["summary"] or "").lower()
-                    for e in recorder.events
-                    for w in case.summary_has
-                )
+                ok = ok and all(w in (e["summary"] or "").lower() for e in recorder.events for w in case.summary_has)
             if case.skills and ok and any(" /" not in c for c in recorder.calls):
                 # a service she called was down (all faked): she has to say
                 # so, not answer anyway

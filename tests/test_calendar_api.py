@@ -27,8 +27,10 @@ def test_shapes_sorts_and_keeps_all_day_first_on_its_day():
         ]
     )
     assert [i["title"] for i in items] == ["Dentist", "Holiday", "Standup"]
-    assert items[0]["calendar"] == "Home" and items[0]["location"] == "Lisboa"
-    assert items[1]["all_day"] is True and items[2]["all_day"] is False
+    assert items[0]["calendar"] == "Home"
+    assert items[0]["location"] == "Lisboa"
+    assert items[1]["all_day"] is True
+    assert items[2]["all_day"] is False
 
 
 def test_drops_cancelled_and_keeps_only_minimal_fields():

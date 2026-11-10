@@ -68,10 +68,7 @@ def enabled_skills(db_path: str, registry: dict) -> dict:
 
 
 def listing(db_path: str, skill_names: list[str]) -> list[dict]:
-    rows = [
-        {"key": k, "on": enabled(db_path, k), "default": d, "what": what}
-        for k, (d, what) in FEATURES.items()
-    ]
+    rows = [{"key": k, "on": enabled(db_path, k), "default": d, "what": what} for k, (d, what) in FEATURES.items()]
     rows += [
         {"key": SKILL_PREFIX + n, "on": enabled(db_path, SKILL_PREFIX + n), "default": True}
         for n in sorted(skill_names)

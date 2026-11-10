@@ -37,19 +37,14 @@ class _RequestMetrics:
 _current: ContextVar[_RequestMetrics | None] = ContextVar("felt_core_metrics", default=None)
 
 
-def start_request(
-    request_id: str, endpoint: str, db_path: str, session_id: str | None = None
-) -> None:
+def start_request(request_id: str, endpoint: str, db_path: str, session_id: str | None = None) -> None:
     """Called once by the FastAPI middleware, before the route handler
     runs. Everything `timed()`/`record()` do below reads this same
     ContextVar - contextvars.copy_context() (what asyncio.create_task uses
     under the hood) means a task spawned after this point, like WP-03's
-    concurrent privacy-check task, still sees it."""
-    _current.set(
-        _RequestMetrics(
-            request_id=request_id, endpoint=endpoint, db_path=db_path, session_id=session_id
-        )
-    )
+    concurrent privacy-check task, still sees it.
+    """
+    _current.set(_RequestMetrics(request_id=request_id, endpoint=endpoint, db_path=db_path, session_id=session_id))
 
 
 def record(stage: str, ms: float, **tags) -> None:
@@ -72,7 +67,8 @@ async def timed(stage: str, **tags):
     NOT when it was cancelled: a cancelled stage (e.g. chat()'s concurrent
     privacy check, cancelled once a skill is picked) never ran to
     completion, so its duration isn't a timing of that stage at all and
-    would drag the percentiles down (audit 2026-09-24)."""
+    would drag the percentiles down (audit 2026-09-24).
+    """
     start = time.monotonic()
     try:
         yield
@@ -105,7 +101,8 @@ def server_timing_header() -> str | None:
     """Standard Server-Timing syntax:
     `router;dur=3812.4, reply;desc="cloud";dur=612.0, tts;dur=2430.1`.
     None (no header added) when nothing was ever recorded for this
-    request, rather than an empty string."""
+    request, rather than an empty string.
+    """
     metrics = _current.get()
     if metrics is None or not metrics.stages:
         return None
@@ -145,7 +142,8 @@ def _stats(values: list[float]) -> dict:
 def compute_stats(rows: list[dict]) -> dict:
     """Rows: each a dict with at least stage/ms, optionally route/skill.
     Grouped by stage; a stage that carries a route or skill tag also gets
-    a breakdown by that tag (e.g. "reply" split into cloud vs local)."""
+    a breakdown by that tag (e.g. "reply" split into cloud vs local).
+    """
     by_stage: dict[str, list[float]] = {}
     by_stage_route: dict[str, dict[str, list[float]]] = {}
     by_stage_skill: dict[str, dict[str, list[float]]] = {}

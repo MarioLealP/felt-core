@@ -52,10 +52,12 @@ async def _run(monkeypatch, params):
 
 async def test_plays_now_by_default(monkeypatch):
     calls, text = await _run(monkeypatch, {"query": "birdbrain"})
-    assert calls == [("start", "u:x")] and text.startswith("Playing")
+    assert calls == [("start", "u:x")]
+    assert text.startswith("Playing")
 
 
 async def test_queue_only_queues(monkeypatch):
     # Mario 2026-10-18: "make it different things, add to queue or play"
     calls, text = await _run(monkeypatch, {"query": "birdbrain", "when": "queue"})
-    assert calls == [("queue", "u:x")] and text.startswith("Queued")
+    assert calls == [("queue", "u:x")]
+    assert text.startswith("Queued")

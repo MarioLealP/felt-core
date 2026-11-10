@@ -1,14 +1,12 @@
 """Lets Felt be asked about ntfy alerts conversationally, instead of only
-ever being a silent log — the read half of the ntfy integration."""
+ever being a silent log — the read half of the ntfy integration.
+"""
 
 from felt_core.db import get_recent_ntfy_events
 from felt_core.plugin import SkillResult
 
 name = "get_recent_alerts"
-description = (
-    "Recent alerts from Mario's server and systems (ntfy): 'any alerts?', 'anything wrong"
-    " with the server?'."
-)
+description = "Recent alerts from Mario's server and systems (ntfy): 'any alerts?', 'anything wrong with the server?'."
 parameters_schema = {"type": "object", "properties": {}}
 
 

@@ -40,30 +40,25 @@ def _read(db_path: str, name: str) -> dict:
 
 def state(db_path: str, now: datetime | None = None) -> dict:
     """Both switches as they are now (a timer that ran out is off), plus a
-    version that changes whenever either is set, for the tray."""
+    version that changes whenever either is set, for the tray.
+    """
     now = _now(now)
     out: dict = {"version": int(get_setting(db_path, "controls_version") or 0)}
     for name in CONTROLS:
         saved = _read(db_path, name)
         until = saved.get("until")
-        on = bool(saved.get("on")) and (
-            until is None or datetime.strptime(until, _FMT).replace(tzinfo=UTC) > now
-        )
+        on = bool(saved.get("on")) and (until is None or datetime.strptime(until, _FMT).replace(tzinfo=UTC) > now)
         out[name] = {"on": on, "until": until if on else None}
     return out
 
 
-def set_control(
-    db_path: str, name: str, on: bool, minutes: int | None = None, now: datetime | None = None
-) -> dict:
+def set_control(db_path: str, name: str, on: bool, minutes: int | None = None, now: datetime | None = None) -> dict:
     """Tap (minutes None) = on until turned off; a slide = on for `minutes`."""
     if name not in CONTROLS:
         raise ValueError(f"unknown control {name!r}")
     until = (_now(now) + timedelta(minutes=minutes)).strftime(_FMT) if on and minutes else None
     set_setting(db_path, f"control_{name}", json.dumps({"on": on, "until": until}))
-    set_setting(
-        db_path, "controls_version", str(int(get_setting(db_path, "controls_version") or 0) + 1)
-    )
+    set_setting(db_path, "controls_version", str(int(get_setting(db_path, "controls_version") or 0) + 1))
     return state(db_path, now)
 
 
@@ -76,7 +71,8 @@ def quiet(db_path: str, now: datetime | None = None) -> bool:
 
 def claude_alerts(db_path: str) -> bool:
     """Whether the server's Claude looks into alerts (WP-58's kill switch,
-    in the app's settings). On unless Mario turned it off."""
+    in the app's settings). On unless Mario turned it off.
+    """
     return get_setting(db_path, "claude_alerts", "1") != "0"
 
 
@@ -96,7 +92,8 @@ def report_desktop(db_path: str, report: dict, now: datetime | None = None) -> N
 
 def desktop(db_path: str, now: datetime | None = None) -> dict | None:
     """The latest heartbeat, or None when the PC hasn't reported lately
-    (off, asleep, or the tray isn't running)."""
+    (off, asleep, or the tray isn't running).
+    """
     try:
         saved = json.loads(get_setting(db_path, "desktop_state") or "{}")
         at = datetime.strptime(saved["at"], _FMT).replace(tzinfo=UTC)

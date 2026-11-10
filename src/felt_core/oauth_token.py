@@ -32,7 +32,8 @@ async def refresh_access_token(
     otherwise POSTs `data` (and `headers`, if given) to `token_url` and
     caches the result. `cache` is the caller's own module-level
     `{"access_token": ..., "expires_at": ...}` dict - mutated in place, so
-    every caller keeps a separate cache per provider/account."""
+    every caller keeps a separate cache per provider/account.
+    """
     if cache["access_token"] and time.monotonic() < cache["expires_at"] - 60:
         return cache["access_token"]
 

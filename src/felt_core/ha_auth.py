@@ -64,9 +64,7 @@ def check(config: FeltConfig, authorization: str) -> str | None:
         return "no bearer token"
     token = authorization[7:]
     try:
-        key = _jwks(
-            config.ha_agent_jwks_url or config.ha_agent_issuer + "jwks/"
-        ).get_signing_key_from_jwt(token)
+        key = _jwks(config.ha_agent_jwks_url or config.ha_agent_issuer + "jwks/").get_signing_key_from_jwt(token)
         claims = jwt.decode(
             token,
             key.key,

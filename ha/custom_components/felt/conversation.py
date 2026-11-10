@@ -12,15 +12,14 @@ from .client import FeltClient, FeltError
 from .const import DOMAIN
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     async_add_entities([FeltAgent(entry)])
 
 
 class FeltAgent(conversation.ConversationEntity):
     """Felt answers - her own brain, skills and memory in felt-core; HA only
-    carries the words (she does the device control herself)."""
+    carries the words (she does the device control herself).
+    """
 
     _attr_has_entity_name = True
     _attr_name = None

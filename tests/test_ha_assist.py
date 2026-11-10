@@ -50,9 +50,7 @@ def _speech(kind, text):
 async def test_a_match_is_done_by_home_assistant(monkeypatch):
     seen = []
     _ha(monkeypatch, _speech("action_done", "Turned off the light"), seen)
-    assert (
-        await ha_assist.handle(CONFIG, "turn off the shelf light please") == "Turned off the light"
-    )
+    assert await ha_assist.handle(CONFIG, "turn off the shelf light please") == "Turned off the light"
     assert seen == [
         {
             "text": "turn off the shelf light",

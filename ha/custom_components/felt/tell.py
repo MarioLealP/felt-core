@@ -32,9 +32,7 @@ def async_register(hass: HomeAssistant, client: FeltClient) -> None:
         except FeltError as e:
             raise HomeAssistantError(f"Felt couldn't take it: {e}") from e
 
-    hass.services.async_register(
-        DOMAIN, SERVICE, handle, schema=SCHEMA, supports_response=SupportsResponse.OPTIONAL
-    )
+    hass.services.async_register(DOMAIN, SERVICE, handle, schema=SCHEMA, supports_response=SupportsResponse.OPTIONAL)
 
 
 def async_unregister(hass: HomeAssistant) -> None:

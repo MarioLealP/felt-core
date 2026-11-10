@@ -38,7 +38,8 @@ def test_skills_are_on_until_switched_off(tmp_path):
     features.set_enabled(db, "skill.find_phone", False)
     assert list(features.enabled_skills(db, registry)) == ["web_search"]
     rows = {r["key"]: r["on"] for r in features.listing(db, list(registry))}
-    assert rows["skill.find_phone"] is False and rows["skill.web_search"] is True
+    assert rows["skill.find_phone"] is False
+    assert rows["skill.web_search"] is True
     assert rows["ambient.marks"] is False
 
 
@@ -73,11 +74,7 @@ def test_screen_off_makes_no_model_call_but_look_at_this_still_does(tmp_path, mo
         raise AssertionError("model called")
 
     monkeypatch.setattr(local_llm, "chat", no_call)
-    result = asyncio.run(
-        screen_reactions.react_to_screen(b"jpeg", "firefox", "wiki", config, trigger="periodic")
-    )
+    result = asyncio.run(screen_reactions.react_to_screen(b"jpeg", "firefox", "wiki", config, trigger="periodic"))
     assert result.reply == ""
     with pytest.raises(AssertionError, match="model called"):
-        asyncio.run(
-            screen_reactions.react_to_screen(b"jpeg", "firefox", "wiki", config, trigger="manual")
-        )
+        asyncio.run(screen_reactions.react_to_screen(b"jpeg", "firefox", "wiki", config, trigger="manual"))

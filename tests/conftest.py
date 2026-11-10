@@ -186,9 +186,7 @@ class FakeLLM:
             return local_llm.LocalReply(**item)
         return local_llm.LocalReply(text=item)
 
-    async def chat_stream(
-        self, messages, *, on_text, max_tokens, temperature=0.8, tools=None, config
-    ):
+    async def chat_stream(self, messages, *, on_text, max_tokens, temperature=0.8, tools=None, config):
         """`local_llm.chat_stream`: same script, the reply text handed to
         `on_text` a few characters at a time (none for a tool call), with a
         yield to the event loop between pieces. `streaming` is True while

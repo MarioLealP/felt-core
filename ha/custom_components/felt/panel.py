@@ -55,9 +55,7 @@ async def async_setup(hass: HomeAssistant, version: str) -> None:
     if hass.data.get(f"{DOMAIN}_panel_setup"):
         return
     hass.data[f"{DOMAIN}_panel_setup"] = True
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(STATIC_URL, str(_PANEL_DIR), cache_headers=False)]
-    )
+    await hass.http.async_register_static_paths([StaticPathConfig(STATIC_URL, str(_PANEL_DIR), cache_headers=False)])
     websocket_api.async_register_command(hass, ws_call)
     websocket_api.async_register_command(hass, ws_stream)
     hass.data[f"{DOMAIN}_panel_version"] = version
@@ -93,9 +91,7 @@ def async_unregister(hass: HomeAssistant) -> None:
 )
 @websocket_api.require_admin
 @websocket_api.async_response
-async def ws_call(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
+async def ws_call(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     path: str = msg["path"]
     if (msg["method"], path.split("?", 1)[0]) not in _ROUTES:
         connection.send_error(msg["id"], "not_allowed", "not a Felt panel route")
@@ -115,11 +111,10 @@ async def ws_call(
 @websocket_api.websocket_command({vol.Required("type"): "felt/app/stream"})
 @websocket_api.require_admin
 @websocket_api.async_response
-async def ws_stream(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
+async def ws_stream(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """felt-core's live notices, relayed as subscription events. Reconnects
-    after a break; felt-core's "hello" on each connect makes the page refetch."""
+    after a break; felt-core's "hello" on each connect makes the page refetch.
+    """
     client = _client(hass)
     if client is None:
         connection.send_error(msg["id"], "not_loaded", "the Felt integration isn't set up")
@@ -130,9 +125,7 @@ async def ws_stream(
         while True:
             try:
                 async for event, data in client.app_stream():
-                    connection.send_message(
-                        websocket_api.event_message(msg["id"], {"event": event, "data": data})
-                    )
+                    connection.send_message(websocket_api.event_message(msg["id"], {"event": event, "data": data}))
                     delay = 2.0
             except FeltError as e:
                 _LOGGER.debug("Felt panel stream: %s", e)

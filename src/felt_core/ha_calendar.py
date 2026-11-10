@@ -59,7 +59,8 @@ def _event(raw: dict) -> dict:
 
 async def list_calendars(client: httpx.AsyncClient, config: FeltConfig) -> list[dict]:
     """Every calendar HA has, as {"id": entity_id, "summary": name}; the
-    default one (`ha_calendar_default`) is marked "primary"."""
+    default one (`ha_calendar_default`) is marked "primary".
+    """
     response = await client.get(f"{config.ha_url}/api/calendars", headers=_headers(config))
     response.raise_for_status()
     return [
@@ -107,7 +108,8 @@ async def get_event(
 ) -> dict | None:
     """The event as Google has it now (refreshed), looked up within a day of
     `around` (its start when last seen), or None if it's gone - or moved
-    further than that, which the next poll picks up anyway."""
+    further than that, which the next poll picks up anyway.
+    """
     await refresh(client, config, calendar_id)
     window = timedelta(days=1)
     for event in await list_events(client, config, calendar_id, around - window, around + window):
@@ -118,9 +120,7 @@ async def get_event(
 
 async def writable(client: httpx.AsyncClient, config: FeltConfig, calendar_id: str) -> bool:
     """Whether HA can add events to it (the holidays calendar can't)."""
-    response = await client.get(
-        f"{config.ha_url}/api/states/{calendar_id}", headers=_headers(config)
-    )
+    response = await client.get(f"{config.ha_url}/api/states/{calendar_id}", headers=_headers(config))
     response.raise_for_status()
     features = response.json().get("attributes", {}).get("supported_features") or 0
     return bool(features & _CREATE_EVENT)
@@ -158,7 +158,8 @@ async def create_event(
 ) -> None:
     """`rrule`: an iCal repeat rule without the "RRULE:" prefix, e.g.
     "FREQ=WEEKLY". `all_day`: dates only - `start`'s day up to (not
-    including) `end`'s."""
+    including) `end`'s.
+    """
     if all_day:
         span = (start.date().isoformat(), end.date().isoformat())
     else:
@@ -170,18 +171,14 @@ async def create_event(
         event["location"] = location
     if rrule:
         event["rrule"] = rrule
-    await _ws_call(
-        config, {"type": "calendar/event/create", "entity_id": calendar_id, "event": event}
-    )
+    await _ws_call(config, {"type": "calendar/event/create", "entity_id": calendar_id, "event": event})
 
 
 async def delete_event(config: FeltConfig, calendar_id: str, uid: str) -> None:
     await _ws_call(config, {"type": "calendar/event/delete", "entity_id": calendar_id, "uid": uid})
 
 
-def remember_created(
-    config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime
-) -> None:
+def remember_created(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime) -> None:
     """Note the appointment just made, so a "where is it?" answer finds it."""
     last = {
         "calendar": calendar_id,
@@ -217,7 +214,8 @@ def event_start(event: dict) -> datetime | None:
 
 def link(event: dict) -> str | None:
     """Pure: the first web link in the event's place or description (HA
-    doesn't pass on Google's Meet link field)."""
+    doesn't pass on Google's Meet link field).
+    """
     for text in (event.get("location"), event.get("description")):
         m = _URL.search(text or "")
         if m:
@@ -235,7 +233,8 @@ def resolve_calendar(calendars: list[dict], name: str | None) -> dict | None:
     """Pure. No name -> the primary calendar. A name -> substring match
     against each calendar's display name (same convention as every
     other name-matching skill in this project), preferring an exact
-    match over a partial one."""
+    match over a partial one.
+    """
     if not name:
         return next((c for c in calendars if c.get("primary")), None)
 
@@ -251,7 +250,8 @@ def format_event_line(event: dict) -> str:
     """Pure: one human-readable line for an event — a timed event shows
     its local start time, an all-day event (a "date" instead of a
     "dateTime" - how the holiday calendar reports its entries) is
-    marked as such instead."""
+    marked as such instead.
+    """
     start = event.get("start", {})
     title = event.get("summary", "(untitled)")
     if "dateTime" in start:
@@ -263,7 +263,8 @@ def format_event_line(event: dict) -> str:
 def summarize_events(events_by_calendar: list[tuple[str, list[dict]]]) -> str:
     """Pure: every (calendar_name, events) pair flattened into one
     speech-friendly summary, dropping calendars with nothing to show
-    rather than saying "X has 0 events" for each one."""
+    rather than saying "X has 0 events" for each one.
+    """
     lines = []
     for calendar_name, events in events_by_calendar:
         for event in events:

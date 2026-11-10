@@ -88,9 +88,7 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
 
 async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    monkeypatch.setattr(
-        orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")}
-    )
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")})
 
     async def explode(*args, **kwargs):
         raise AssertionError("must not be called on the weather fast path")
@@ -104,9 +102,7 @@ async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monk
         "computed_at": time.monotonic(),
     }
     try:
-        result = await orchestrator.chat(
-            "what's the weather right now", config, session_id="wp06-test"
-        )
+        result = await orchestrator.chat("what's the weather right now", config, session_id="wp06-test")
     finally:
         background._weather_precompute = None
 
@@ -117,9 +113,7 @@ async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monk
 
 async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    monkeypatch.setattr(
-        orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")}
-    )
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {"get_weather": _skill("get_weather")})
     called = []
 
     async def fake_run_skill(name, params, registry, ctx):
@@ -138,9 +132,7 @@ async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatc
         "computed_at": time.monotonic() - background._WEATHER_PRECOMPUTE_MAX_AGE_S - 1,
     }
     try:
-        result = await orchestrator.chat(
-            "what's the weather right now", config, session_id="wp06-test"
-        )
+        result = await orchestrator.chat("what's the weather right now", config, session_id="wp06-test")
     finally:
         background._weather_precompute = None
 

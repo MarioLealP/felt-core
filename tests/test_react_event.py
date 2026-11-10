@@ -66,9 +66,7 @@ def test_global_min_gap_covers_every_remark():
 
 
 def test_same_track_is_deduped_after_the_cooldown_passes():
-    assert (
-        _decide("music_new_track", _TRACK, since_event=10 * 60, since_same=10 * 60) == "duplicate"
-    )
+    assert _decide("music_new_track", _TRACK, since_event=10 * 60, since_same=10 * 60) == "duplicate"
 
 
 def test_afk_end_only_speaks_after_a_long_absence():
@@ -85,19 +83,14 @@ def test_game_stop_needs_a_real_session():
 def test_policy_override_from_config(tmp_path):
     config = _config(tmp_path, event_policies='{"music_new_track": {"cooldown_s": 5}}')
     assert events.policies(config)["music_new_track"].cooldown_s == 5
-    assert (
-        events.policies(config)["music_new_track"].dedupe_s
-        == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
-    )
+    assert events.policies(config)["music_new_track"].dedupe_s == events.DEFAULT_POLICIES["music_new_track"].dedupe_s
 
 
 # -- prompts: whitelisted fields only -------------------------------------
 
 
 def test_prompt_uses_only_whitelisted_fields():
-    prompt = events.build_prompt(
-        "music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la"
-    )
+    prompt = events.build_prompt("music_new_track", {**_TRACK, "secret": "do not send"}, lyric="la la la")
     assert prompt is not None
     assert '"Song A" by Artist A' in prompt
     assert "la la la" in prompt
@@ -107,7 +100,8 @@ def test_prompt_uses_only_whitelisted_fields():
 def test_game_prompt_strips_exe_and_formats_duration():
     prompt = events.build_prompt("game_stop", {"name": "endfield.exe", "duration_s": 7200})
     assert prompt is not None
-    assert "endfield" in prompt and ".exe" not in prompt
+    assert "endfield" in prompt
+    assert ".exe" not in prompt
     assert "about 2 hours" in prompt
 
 
@@ -127,8 +121,10 @@ async def test_music_event_speaks_then_cools_down_with_zero_model_calls(tmp_path
         "music_new_track", {"title": "Song B", "artist": "Artist B"}, config, session_id="s"
     )
 
-    assert first.line == "ooh, good pick" and first.emotion == "happy"
-    assert second.line == "" and second.skipped == "min_gap"
+    assert first.line == "ooh, good pick"
+    assert first.emotion == "happy"
+    assert second.line == ""
+    assert second.skipped == "min_gap"
     assert len(calls) == 1
     assert calls[0]["tools"] is None
     assert calls[0]["messages"][-1]["role"] == "user"
@@ -159,9 +155,7 @@ async def test_event_is_never_a_screen_observation(tmp_path, fake_llm):
 
     assert result.line
     assert get_recent_observations(config.db_path, "s", limit=10) == []
-    assert (
-        seconds_since_last_spoken_reaction(config.db_path, "s") is None
-    )  # screen cooldown untouched
+    assert seconds_since_last_spoken_reaction(config.db_path, "s") is None  # screen cooldown untouched
     # Her line is in chat history, but not as "real conversation".
     assert [m["content"] for m in get_history(config.db_path, "s")] == [result.line]
     assert get_history(config.db_path, "s", exclude_remarks=True) == []
@@ -285,32 +279,33 @@ def test_unhushed_prompt_early_vs_full():
     full = events.build_prompt("unhushed", _FULL)
     assert early is not None
     assert full is not None
-    assert (
-        "couldn't last without you" in early
-        and "about 2 minutes" in early
-        and "about 10 minutes" in early
-    )
-    assert "the whole about 10 minutes" in full and "stay quiet" in full
-    assert "max 12 words" in early and "max 12 words" in full
+    assert "couldn't last without you" in early
+    assert "about 2 minutes" in early
+    assert "about 10 minutes" in early
+    assert "the whole about 10 minutes" in full
+    assert "stay quiet" in full
+    assert "max 12 words" in early
+    assert "max 12 words" in full
 
 
 def test_unhushed_prompt_after_a_few_seconds():
     prompt = events.build_prompt("unhushed", {"hushed_for_s": 5, "planned_s": 600, "early": True})
     assert prompt is not None
-    assert "after only a few seconds" in prompt and "1 minutes" not in prompt
+    assert "after only a few seconds" in prompt
+    assert "1 minutes" not in prompt
 
 
 def test_unhushed_prompt_names_the_last_line_to_avoid():
     prompt = events.build_prompt("unhushed", _EARLY, previous="Missed me already?")
     assert prompt is not None
-    assert '"Missed me already?"' in prompt and "something different" in prompt
+    assert '"Missed me already?"' in prompt
+    assert "something different" in prompt
 
 
 def test_cap_words():
     assert events.cap_words("Short and sweet.", 12) == "Short and sweet."
     assert (
-        events.cap_words("Finally free! I have so many things to tell you right now, honestly.", 12)
-        == "Finally free!"
+        events.cap_words("Finally free! I have so many things to tell you right now, honestly.", 12) == "Finally free!"
     )
     assert events.cap_words(" ".join(["word"] * 20), 12) == " ".join(["word"] * 12) + "."
 
@@ -321,9 +316,7 @@ def test_same_line_ignores_case_and_punctuation():
     assert not events.same_line("", None)
 
 
-async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(
-    tmp_path, fake_llm
-):
+async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(tmp_path, fake_llm):
     config = _config(tmp_path)
     calls = _fake_llm(fake_llm, line="Couldn't last without me, huh?")
     obs = save_observation(config.db_path, "s", "a game")
@@ -331,11 +324,10 @@ async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_scr
 
     result = await events.react_to_event("unhushed", _EARLY, config, session_id="s", tone="smug")
 
-    assert result.line == "Couldn't last without me, huh?" and result.emotion == "amused"
+    assert result.line == "Couldn't last without me, huh?"
+    assert result.emotion == "amused"
     assert "Right now: smug" in _user(calls[0])
-    assert (
-        len(get_recent_observations(config.db_path, "s", limit=10)) == 1
-    )  # only the one saved above
+    assert len(get_recent_observations(config.db_path, "s", limit=10)) == 1  # only the one saved above
 
 
 async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fake_llm):
@@ -377,9 +369,7 @@ def test_endpoint_unhushed_returns_audio_and_text(tmp_path, monkeypatch, fake_ll
     _fake_llm(fake_llm, line="Oh, I'm allowed to talk now?")
     client = _client(tmp_path, monkeypatch)
 
-    response = client.post(
-        "/v1/react/event", json={"event": "unhushed", "details": _EARLY, "tone": "playful"}
-    )
+    response = client.post("/v1/react/event", json={"event": "unhushed", "details": _EARLY, "tone": "playful"})
 
     assert response.status_code == 200
     assert response.content == b"RIFF-fake-wav"

@@ -15,8 +15,7 @@ from felt_core.self_memory import LISBON
 
 name = "diary_recall"
 description = (
-    "Felt's diary of what Mario did: 'what did I do yesterday', 'how was my week'. Not "
-    "facts, not the calendar."
+    "Felt's diary of what Mario did: 'what did I do yesterday', 'how was my week'. Not facts, not the calendar."
 )
 parameters_schema = {
     "type": "object",

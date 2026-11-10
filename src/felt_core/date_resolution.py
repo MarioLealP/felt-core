@@ -58,7 +58,8 @@ _BARE_HOUR = re.compile(
 def clock_bare_hours(text: str, pm_below: int = 8) -> str:
     """Pure: 'friday at 3' -> 'friday at 15:00', 'monday at 9' -> 'monday at
     9:00'. Hours under `pm_below` count as afternoon (what people mean by
-    'at 3'); alarms pass 0 - 'wake me at 6' is morning."""
+    'at 3'); alarms pass 0 - 'wake me at 6' is morning.
+    """
 
     def clock(m: re.Match) -> str:
         hour = int(m[1])
@@ -72,9 +73,7 @@ def clock_bare_hours(text: str, pm_below: int = 8) -> str:
 
 
 # "the 1st at 9" with no month: dateparser takes the 1 as January
-_LONE_DAY = re.compile(
-    r"\b(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b(?!\s+(?:of\s+)?[a-z]{3})"
-)
+_LONE_DAY = re.compile(r"\b(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b(?!\s+(?:of\s+)?[a-z]{3})")
 _MONTHS = (
     "january", "february", "march", "april", "may", "june",
     "july", "august", "september", "october", "november", "december",
@@ -83,7 +82,8 @@ _MONTHS = (
 
 def name_the_month(text: str, now: datetime) -> str:
     """Pure: 'the 1st at 9:00' -> 'november 1st at 9:00' - the next month
-    that has that day (this month if it's still ahead)."""
+    that has that day (this month if it's still ahead).
+    """
     m = _LONE_DAY.search(text)
     if m is None or any(month[:3] in text.lower() for month in _MONTHS):
         return text
@@ -124,7 +124,8 @@ def day_only(when: str, message: str) -> bool:
     """Pure: an all-day thing? felt-llm writes `when` and sometimes adds an
     hour Mario never said (live 2026-10-23: "put the 4th of November in my
     calendar" -> Wednesday 3pm), so his own message names a day and no time
-    counts too. A follow-up ("none", a place) names no day: `when` decides."""
+    counts too. A follow-up ("none", a place) names no day: `when` decides.
+    """
     if not has_clock(when):
         return True
     said = fix_typos(message)
@@ -142,7 +143,8 @@ _SLASHED = re.compile(r"(?<!\d[/.-])\b\d{1,2}[/.-]\d{1,2}\b")
 def fix_typos(text: str) -> str:
     """Pure: 'on4th of novemeber' -> 'on 4th of november'. Only a word next to
     a number (past an "of") is taken for a month, so "the member meeting"
-    stays as it is."""
+    stays as it is.
+    """
     text = _GLUED.sub(" ", text)
     words = list(_WORD.finditer(text))
     for i, m in reversed(list(enumerate(words))):
@@ -162,7 +164,8 @@ def fix_typos(text: str) -> str:
 
 def _stale_year(text: str, parsed: datetime, now: datetime) -> datetime:
     """felt-llm's sense of the year lags (its training data): '4 November 2025'
-    asked in October 2026 means this November, not a date already gone."""
+    asked in October 2026 means this November, not a date already gone.
+    """
     base = now.replace(tzinfo=None) if parsed.tzinfo is None else now
     years = [int(y) for y in re.findall(r"\b(20\d\d)\b", text)]
     if parsed >= base or not years or max(years) >= now.year:

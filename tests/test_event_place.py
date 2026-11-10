@@ -107,13 +107,14 @@ async def test_a_day_without_a_time_is_all_day_and_not_asked_where(monkeypatch, 
     """cm-0vl: 'make an appointment so i know 4th november is WoW forever release'
     was an hour at midnight and a 'where is it?'."""
     create, _ = _skills(monkeypatch, cal)
-    said = await create.handle(
-        {"title": "WoW Forever release", "when": "4th november"}, _ctx(tmp_path)
-    )
+    said = await create.handle({"title": "WoW Forever release", "when": "4th november"}, _ctx(tmp_path))
     assert cal.calls == ["create None"]
     start, end, all_day = cal.spans[0]
-    assert all_day and (start.hour, start.minute) == (0, 0) and end - start == timedelta(days=1)
-    assert "all day" in (said.text or "") and "where" not in (said.text or "").lower()
+    assert all_day
+    assert (start.hour, start.minute) == (0, 0)
+    assert end - start == timedelta(days=1)
+    assert "all day" in (said.text or "")
+    assert "where" not in (said.text or "").lower()
 
 
 async def test_an_hour_mario_never_said_is_still_all_day(monkeypatch, tmp_path, cal):
@@ -124,7 +125,9 @@ async def test_an_hour_mario_never_said_is_still_all_day(monkeypatch, tmp_path, 
     ctx.original_message = "put the 4th of November in my calendar as WoW Forever release"
     said = await create.handle({"title": "WoW Forever release", "when": "4 November 15:00"}, ctx)
     start, end, all_day = cal.spans[0]
-    assert all_day and (start.hour, start.minute) == (0, 0) and end - start == timedelta(days=1)
+    assert all_day
+    assert (start.hour, start.minute) == (0, 0)
+    assert end - start == timedelta(days=1)
     assert "where" not in (said.text or "").lower()
 
 
@@ -132,11 +135,13 @@ async def test_1_none_adds_it_at_once_without_a_place(monkeypatch, tmp_path, cal
     create, place = _skills(monkeypatch, cal)
     ctx = _ctx(tmp_path)
     asked = await create.handle(DENTIST, ctx)
-    assert "Ask Mario where it is" in (asked.text or "") and cal.calls == []
+    assert "Ask Mario where it is" in (asked.text or "")
+    assert cal.calls == []
 
     answer = await place.handle({"place": "none"}, ctx)
     assert cal.calls == ["create None"]
-    assert "no place" in (answer.text or "") and "Read it back" in (answer.text or "")
+    assert "no place" in (answer.text or "")
+    assert "Read it back" in (answer.text or "")
     await asyncio.sleep(0)
     assert cal.lines == []  # he answered: no extra line
 
@@ -148,7 +153,8 @@ async def test_1_none_through_create_again_is_the_answer(monkeypatch, tmp_path, 
     ctx = _ctx(tmp_path)
     await create.handle(DENTIST, ctx)
     answer = await create.handle({**DENTIST, "place": "none"}, ctx)
-    assert cal.calls == ["create None"] and "no place" in (answer.text or "")
+    assert cal.calls == ["create None"]
+    assert "no place" in (answer.text or "")
     assert appointment_hold.claim() is None
 
 
@@ -158,7 +164,8 @@ async def test_1_create_again_without_a_place_is_the_answer(monkeypatch, tmp_pat
     ctx = _ctx(tmp_path)
     await create.handle(DENTIST, ctx)
     answer = await create.handle(DENTIST, ctx)
-    assert cal.calls == ["create None"] and "no place" in (answer.text or "")
+    assert cal.calls == ["create None"]
+    assert "no place" in (answer.text or "")
     assert appointment_hold.claim() is None
 
 
@@ -173,7 +180,8 @@ async def test_3_a_place_through_create_again_is_the_answer(monkeypatch, tmp_pat
 async def test_online_up_front_adds_it_without_asking(monkeypatch, tmp_path, cal):
     create, _ = _skills(monkeypatch, cal)
     result = await create.handle({**DENTIST, "place": "online"}, _ctx(tmp_path))
-    assert cal.calls == ["create None"] and "no place" in (result.text or "")
+    assert cal.calls == ["create None"]
+    assert "no place" in (result.text or "")
     assert appointment_hold.claim() is None
 
 
@@ -181,7 +189,8 @@ async def test_2_a_place_up_front_is_added_at_once(monkeypatch, tmp_path, cal):
     create, _ = _skills(monkeypatch, cal)
     result = await create.handle({**DENTIST, "place": "Clínica Sorriso"}, _ctx(tmp_path))
     assert cal.calls == ["create Clínica Sorriso"]
-    assert "at Clínica Sorriso" in (result.text or "") and "ask" not in (result.text or "")
+    assert "at Clínica Sorriso" in (result.text or "")
+    assert "ask" not in (result.text or "")
 
 
 async def test_3_the_answer_adds_it_once_with_the_place(monkeypatch, tmp_path, cal):
@@ -206,7 +215,8 @@ async def test_4_no_answer_adds_it_after_the_wait_and_says_so(monkeypatch, tmp_p
     await asyncio.sleep(0.05)
     assert cal.calls == ["create None"]
     [line] = cal.lines
-    assert line.startswith("Added dentist, ") and line.endswith(", 11:00, no place.")
+    assert line.startswith("Added dentist, ")
+    assert line.endswith(", 11:00, no place.")
 
 
 async def test_a_late_answer_changes_the_one_already_added(monkeypatch, tmp_path, cal):
@@ -218,7 +228,8 @@ async def test_a_late_answer_changes_the_one_already_added(monkeypatch, tmp_path
     # the new one first, the old one deleted only after
     assert cal.calls == ["create None", "create Clínica Sorriso", "delete u1"]
     [event] = cal.events
-    assert event["location"] == "Clínica Sorriso" and "is now at" in (answer.text or "")
+    assert event["location"] == "Clínica Sorriso"
+    assert "is now at" in (answer.text or "")
 
 
 async def test_none_through_create_after_the_wait_adds_nothing_more(monkeypatch, tmp_path, cal):
@@ -229,12 +240,11 @@ async def test_none_through_create_after_the_wait_adds_nothing_more(monkeypatch,
     await create.handle(DENTIST, ctx)
     await appointment_hold.add_unanswered(ctx.config)  # the 30 s ran out
     answer = await create.handle({**DENTIST, "place": "none"}, ctx)
-    assert cal.calls == ["create None"] and "already in the calendar" in (answer.text or "")
+    assert cal.calls == ["create None"]
+    assert "already in the calendar" in (answer.text or "")
 
 
-async def test_none_through_create_after_a_made_up_place_adds_nothing_more(
-    monkeypatch, tmp_path, cal
-):
+async def test_none_through_create_after_a_made_up_place_adds_nothing_more(monkeypatch, tmp_path, cal):
     # cm-2hu, the other way in: turn 1 came with a place, so it went in at once
     create, _ = _skills(monkeypatch, cal)
     ctx = _ctx(tmp_path)
@@ -285,7 +295,8 @@ async def test_a_late_none_changes_nothing(monkeypatch, tmp_path, cal):
     await create.handle(DENTIST, ctx)
     await appointment_hold.add_unanswered(ctx.config)
     answer = await place.handle({"place": "doesn't matter"}, ctx)
-    assert cal.calls == ["create None"] and "stays without a place" in (answer.text or "")
+    assert cal.calls == ["create None"]
+    assert "stays without a place" in (answer.text or "")
 
 
 async def test_a_second_appointment_adds_the_waiting_one_now(monkeypatch, tmp_path, cal):
@@ -294,7 +305,8 @@ async def test_a_second_appointment_adds_the_waiting_one_now(monkeypatch, tmp_pa
     await create.handle(DENTIST, ctx)
     await create.handle({"title": "haircut", "when": "tuesday at 3pm"}, ctx)
     await asyncio.sleep(0.01)
-    assert cal.calls == ["create None"] and cal.lines[0].startswith("Added dentist")
+    assert cal.calls == ["create None"]
+    assert cal.lines[0].startswith("Added dentist")
     assert appointment_hold.claim() is not None  # the haircut waits for its place
 
 
@@ -314,13 +326,15 @@ async def test_answered_and_down_one_error_only(monkeypatch, tmp_path, cal):
     await create.handle(DENTIST, ctx)
     cal.down = True
     answer = await place.handle({"place": "Gaia"}, ctx)
-    assert "couldn't reach" in (answer.text or "") and cal.lines == []
+    assert "couldn't reach" in (answer.text or "")
+    assert cal.lines == []
 
 
 async def test_nothing_waiting_or_just_added(monkeypatch, tmp_path, cal):
     _, place = _skills(monkeypatch, cal)
     result = await place.handle({"place": "Gaia"}, _ctx(tmp_path))
-    assert "say the whole thing again" in (result.text or "") and cal.calls == []
+    assert "say the whole thing again" in (result.text or "")
+    assert cal.calls == []
 
 
 async def test_unconfirmed_change_keeps_the_old_one(monkeypatch, tmp_path, cal):
@@ -331,7 +345,8 @@ async def test_unconfirmed_change_keeps_the_old_one(monkeypatch, tmp_path, cal):
     cal.confirm = False  # HA took the create but it doesn't show up
     result = await place.handle({"place": "Gaia"}, ctx)
     assert "couldn't confirm" in (result.text or "")
-    assert [c for c in cal.calls if c.startswith("delete")] == [] and len(cal.events) == 1
+    assert [c for c in cal.calls if c.startswith("delete")] == []
+    assert len(cal.events) == 1
 
 
 def test_the_late_answer_window_is_two_hours(tmp_path):
@@ -377,4 +392,5 @@ async def test_her_words_for_the_no_place_add(monkeypatch, tmp_path, cal):
     await create.handle(DENTIST, ctx)
     await appointment_hold.add_unanswered(ctx.config)
     assert cal.lines == ["Dentist's in, no place though - you went quiet on me."]
-    assert '"dentist"' in prompts[0] and "without a place" in prompts[0]
+    assert '"dentist"' in prompts[0]
+    assert "without a place" in prompts[0]

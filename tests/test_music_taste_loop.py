@@ -72,30 +72,18 @@ _NO_ID_NO_URI = {"id": None, "name": "Mystery", "artists": []}
 
 
 def test_null_id_item_is_keyed_by_uri():
-    finished = brain._finished_play_from_transition(
-        _snapshot(_LOCAL_FILE, 190000), _snapshot(_SONG_B, 1000)
-    )
+    finished = brain._finished_play_from_transition(_snapshot(_LOCAL_FILE, 190000), _snapshot(_SONG_B, 1000))
 
     assert finished is not None
     assert finished["track_id"] == _LOCAL_FILE["uri"]
 
 
 def test_item_with_neither_id_nor_uri_is_not_recorded():
-    assert (
-        brain._finished_play_from_transition(
-            _snapshot(_NO_ID_NO_URI, 190000), _snapshot(_SONG_B, 1000)
-        )
-        is None
-    )
+    assert brain._finished_play_from_transition(_snapshot(_NO_ID_NO_URI, 190000), _snapshot(_SONG_B, 1000)) is None
 
 
 def test_same_null_id_local_file_still_playing_means_nothing_finished():
-    assert (
-        brain._finished_play_from_transition(
-            _snapshot(_LOCAL_FILE, 1000), _snapshot(_LOCAL_FILE, 16000)
-        )
-        is None
-    )
+    assert brain._finished_play_from_transition(_snapshot(_LOCAL_FILE, 1000), _snapshot(_LOCAL_FILE, 16000)) is None
 
 
 class _StopLoop(Exception):

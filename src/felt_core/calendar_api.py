@@ -2,7 +2,8 @@
 which hands them to the bar's calendar over D-Bus. Felt reads Home Assistant's
 calendars (ha_calendar.py; HA holds the Google login) and does the reminders
 (calendar_headsup.py); the desktop only shows. Minimal fields on purpose: no
-descriptions, no attendees."""
+descriptions, no attendees.
+"""
 
 import asyncio
 import time
@@ -31,7 +32,8 @@ def _when(part: dict) -> tuple[str | None, bool]:
 def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]:
     """Pure: events -> the bar's items, sorted by start. Cancelled events
     are left out (HA already drops the ones Mario declined); all-day
-    events stay."""
+    events stay.
+    """
     keyed: list[tuple[tuple[str, bool, str], dict]] = []
     for calendar, events in events_by_calendar:
         for e in events:
@@ -71,15 +73,8 @@ async def upcoming(days: int = 14) -> dict:
         async with httpx.AsyncClient(timeout=20) as client:
             cals = await ha_calendar.list_calendars(client, config)
             per_cal = await asyncio.gather(
-                *(
-                    ha_calendar.list_events(
-                        client, config, c["id"], start, now + timedelta(days=days)
-                    )
-                    for c in cals
-                )
+                *(ha_calendar.list_events(client, config, c["id"], start, now + timedelta(days=days)) for c in cals)
             )
-        items = agenda_items(
-            [(c.get("summary", ""), ev) for c, ev in zip(cals, per_cal, strict=True)]
-        )
+        items = agenda_items([(c.get("summary", ""), ev) for c, ev in zip(cals, per_cal, strict=True)])
         _cache[days] = (time.monotonic(), items)
         return {"events": items}

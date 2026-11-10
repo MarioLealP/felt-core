@@ -59,8 +59,11 @@ def test_alarm_facts():
         "Mario's alarm is going off now, to remind him: \"stretch\" - say what it's for."
     )
     late = alarm_facts("", at, at + timedelta(hours=2))
-    assert late.startswith("Mario's alarm is going off now.") and "07:30" in late and "late" in late
-    assert plain_alarm("stretch") == "Alarm: stretch" and plain_alarm("") == "Alarm"
+    assert late.startswith("Mario's alarm is going off now.")
+    assert "07:30" in late
+    assert "late" in late
+    assert plain_alarm("stretch") == "Alarm: stretch"
+    assert plain_alarm("") == "Alarm"
 
 
 async def test_alarm_in_her_words(tmp_path, monkeypatch, fake_llm):

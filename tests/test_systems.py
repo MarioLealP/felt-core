@@ -50,12 +50,15 @@ def test_areas_are_fine_unless_something_needs_him_and_the_worst_is_circled(tmp_
     page = systems.page(db)
     by_area = {a["name"]: a for a in page["areas"]}
     assert by_area["security"]["status"] == "needs-you"
-    assert by_area["security"]["incident_id"] == honeypot and by_area["security"]["count"] == 2
-    assert by_area["server"]["status"] == "fine" and by_area["backups"]["status"] == "fine"
+    assert by_area["security"]["incident_id"] == honeypot
+    assert by_area["security"]["count"] == 2
+    assert by_area["server"]["status"] == "fine"
+    assert by_area["backups"]["status"] == "fine"
     assert page["circled"] == honeypot
     assert [i["id"] for i in page["incidents"]][:2] == [honeypot, trivy]
     statuses = {i["id"]: i["status"] for i in page["incidents"]}
-    assert statuses[trivy] == "looking" and statuses[honeypot] == "needs-you"
+    assert statuses[trivy] == "looking"
+    assert statuses[honeypot] == "needs-you"
 
 
 def test_dropped_noise_never_shows(tmp_path):
@@ -73,7 +76,8 @@ def test_details_carry_the_report_with_its_trail_and_the_raw_alerts(tmp_path):
     assert found is not None
     assert found["report"]["trail"][0]["input"].startswith("clockmost-read")
     assert found["alerts"][0]["message"] == "Telnet connect on port 23"
-    assert found["session_id"] == "s1" and found["links"] == LINKS
+    assert found["session_id"] == "s1"
+    assert found["links"] == LINKS
 
 
 def test_handled_from_the_app_closes_it(tmp_path):
@@ -82,7 +86,9 @@ def test_handled_from_the_app_closes_it(tmp_path):
     assert systems.mark_handled(db, backup)
     assert not systems.mark_handled(db, backup)  # only once
     found = systems.details(db, backup, LINKS)
-    assert found is not None and found["state"] == "handled" and found["handled_by"] == "mario"
+    assert found is not None
+    assert found["state"] == "handled"
+    assert found["handled_by"] == "mario"
     assert systems.page(db)["circled"] is None
 
 
@@ -116,5 +122,6 @@ def test_ask_felt_answers_her_alert_line_with_what_claude_found(tmp_path):
     text = remark_text(db, line_id)
     assert text is not None
     assert text.startswith("Claude wants you to look at it.")
-    assert "HONEYPOT: 192.168.10.201 banned" in text and "needs-mario" in text
+    assert "HONEYPOT: 192.168.10.201 banned" in text
+    assert "needs-mario" in text
     assert "Someone touched the honeypot." in text

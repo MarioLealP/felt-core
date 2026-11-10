@@ -40,9 +40,11 @@ def test_claims_the_most_urgent_first_and_only_once(tmp_path):
     honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent
     assert responder.waiting(db) == 2
     first = responder.claim_next(db, _at(1))
-    assert first is not None and first["id"] == honeypot
+    assert first is not None
+    assert first["id"] == honeypot
     second = responder.claim_next(db, _at(1))
-    assert second is not None and second["id"] == trivy
+    assert second is not None
+    assert second["id"] == trivy
     assert responder.claim_next(db, _at(1)) is None
 
 
@@ -68,7 +70,8 @@ def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path
     assert responder.save_report(db, real, {**REPORT, "verdict": "needs-mario"}, "s2")
     assert _get(db, fine)["state"] == "handled"
     real_incident = _get(db, real)
-    assert real_incident["state"] == "open" and real_incident["session_id"] == "s2"
+    assert real_incident["state"] == "open"
+    assert real_incident["session_id"] == "s2"
 
 
 def test_one_claude_doesnt_get_to_is_missed_sooner_the_more_urgent(tmp_path):
@@ -102,7 +105,8 @@ def test_her_report_counts_like_claudes(tmp_path):
     responder.claim_next(db, _at(1))
     responder.take_local(db, trivy, _at(2))
     assert responder.save_report(db, trivy, {**REPORT, "by": "felt"}, "felt-local")
-    assert _get(db, trivy)["state"] == "handled" and _get(db, trivy)["investigator"] == "felt"
+    assert _get(db, trivy)["state"] == "handled"
+    assert _get(db, trivy)["investigator"] == "felt"
 
 
 def test_an_urgent_one_nobody_claims_is_missed_after_two_minutes(tmp_path):
@@ -124,9 +128,11 @@ def test_the_doorbell_rings_only_when_something_waits(tmp_path):
     db = str(tmp_path / "f.db")
     bell = tmp_path / responder.WAKE_FILE
     _in(db, "clockmost: update deployed")  # Felt's, not Claude's
-    assert not responder.wake(db) and not bell.exists()
+    assert not responder.wake(db)
+    assert not bell.exists()
     _in(db, "HONEYPOT: ssh touched")
-    assert responder.wake(db) and bell.exists()
+    assert responder.wake(db)
+    assert bell.exists()
 
 
 def test_her_follow_up_comes_after_her_first_line(tmp_path):
@@ -136,12 +142,12 @@ def test_her_follow_up_comes_after_her_first_line(tmp_path):
     assert alert_lines.due(db, _at(1)) == [(honeypot, "line")]  # Claude still looking
     alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     assert alert_lines.due(db, _at(1)) == []
-    responder.save_report(
-        db, honeypot, {**REPORT, "verdict": "needs-mario", "for_mario": "check the NAS"}, "s1"
-    )
+    responder.save_report(db, honeypot, {**REPORT, "verdict": "needs-mario", "for_mario": "check the NAS"}, "s1")
     assert alert_lines.due(db, _at(2)) == [(honeypot, "followup")]
     facts = alert_lines.followup_facts(_get(db, honeypot))
-    assert "it needs Mario" in facts and "check the NAS" in facts and "join Claude" in facts
+    assert "it needs Mario" in facts
+    assert "check the NAS" in facts
+    assert "join Claude" in facts
     alert_lines.store(db, honeypot, "It was the NAS, have a look.", "followup")
     assert alert_lines.due(db, _at(3)) == []
 
@@ -152,7 +158,8 @@ def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
     alert_lines.store(db, unclaimed, "Honeypot, Claude's on it.")
     responder.mark_missed(db, _at(16))
     facts = alert_lines.followup_facts(_get(db, unclaimed))
-    assert "didn't get to it" in facts and "look himself" in facts
+    assert "didn't get to it" in facts
+    assert "look himself" in facts
     assert alert_lines.due(db, _at(17)) == [(unclaimed, "followup")]
 
 
@@ -167,8 +174,10 @@ def test_the_follow_up_says_who_looked(tmp_path):
         looked[by] = alert_lines.followup_facts(_get(db, incident_id))
     assert "Who looked into it: Claude." in looked["claude"]
     assert "join Claude's investigation" in looked["claude"]
-    assert "automatic checks" in looked["checks"] and "join" not in looked["checks"]
-    assert "you yourself" in looked["felt"] and "join" not in looked["felt"]
+    assert "automatic checks" in looked["checks"]
+    assert "join" not in looked["checks"]
+    assert "you yourself" in looked["felt"]
+    assert "join" not in looked["felt"]
 
 
 def test_an_old_report_without_by_was_claudes(tmp_path):
@@ -196,10 +205,7 @@ def test_the_responder_token_opens_its_two_routes_and_nothing_else(tmp_path, mon
         assert c.post("/v1/incidents/waiting", headers=resp).status_code == 401
         assert c.post("/v1/incidents/handoff", headers=resp).json() == {"incident": None}
         assert c.get("/v1/history", headers=resp).status_code == 401
-        assert (
-            c.post("/v1/incidents/handoff", headers={"Authorization": "Bearer main"}).status_code
-            == 200
-        )
+        assert c.post("/v1/incidents/handoff", headers={"Authorization": "Bearer main"}).status_code == 200
 
 
 def test_handoff_and_report_over_http(tmp_path, monkeypatch):
@@ -207,23 +213,13 @@ def test_handoff_and_report_over_http(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
         incident_id = _in(str(tmp_path / "felt.db"), "HONEYPOT: ssh touched", at=datetime.now(UTC))
         claimed = c.post("/v1/incidents/handoff", headers=resp).json()["incident"]
-        assert (
-            claimed["id"] == incident_id
-            and claimed["alerts"][0]["title"] == "HONEYPOT: ssh touched"
-        )
+        assert claimed["id"] == incident_id
+        assert claimed["alerts"][0]["title"] == "HONEYPOT: ssh touched"
         body = {"report": {**REPORT, "verdict": "maybe"}, "session_id": "s1"}
-        assert (
-            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
-            == 422
-        )
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code == 422
         body["report"]["verdict"] = "expected"
-        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {
-            "ok": True
-        }
-        assert (
-            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
-            == 409
-        )
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {"ok": True}
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code == 409
         stored = _get(str(tmp_path / "felt.db"), incident_id)
         assert json.loads(stored["report"])["summary"].startswith("The deploy")
 
@@ -237,14 +233,9 @@ def test_felt_takes_over_over_http(tmp_path, monkeypatch):
         assert c.post(f"/v1/incidents/{incident_id}/local").status_code == 401
         assert c.post(f"/v1/incidents/{incident_id}/local", headers=resp).json() == {"ok": True}
         body = {"report": {**REPORT, "by": "felt"}, "session_id": "felt-local"}
-        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {
-            "ok": True
-        }
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).json() == {"ok": True}
         body["report"]["by"] = "gpt"
-        assert (
-            c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code
-            == 422
-        )
+        assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code == 422
 
 
 def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
@@ -257,7 +248,8 @@ def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
     assert _in(db, title.replace("/etc/a", "/etc/c"), at=_at(2)) == first  # he sees it live
     responder.save_report(db, first, REPORT, "s1")
     after = _in(db, title.replace("/etc/a", "/etc/shadow"), at=_at(5))
-    assert after != first and _get(db, after)["state"] == "open"
+    assert after != first
+    assert _get(db, after)["state"] == "open"
 
 
 def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
@@ -346,8 +338,7 @@ def test_attacks_never_expire(tmp_path):
     _missed(db, "HONEYPOT: ssh touched")
     _missed(
         db,
-        "Wazuh L12 [clockmost]: clockmost-ops: 5+ refused requests in 10 min"
-        " - agent probing the gateway?",
+        "Wazuh L12 [clockmost]: clockmost-ops: 5+ refused requests in 10 min - agent probing the gateway?",
     )
     _missed(db, "vault: tray card issued to an UNEXPECTED address")
     assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
@@ -371,8 +362,7 @@ def test_hers_to_tell_expires_too(tmp_path):
     db = str(tmp_path / "f.db")
     oom = _in(
         db,
-        "Wazuh L12 [clockmost]: System running out of memory."
-        " Availability of the system is in risk.",
+        "Wazuh L12 [clockmost]: System running out of memory. Availability of the system is in risk.",
     )
     assert _get(db, oom)["handler"] == "felt"
     assert incidents.expire_unseen(db, _at(48 * 60)) == [oom]

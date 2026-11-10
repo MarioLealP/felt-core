@@ -76,7 +76,8 @@ def _open(db_path: str) -> sqlite3.Connection:
 
 def split_sender(raw: str) -> tuple[str, str]:
     """Pure: ("Patreon", "bingo@patreon.com") from 'Patreon <bingo@patreon.com>';
-    the address doubles as the name when there is none."""
+    the address doubles as the name when there is none.
+    """
     name, address = parseaddr(raw)
     address = address.lower()
     return (name.strip() or address or raw.strip()), address
@@ -91,7 +92,8 @@ def plain_text(body: str) -> str:
 
 def domain_of(address: str) -> str:
     """Pure: the registered domain, roughly - "mail.patreon.com" -> "patreon.com",
-    "news.loja.com.pt" -> "loja.com.pt"."""
+    "news.loja.com.pt" -> "loja.com.pt".
+    """
     labels = address.rsplit("@", 1)[-1].split(".")
     keep = 3 if len(labels) >= 3 and labels[-2] in _SECOND_LEVEL else 2
     return ".".join(labels[-keep:])
@@ -99,7 +101,8 @@ def domain_of(address: str) -> str:
 
 def is_noise(address: str, patterns: list[str]) -> bool:
     """Pure: a pattern is a whole address, or a domain that covers its
-    subdomains too."""
+    subdomains too.
+    """
     host = address.rsplit("@", 1)[-1]
     for p in patterns:
         if "@" in p:
@@ -112,14 +115,14 @@ def is_noise(address: str, patterns: list[str]) -> bool:
 
 def add(db_path: str, key: str, sender: str, subject: str, body: str, bulk: bool) -> int | None:
     """Store a mail HA forwarded; None when it was already here (HA repeats the
-    newest one on every restart)."""
+    newest one on every restart).
+    """
     name, address = split_sender(sender)
     conn = _open(db_path)
     try:
         with conn:
             cur = conn.execute(
-                "INSERT OR IGNORE INTO emails (key, sender, address, subject, body, bulk)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO emails (key, sender, address, subject, body, bulk) VALUES (?, ?, ?, ?, ?, ?)",
                 (key, name, address, subject.strip(), plain_text(body), int(bulk)),
             )
     finally:
@@ -138,9 +141,7 @@ def _set_state(db_path: str, ids: list[int], state: str, mentioned: bool = False
     try:
         with conn:
             stamp = ", mentioned_at = datetime('now')" if mentioned else ""
-            conn.executemany(
-                f"UPDATE emails SET state = ?{stamp} WHERE id = ?", [(state, i) for i in ids]
-            )
+            conn.executemany(f"UPDATE emails SET state = ?{stamp} WHERE id = ?", [(state, i) for i in ids])
     finally:
         conn.close()
 
@@ -171,9 +172,7 @@ async def _worth_mentioning(config: FeltConfig, row: tuple) -> bool:
             [
                 {
                     "role": "user",
-                    "content": _JUDGE.format(
-                        sender=f"{sender} <{address}>", subject=subject, body=body[:800]
-                    ),
+                    "content": _JUDGE.format(sender=f"{sender} <{address}>", subject=subject, body=body[:800]),
                 }
             ],
             max_tokens=60,
@@ -189,7 +188,8 @@ async def _worth_mentioning(config: FeltConfig, row: tuple) -> bool:
 
 async def sort_new(config: FeltConfig) -> None:
     """Decide each new mail: noise, waiting, or (list mail) her call. A list
-    mail she couldn't judge (felt-llm busy or down) stays new for the next tick."""
+    mail she couldn't judge (felt-llm busy or down) stays new for the next tick.
+    """
     conn = _open(config.db_path)
     try:
         with conn:
@@ -199,8 +199,7 @@ async def sort_new(config: FeltConfig) -> None:
             )
         patterns = _noise(conn)
         rows = conn.execute(
-            "SELECT id, sender, address, subject, body, bulk FROM emails"
-            " WHERE state = 'new' ORDER BY id"
+            "SELECT id, sender, address, subject, body, bulk FROM emails WHERE state = 'new' ORDER BY id"
         ).fetchall()
     finally:
         conn.close()
@@ -223,7 +222,8 @@ async def sort_new(config: FeltConfig) -> None:
 
 def mention_facts(mails: list[tuple[str, str]]) -> tuple[str, str]:
     """Pure: (facts for her line, the plain fallback) about the waiting mails,
-    [(sender, subject)], people before lists."""
+    [(sender, subject)], people before lists.
+    """
     named = [f'from {s}: "{subj}"' if subj else f"from {s}" for s, subj in mails[:NAMED]]
     more = len(mails) - NAMED
     listed = "; ".join(named) + (f"; and {more} more" if more > 0 else "")
@@ -231,22 +231,19 @@ def mention_facts(mails: list[tuple[str, str]]) -> tuple[str, str]:
         f"Mario has new email he hasn't heard about - {listed}. Mention it in passing, "
         'like a "btw", naming every sender, and that you can tell him more.'
     )
-    fallback = f"Btw, you've got mail {named[0]}" + (
-        f" and {len(mails) - 1} more." if len(mails) > 1 else "."
-    )
+    fallback = f"Btw, you've got mail {named[0]}" + (f" and {len(mails) - 1} more." if len(mails) > 1 else ".")
     return facts, fallback
 
 
 def _since_last_mention_s(conn: sqlite3.Connection) -> float | None:
-    row = conn.execute(
-        "SELECT (julianday('now') - julianday(MAX(mentioned_at))) * 86400 FROM emails"
-    ).fetchone()
+    row = conn.execute("SELECT (julianday('now') - julianday(MAX(mentioned_at))) * 86400 FROM emails").fetchone()
     return row[0] if row and row[0] is not None else None
 
 
 async def mention(config: FeltConfig) -> str | None:
     """Her one line about everything waiting, if the hour since the last one is
-    up. Returns the line said."""
+    up. Returns the line said.
+    """
     from felt_core.asides import schedule_pick
     from felt_core.her_line import her_line
     from felt_core.proactive import enqueue_proactive
@@ -302,7 +299,8 @@ async def watch(config: FeltConfig) -> None:
 
 def just_mentioned(db_path: str) -> list[dict]:
     """The mails of her last mention, if it was within ANSWER_WINDOW and he
-    hasn't had them summarised: what a bare "yes" / "tell me more" means."""
+    hasn't had them summarised: what a bare "yes" / "tell me more" means.
+    """
     conn = _open(db_path)
     try:
         rows = conn.execute(
@@ -325,10 +323,7 @@ def summary_prompt(mails: list[dict]) -> str:
     per = _BODY_CHARS // max(len(mails), 1)
     parts = [f"From {m['sender']} (subject: {m['subject']}):\n{m['body'][:per]}" for m in mails]
     which = "this email" if len(mails) == 1 else "these emails, one or two sentences each"
-    return (
-        f"Summarize {which} conversationally, as if telling a friend what it says:\n\n"
-        + "\n\n".join(parts)
-    )
+    return f"Summarize {which} conversationally, as if telling a friend what it says:\n\n" + "\n\n".join(parts)
 
 
 def recent(db_path: str, limit: int = 5) -> list[dict]:
@@ -336,8 +331,7 @@ def recent(db_path: str, limit: int = 5) -> list[dict]:
     conn = _open(db_path)
     try:
         rows = conn.execute(
-            "SELECT sender, subject, body, state FROM emails WHERE state != 'noise'"
-            " ORDER BY id DESC LIMIT ?",
+            "SELECT sender, subject, body, state FROM emails WHERE state != 'noise' ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
     finally:
@@ -350,7 +344,8 @@ def noise_pattern(who: str, senders: list[tuple[str, str, bool]]) -> str | None:
     is taken as said. A name is looked up in the recent senders [(name,
     address, bulk)], newest first: a list sender's whole domain goes (Patreon
     mails from several addresses), a person's one address (never all of
-    gmail.com)."""
+    gmail.com).
+    """
     who = who.strip().lower()
     if not who:
         return None
@@ -366,23 +361,20 @@ def noise_pattern(who: str, senders: list[tuple[str, str, bool]]) -> str | None:
 
 def mute(db_path: str, who: str) -> str | None:
     """ "I don't care about X emails": the pattern added (None = no sender like
-    that); mails from it still waiting won't be mentioned either."""
+    that); mails from it still waiting won't be mentioned either.
+    """
     conn = _open(db_path)
     try:
         senders = [
             (r[0], r[1], bool(r[2]))
-            for r in conn.execute(
-                "SELECT sender, address, bulk FROM emails ORDER BY id DESC LIMIT 100"
-            )
+            for r in conn.execute("SELECT sender, address, bulk FROM emails ORDER BY id DESC LIMIT 100")
         ]
         pattern = noise_pattern(who, senders)
         if pattern is None:
             return None
         with conn:
             conn.execute("INSERT OR IGNORE INTO email_noise (pattern) VALUES (?)", (pattern,))
-            waiting = conn.execute(
-                "SELECT id, address FROM emails WHERE state IN ('new', 'waiting')"
-            ).fetchall()
+            waiting = conn.execute("SELECT id, address FROM emails WHERE state IN ('new', 'waiting')").fetchall()
             conn.executemany(
                 "UPDATE emails SET state = 'noise' WHERE id = ?",
                 [(i,) for i, a in waiting if is_noise(a, [pattern])],

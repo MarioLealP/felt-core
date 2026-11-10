@@ -13,9 +13,7 @@ import httpx
 from felt_core.config import FeltConfig
 
 
-async def notify(
-    config: FeltConfig, message: str, title: str | None = None, priority: int = 3
-) -> bool:
+async def notify(config: FeltConfig, message: str, title: str | None = None, priority: int = 3) -> bool:
     if (
         not config.ntfy_url
         or not config.ntfy_publish_topic
@@ -28,10 +26,6 @@ async def notify(
     if title:
         headers["Title"] = title
 
-    async with httpx.AsyncClient(
-        auth=(config.ntfy_publish_user, config.ntfy_publish_password), timeout=15
-    ) as client:
-        response = await client.post(
-            f"{config.ntfy_url}/{config.ntfy_publish_topic}", content=message, headers=headers
-        )
+    async with httpx.AsyncClient(auth=(config.ntfy_publish_user, config.ntfy_publish_password), timeout=15) as client:
+        response = await client.post(f"{config.ntfy_url}/{config.ntfy_publish_topic}", content=message, headers=headers)
         return response.status_code == 200

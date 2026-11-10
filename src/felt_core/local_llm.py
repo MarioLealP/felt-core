@@ -31,12 +31,14 @@ logger = logging.getLogger(__name__)
 
 class LocalLLMUnavailable(Exception):
     """felt-llm couldn't produce a reply (down, timed out, 5xx, or a
-    malformed response). The API maps it to a 503, background loops skip."""
+    malformed response). The API maps it to a 503, background loops skip.
+    """
 
 
 class AmbientSkipped(LocalLLMUnavailable):
     """An ambient call that gave way (llm_gate): Mario is talking, the
-    ambient budget is spent, or it couldn't start in time."""
+    ambient budget is spent, or it couldn't start in time.
+    """
 
 
 @dataclass
@@ -65,7 +67,8 @@ _SENTENCE_END = re.compile(r"[.!?…][\"')\]*~]*(?=\s|$)")
 def end_at_last_sentence(text: str) -> str:
     """A reply cut off by max_tokens, ended at its last complete sentence so
     it never stops mid-word (FELT-71). No complete sentence at all: the
-    fragment gets an ellipsis instead."""
+    fragment gets an ellipsis instead.
+    """
     ends = list(_SENTENCE_END.finditer(text))
     if ends:
         return text[: ends[-1].end()].rstrip()
@@ -76,7 +79,8 @@ def _merge_system_messages(messages: list[dict]) -> list[dict]:
     """One leading system message. Callers append context as extra
     "system" entries (facts, music taste, "currently on screen"), and
     llama.cpp's chat templates reject or mangle a system message that isn't
-    first - so they're folded into the first one, in order."""
+    first - so they're folded into the first one, in order.
+    """
     system_parts = [str(m["content"]) for m in messages if m.get("role") == "system"]
     rest = [m for m in messages if m.get("role") != "system"]
     if not system_parts:
@@ -125,9 +129,7 @@ def _reply(
         raise LocalLLMUnavailable("felt-llm returned an unexpected message shape")
     truncated = finish_reason == "length" and json_schema is None and not tool_calls and bool(text)
     if truncated:
-        logger.warning(
-            "felt-llm hit max_tokens=%d; ending the reply at its last sentence", max_tokens
-        )
+        logger.warning("felt-llm hit max_tokens=%d; ending the reply at its last sentence", max_tokens)
         text = end_at_last_sentence(text)
     return LocalReply(
         text=text,
@@ -157,7 +159,8 @@ async def chat(
     config: FeltConfig,
 ) -> LocalReply:
     """`json_schema` is the bare JSON schema; it's sent as an OpenAI
-    `response_format` so llama.cpp constrains the output to it."""
+    `response_format` so llama.cpp constrains the output to it.
+    """
     if not config.local_llm_url:
         raise LocalLLMUnavailable("local_llm_url is not configured")
     payload = _payload(
@@ -189,14 +192,13 @@ async def chat(
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
         raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
 
-    return _reply(
-        text, tool_calls, finish_reason, timings, max_tokens=max_tokens, json_schema=json_schema
-    )
+    return _reply(text, tool_calls, finish_reason, timings, max_tokens=max_tokens, json_schema=json_schema)
 
 
 def _add_tool_call_delta(calls: list[dict], delta: dict) -> None:
     """Tool calls stream in pieces: the first delta for an index carries the
-    id and name, later ones append to the arguments string."""
+    id and name, later ones append to the arguments string.
+    """
     index = delta.get("index", len(calls))
     while len(calls) <= index:
         calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
@@ -224,7 +226,8 @@ async def chat_stream(
     end, same shape as chat(). Tool-call pieces are collected whole, never
     passed to `on_text` - and once a tool call has started, neither is any
     more text: a reply that turns into a tool call isn't spoken. Thinking is
-    off on felt-llm (`--reasoning off`), so there are no reasoning pieces."""
+    off on felt-llm (`--reasoning off`), so there are no reasoning pieces.
+    """
     if not config.local_llm_url:
         raise LocalLLMUnavailable("local_llm_url is not configured")
     payload = _payload(
@@ -290,7 +293,8 @@ async def chat_stream(
 
 async def is_healthy(config: FeltConfig) -> bool:
     """`GET {local_llm_url}/health` - True only on a 200 (llama.cpp answers
-    503 while the model is still loading)."""
+    503 while the model is still loading).
+    """
     if not config.local_llm_url:
         return False
     try:
@@ -305,7 +309,8 @@ def parse_tool_arguments(tool_call: dict) -> tuple[str, dict]:
     """(name, params) from one raw tool call. Arguments arrive as a JSON
     string; anything that doesn't decode to an object becomes {} - the
     skill then falls back to `ctx.original_message`, same as it always has
-    when the router omitted params."""
+    when the router omitted params.
+    """
     function = tool_call.get("function") or {}
     raw = function.get("arguments")
     params: object = raw

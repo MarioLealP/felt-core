@@ -3,7 +3,8 @@ he plays through, never the last few days', never ones he skips); new ones
 are artists he doesn't listen to yet, named by felt-llm with a "because",
 with real tracks from Spotify. The model only names artists - a local model
 knows artists far better than exact song titles (2026-10-17 dry run: of nine
-suggested titles, one existed)."""
+suggested titles, one existed).
+"""
 
 import datetime as dt
 import json
@@ -70,7 +71,8 @@ def _recent(last: str | None, days: int) -> bool:
 
 def familiar(history: dict[str, dict], count: int, avoid: set[str]) -> list[dict]:
     """Pure-ish (random): songs he plays through, weighted by how often;
-    never one he mostly skips, played in the last few days, or in `avoid`."""
+    never one he mostly skips, played in the last few days, or in `avoid`.
+    """
     pool = [
         (tid, t)
         for tid, t in history.items()
@@ -116,11 +118,7 @@ async def _new_artists(config: FeltConfig, profile: str, known: set[str], count:
         artists = json.loads(reply.text).get("artists", [])
     except (ValueError, AttributeError):
         return []
-    return [
-        a
-        for a in artists
-        if isinstance(a, dict) and a.get("name") and sp.norm_name(a["name"]) not in known
-    ]
+    return [a for a in artists if isinstance(a, dict) and a.get("name") and sp.norm_name(a["name"]) not in known]
 
 
 async def discoveries(
@@ -158,11 +156,10 @@ async def discoveries(
     return picks
 
 
-async def pick(
-    client: httpx.AsyncClient, config: FeltConfig, count: int, avoid: set[str]
-) -> list[dict]:
+async def pick(client: httpx.AsyncClient, config: FeltConfig, count: int, avoid: set[str]) -> list[dict]:
     """Up to `count` picks {uri, title, artist, discovery[, because]}, about
-    discovery_share of them by artists new to him."""
+    discovery_share of them by artists new to him.
+    """
     db = config.db_path
     share = learning.discovery_share(store.discovery_outcomes(db, 10))
     want_new = sum(random.random() < share for _ in range(count))
