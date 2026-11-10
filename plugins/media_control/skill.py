@@ -8,9 +8,7 @@ now_playing.
 
 import httpx2
 
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
-from felt_core.spotify_client import (
+from felt_core.clients.spotify_client import (
     format_track_name,
     get_currently_playing,
     get_player,
@@ -22,6 +20,8 @@ from felt_core.spotify_client import (
     save_to_library,
     set_volume,
 )
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "media_control"
 description = (

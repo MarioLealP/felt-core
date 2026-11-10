@@ -16,11 +16,12 @@ data API), so this stays within the fully-local rule.
 import difflib
 import logging
 
-from felt_core import local_llm, metrics
+from felt_core.clients import local_llm
+from felt_core.clients.poe_trade_cache import load_cache
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
-from felt_core.plugin_loader import load_plugins
-from felt_core.poe_trade_cache import load_cache
+from felt_core.core import metrics
+from felt_core.core.plugin_loader import load_plugins
+from felt_core.models.plugin import ExecutionContext
 
 logger = logging.getLogger(__name__)
 

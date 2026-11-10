@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-import felt_core.api as api
+import felt_core.api.app as api
 from felt_core.config import FeltConfig
 
 _CLIENT_LOGGERS = ("httpx2", "httpx")  # httpx2 is ours; plain httpx is huggingface-hub's (fastembed's model download)

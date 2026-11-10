@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 import httpx2
 import pytest
 
-from felt_core import db, ender, local_llm, phone
+from felt_core.clients import local_llm, phone
 from felt_core.config import FeltConfig
+from felt_core.core import ender
+from felt_core.db import store as db
 
 
 def _config(tmp_path):

@@ -3,8 +3,8 @@ Home Assistant app (phone.py, 2026-10-18 - KDE Connect went with the
 Windows desktop agent). A real-world side effect, not just information.
 """
 
-from felt_core.phone import PhoneUnavailable, ring
-from felt_core.plugin import SkillResult
+from felt_core.clients.phone import PhoneUnavailable, ring
+from felt_core.models.plugin import SkillResult
 
 name = "find_phone"
 description = "Makes Mario's phone ring loudly so he can find it."

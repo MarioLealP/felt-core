@@ -1,4 +1,4 @@
-"""felt_core.oauth_token.refresh_access_token (WP-40) - the OAuth
+"""felt_core.clients.oauth_token.refresh_access_token (WP-40) - the OAuth
 refresh-token flow factored out of spotify_client.py and
 google_calendar.py, which each had an identical, independently-written
 copy of this exact cache-check/POST/store dance."""
@@ -7,7 +7,7 @@ import time
 
 import httpx2
 
-from felt_core.oauth_token import refresh_access_token
+from felt_core.clients.oauth_token import refresh_access_token
 
 
 class _FakeResponse:

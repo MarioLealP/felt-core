@@ -6,10 +6,11 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from felt_core import asides, features, local_llm
-from felt_core.api import app
+from felt_core.api.app import app
 from felt_core.brain import screen_reactions
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
+from felt_core.core import asides, features
 
 SSO = {"X-Authentik-Username": "mario"}
 

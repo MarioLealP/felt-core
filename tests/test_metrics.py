@@ -2,9 +2,9 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
-import felt_core.metrics as metrics
-from felt_core.api import app
-from felt_core.db import get_latency_rows
+import felt_core.core.metrics as metrics
+from felt_core.api.app import app
+from felt_core.db.store import get_latency_rows
 
 
 async def test_timed_records_into_db_and_server_timing(tmp_path):

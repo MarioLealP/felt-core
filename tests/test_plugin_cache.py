@@ -1,7 +1,7 @@
 import os
 import time
 
-from felt_core import plugin_loader
+from felt_core.core import plugin_loader
 
 SKILL = """name = "{n}"
 description = "d"

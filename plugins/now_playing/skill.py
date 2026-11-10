@@ -10,9 +10,9 @@ from pathlib import Path
 
 import httpx2
 
-from felt_core.lyrics_client import current_line, get_lyrics
-from felt_core.plugin import SkillResult
-from felt_core.spotify_client import format_track_name, get_currently_playing
+from felt_core.clients.lyrics_client import current_line, get_lyrics
+from felt_core.clients.spotify_client import format_track_name, get_currently_playing
+from felt_core.models.plugin import SkillResult
 
 name = "now_playing"
 description = "What song is playing right now ('what's this song?'). Read-only."

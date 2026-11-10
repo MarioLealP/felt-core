@@ -19,9 +19,7 @@ from datetime import datetime, timedelta
 
 import httpx2
 
-from felt_core import appointment_hold
-from felt_core.date_resolution import day_only, resolve_datetime
-from felt_core.ha_calendar import (
+from felt_core.clients.ha_calendar import (
     TZ,
     CalendarUnavailable,
     connected,
@@ -31,8 +29,10 @@ from felt_core.ha_calendar import (
     resolve_calendar,
     writable,
 )
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.core import appointment_hold
+from felt_core.core.date_resolution import day_only, resolve_datetime
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "create_calendar_event"
 description = "Adds an appointment or event to Mario's calendar, e.g. 'dentist Friday at 3pm'."

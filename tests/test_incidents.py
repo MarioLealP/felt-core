@@ -3,8 +3,8 @@ paired with their RESOLVED, and self-fixing ones wait before they count."""
 
 from datetime import UTC, datetime, timedelta
 
-from felt_core import incidents
-from felt_core.alert_types import CATALOGUE, parse
+from felt_core.core import incidents
+from felt_core.core.alert_types import CATALOGUE, parse
 
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 

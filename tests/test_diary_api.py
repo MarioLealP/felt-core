@@ -7,9 +7,9 @@ import json
 
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
-import felt_core.diary as diary
-from felt_core.db import (
+import felt_core.api.app as api
+import felt_core.core.diary as diary
+from felt_core.db.store import (
     get_diary,
     get_events_between,
     get_self_memories,
@@ -200,8 +200,8 @@ def test_duplicate_trigger_while_writing_does_not_start_a_second_write(tmp_path,
     second cloud write (two entries' worth of calls, two morning greetings)."""
     import asyncio
 
-    from felt_core import diary as diary_mod
     from felt_core.config import FeltConfig
+    from felt_core.core import diary as diary_mod
 
     started: list[str] = []
     release = asyncio.Event()

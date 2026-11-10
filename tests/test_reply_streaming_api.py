@@ -10,11 +10,12 @@ import httpx2
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-import felt_core.api as api
-from felt_core import local_llm, reply_stream, tts_cache
+import felt_core.api.app as api
 from felt_core.brain.result import ChatResult
 from felt_core.brain.streaming import ReplyMeta
-from felt_core.plugin import UIAction
+from felt_core.clients import local_llm
+from felt_core.core import reply_stream, tts_cache
+from felt_core.models.plugin import UIAction
 
 _LONG_REPLY = (
     "This is the first sentence of the reply, long enough. "

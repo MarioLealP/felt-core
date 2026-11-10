@@ -1,8 +1,8 @@
 import httpx2
 
-import felt_core.spotify_client as spotify_client
+import felt_core.clients.spotify_client as spotify_client
+from felt_core.clients.spotify_client import format_track_name, get_currently_playing, pick_device
 from felt_core.config import FeltConfig
-from felt_core.spotify_client import format_track_name, get_currently_playing, pick_device
 
 _TRACK = {
     "id": "abc123",

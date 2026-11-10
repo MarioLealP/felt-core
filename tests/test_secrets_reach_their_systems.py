@@ -12,9 +12,10 @@ import httpx2
 import pytest
 from conftest import load_plugin_module
 
-from felt_core import ha_calendar, leave_by, notify, ntfy_listener, spotify_client
+from felt_core.clients import ha_calendar, notify, spotify_client
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.core import leave_by, ntfy_listener
+from felt_core.models.plugin import ExecutionContext
 
 SECRET = "s3cret-value"
 

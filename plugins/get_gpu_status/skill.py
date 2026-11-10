@@ -5,7 +5,7 @@ on felt-voice, which already runs there as a systemd service, via its
 
 import httpx2
 
-from felt_core.plugin import SkillResult
+from felt_core.models.plugin import SkillResult
 
 name = "get_gpu_status"
 description = "GPU load, VRAM and temperature of the Nitro5 AI node."

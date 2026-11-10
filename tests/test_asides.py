@@ -5,14 +5,15 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
-import felt_core.app_api as app_api
-import felt_core.asides as asides
-from felt_core import features, local_llm
-from felt_core.api import app
-from felt_core.app_history import history_page
+import felt_core.api.app_api as app_api
+import felt_core.core.asides as asides
+from felt_core.api.app import app
 from felt_core.brain import orchestrator
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import save_event_reaction, save_message, save_observation, set_observation_reply
+from felt_core.core import features
+from felt_core.core.app_history import history_page
+from felt_core.db.store import save_event_reaction, save_message, save_observation, set_observation_reply
 
 SSO = {"X-Authentik-Username": "mario"}
 

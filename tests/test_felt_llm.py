@@ -11,17 +11,19 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-import felt_core.api as api
+import felt_core.api.app as api
 import felt_core.brain.background as background
 import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as replies
 import felt_core.brain.screen_reactions as screen
-import felt_core.diary as diary
-from felt_core import db, local_llm, metrics
+import felt_core.core.diary as diary
+from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
-from felt_core.db import get_history
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core import metrics
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.db import store as db
+from felt_core.db.store import get_history
+from felt_core.models.plugin import SkillResult
 
 
 def _config(tmp_path, **kwargs):
@@ -360,7 +362,7 @@ async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_l
     db.save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
     fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
 
-    with caplog.at_level(logging.INFO, logger="felt_core.diary"):
+    with caplog.at_level(logging.INFO, logger="felt_core.core.diary"):
         written = await diary.write_diary_for_date(config, "2026-09-27")
 
     assert written is False

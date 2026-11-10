@@ -21,10 +21,10 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx2
 
-from felt_core.date_resolution import resolve_date, upcoming_weekend
-from felt_core.db import get_setting
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.core.date_resolution import resolve_date, upcoming_weekend
+from felt_core.core.params import get_single_param
+from felt_core.db.store import get_setting
+from felt_core.models.plugin import SkillResult
 
 # WP-06: the fetch itself only ever cost ~0.3s, so this cache isn't the
 # real latency win (the phrasing/TTS precompute is) - it's here mainly so
@@ -201,7 +201,7 @@ async def handle(params, ctx):
     # responding to what's really happening right now, not shapeshifting
     # for a hypothetical future day. None (no specific mapping for this
     # code) means "just use this skill's plugins/tags.json default" - see
-    # felt_core.animation.resolve_animation_tag.
+    # felt_core.core.animation.resolve_animation_tag.
     tag = _condition_tag(current["weather_code"])
 
     if wants_current:

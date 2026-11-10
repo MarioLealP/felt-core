@@ -12,8 +12,8 @@ import pytest
 
 from felt_core.brain import orchestrator, router
 from felt_core.config import FeltConfig
-from felt_core.plugin import SkillResult
-from felt_core.plugin_loader import LoadedSkill
+from felt_core.core.plugin_loader import LoadedSkill
+from felt_core.models.plugin import SkillResult
 
 DIM = 256
 

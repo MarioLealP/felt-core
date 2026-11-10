@@ -4,11 +4,11 @@ import json
 
 from fastapi.testclient import TestClient
 
-from felt_core.api import app
-from felt_core.app_stream import notices
-from felt_core.db import save_message
-from felt_core.marks import _connect as marks_connect
-from felt_core.marks import _ensure as ensure_marks
+from felt_core.api.app import app
+from felt_core.api.app_stream import notices
+from felt_core.core.marks import _connect as marks_connect
+from felt_core.core.marks import _ensure as ensure_marks
+from felt_core.db.store import save_message
 
 
 def _parse(chunk: str) -> tuple[str, dict]:
@@ -45,7 +45,7 @@ async def test_new_lines_picks_and_marks_become_notices(tmp_path):
 
 
 async def test_list_and_incident_changes_become_notices(tmp_path):
-    from felt_core import incidents, systems
+    from felt_core.core import incidents, systems
 
     db = str(tmp_path / "felt.db")
     save_message(db, "dashboard", "user", "hi")
@@ -69,7 +69,7 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     systems.mark_handled(db, backup)
     rounds += 1
     assert _parse(await anext(stream)) == ("systems", {})
-    from felt_core import controls
+    from felt_core.core import controls
 
     controls.set_control(db, "quiet", True)
     rounds += 1

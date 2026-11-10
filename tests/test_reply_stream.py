@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from felt_core import reply_stream
+from felt_core.core import reply_stream
 
 
 @pytest.fixture(autouse=True)

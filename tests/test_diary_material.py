@@ -3,9 +3,9 @@ dedupe/cap, event-data capping, and facts never touched at all."""
 
 import json
 
-import felt_core.diary as diary
+import felt_core.core.diary as diary
 from felt_core.config import FeltConfig
-from felt_core.db import _connect, save_event, save_fact, save_message
+from felt_core.db.store import _connect, save_event, save_fact, save_message
 
 
 def _config(tmp_path):

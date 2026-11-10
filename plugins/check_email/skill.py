@@ -4,8 +4,8 @@ was that Patreon email about?"), reading the mails Home Assistant forwarded
 body so she can say what one is about.
 """
 
-from felt_core import emails
-from felt_core.plugin import SkillResult
+from felt_core.core import emails
+from felt_core.models.plugin import SkillResult
 
 name = "check_email"
 description = (

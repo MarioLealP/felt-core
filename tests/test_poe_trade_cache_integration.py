@@ -5,8 +5,8 @@ test_poe_trade_cache.py."""
 
 import pytest
 
+from felt_core.clients.poe_trade_cache import load_cache, refresh
 from felt_core.config import FeltConfig
-from felt_core.poe_trade_cache import load_cache, refresh
 
 
 @pytest.mark.vcr

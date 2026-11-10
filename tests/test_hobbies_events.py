@@ -1,6 +1,6 @@
 """WP-30: hobbies in the welcome-back line and the diary."""
 
-from felt_core import diary, events
+from felt_core.core import diary, events
 
 
 def test_afk_end_mentions_known_hobbies_only():

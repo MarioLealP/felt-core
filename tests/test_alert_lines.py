@@ -5,9 +5,9 @@ her log as kind alert, never in the Margins."""
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from felt_core import alert_lines, incidents, margins
-from felt_core.alert_types import CATALOGUE
-from felt_core.db import ALERT, _connect
+from felt_core.core import alert_lines, incidents, margins
+from felt_core.core.alert_types import CATALOGUE
+from felt_core.db.store import ALERT, _connect
 
 T0 = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 
@@ -96,7 +96,7 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
     assert said == ["backup-failed", "storage-check"]
     assert asyncio.run(alert_lines.write_due(Config())) == 0  # ty: ignore[invalid-argument-type]
 
-    from felt_core import local_llm
+    from felt_core.clients import local_llm
 
     async def down(config, incident, kind="line"):
         raise local_llm.LocalLLMUnavailable("down")

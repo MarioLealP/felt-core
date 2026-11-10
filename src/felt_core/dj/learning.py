@@ -2,7 +2,7 @@
 pick went.
 """
 
-from felt_core.music_taste import is_skip
+from felt_core.core.music_taste import is_skip
 
 DEFAULT_DISCOVERY = 1 / 3  # Mario 2026-10-17: "an excuse to find new songs"
 _MIN_DISCOVERY, _MAX_DISCOVERY = 0.15, 0.6

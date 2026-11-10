@@ -1,5 +1,5 @@
-import felt_core.api as api
-from felt_core import tts_cache
+import felt_core.api.app as api
+from felt_core.core import tts_cache
 
 
 class _FakeConfig:

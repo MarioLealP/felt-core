@@ -8,7 +8,7 @@ snippet list can't provide.
 
 import httpx2
 
-from felt_core.plugin import SkillResult
+from felt_core.models.plugin import SkillResult
 
 name = "web_search"
 description = (

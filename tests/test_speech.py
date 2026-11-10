@@ -1,4 +1,4 @@
-from felt_core.speech import strip_for_tts
+from felt_core.core.speech import strip_for_tts
 
 
 def test_strips_bold_and_italic_markers():

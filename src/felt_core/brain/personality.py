@@ -18,7 +18,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from felt_core.brain.persona import compile_persona
-from felt_core.self_memory import memory_block
+from felt_core.core.self_memory import memory_block
 
 if TYPE_CHECKING:
     from felt_core.config import FeltConfig

@@ -1,4 +1,4 @@
-from felt_core.ntfy_listener import _basic_auth
+from felt_core.core.ntfy_listener import _basic_auth
 
 
 def test_basic_auth_pairs_user_and_password():

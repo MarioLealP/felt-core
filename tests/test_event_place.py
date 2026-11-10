@@ -11,9 +11,10 @@ from datetime import datetime, timedelta
 import pytest
 from conftest import load_plugin_module
 
-from felt_core import appointment_hold, ha_calendar, local_llm
+from felt_core.clients import ha_calendar, local_llm
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.core import appointment_hold
+from felt_core.models.plugin import ExecutionContext
 
 
 def _ctx(tmp_path):

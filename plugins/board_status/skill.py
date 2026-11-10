@@ -12,8 +12,8 @@ import json
 import httpx2
 
 from felt_core.config import reveal
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "board_status"
 description = "Mario's work board (the agents' open-work list): in progress, needs review, next, backlog. Read-only."

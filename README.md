@@ -20,7 +20,7 @@ that, enforced project-wide, not just here:
    generic defaults. `.env.example` documents every setting.
 2. **Modular / plugin architecture.** Skills (weather, price checks, smart
    home, whatever else) are self-contained plugins implementing one small
-   interface (`src/felt_core/plugin.py`) — addable/removable without
+   interface (`src/felt_core/models/plugin.py`) — addable/removable without
    touching core code. New skill = new folder in `plugins/`.
 
 A consequence worth naming explicitly: **felt-llm is the only brain, and

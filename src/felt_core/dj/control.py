@@ -12,10 +12,10 @@ import time
 import httpx2
 from pydantic import BaseModel, Field
 
-from felt_core import features, llm_gate
-from felt_core import spotify_client as sp
+from felt_core.clients import spotify_client as sp
 from felt_core.config import FeltConfig
-from felt_core.db import APP_SESSION
+from felt_core.core import features, llm_gate
+from felt_core.db.store import APP_SESSION
 from felt_core.dj import learning, picker, store
 
 logger = logging.getLogger(__name__)
@@ -187,8 +187,8 @@ async def _refill(config: FeltConfig) -> None:
 
 
 async def _say(config: FeltConfig, pick: dict) -> None:
-    from felt_core.events import react_to_event
-    from felt_core.proactive import enqueue_proactive
+    from felt_core.core.events import react_to_event
+    from felt_core.core.proactive import enqueue_proactive
 
     if not features.enabled(config.db_path, "ambient.dj_lines"):
         return

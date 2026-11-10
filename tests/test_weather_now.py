@@ -4,7 +4,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from felt_core import api
+from felt_core.api import app as api
 from felt_core.brain import background as brain
 
 

@@ -9,8 +9,8 @@ import time
 
 import pytest
 
-from felt_core import spotify_client
-from felt_core.spotify_client import list_devices, search_track
+from felt_core.clients import spotify_client
+from felt_core.clients.spotify_client import list_devices, search_track
 
 
 @pytest.mark.vcr

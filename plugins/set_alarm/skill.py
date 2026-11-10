@@ -19,12 +19,12 @@ reached.
 
 from datetime import datetime, timedelta
 
-from felt_core.alarms import schedule_alarm
-from felt_core.date_resolution import resolve_datetime
-from felt_core.params import get_single_param
-from felt_core.phone import PhoneUnavailable
-from felt_core.phone import set_alarm as phone_alarm
-from felt_core.plugin import SkillResult
+from felt_core.clients.phone import PhoneUnavailable
+from felt_core.clients.phone import set_alarm as phone_alarm
+from felt_core.core.alarms import schedule_alarm
+from felt_core.core.date_resolution import resolve_datetime
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult
 
 name = "set_alarm"
 description = (

@@ -7,7 +7,7 @@ import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
 import felt_core.brain.screen_reactions as screen_reactions
 from felt_core.config import FeltConfig
-from felt_core.db import (
+from felt_core.db.store import (
     get_history,
     save_fact,
     save_message,
@@ -77,7 +77,7 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
 
 
 async def test_local_email_summary_has_personality_and_a_token_cap(tmp_path, fake_llm):
-    from felt_core import emails
+    from felt_core.core import emails
 
     config = _config(tmp_path)
     emails.add(config.db_path, "<1@x>", "Ana", "Dinner", "Dinner on Friday?", False)

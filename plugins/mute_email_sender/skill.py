@@ -3,8 +3,8 @@ never mentions its mail again (emails.py; a mailing list's whole domain, a
 person's one address).
 """
 
-from felt_core import emails
-from felt_core.plugin import SkillResult
+from felt_core.core import emails
+from felt_core.models.plugin import SkillResult
 
 name = "mute_email_sender"
 description = (

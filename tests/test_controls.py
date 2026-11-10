@@ -6,8 +6,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from felt_core import controls, local_llm
-from felt_core.api import app
+from felt_core.api.app import app
+from felt_core.clients import local_llm
+from felt_core.core import controls
 
 T0 = datetime(2026, 10, 3, 21, 0, tzinfo=UTC)
 SSO = {"X-Authentik-Username": "mario"}

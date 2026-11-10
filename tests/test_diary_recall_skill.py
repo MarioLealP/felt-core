@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 from conftest import load_plugin_module
 
 from felt_core.config import FeltConfig
-from felt_core.db import insert_diary, insert_or_update_diary_week
-from felt_core.plugin import ExecutionContext
-from felt_core.self_memory import LISBON
+from felt_core.core.self_memory import LISBON
+from felt_core.db.store import insert_diary, insert_or_update_diary_week
+from felt_core.models.plugin import ExecutionContext
 
 skill = load_plugin_module("diary_recall/skill.py")
 

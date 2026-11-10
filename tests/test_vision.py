@@ -6,8 +6,8 @@ import json
 import httpx2
 import pytest
 
-from felt_core import local_llm, vision
 from felt_core.brain import screen_reactions
+from felt_core.clients import local_llm, vision
 from felt_core.config import FeltConfig
 
 
@@ -123,7 +123,7 @@ async def test_a_description_from_the_desktop_skips_the_image(tmp_path, fake_llm
 def test_the_endpoint_takes_seen_instead_of_an_image(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from felt_core import api
+    from felt_core.api import app as api
 
     got = {}
 

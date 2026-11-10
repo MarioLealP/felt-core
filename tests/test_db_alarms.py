@@ -1,4 +1,4 @@
-from felt_core.db import get_pending_alarms, mark_alarm_fired, save_alarm
+from felt_core.db.store import get_pending_alarms, mark_alarm_fired, save_alarm
 
 
 def test_save_alarm_appears_in_pending(tmp_path):

@@ -3,8 +3,9 @@ so they happen with the desktop off; the desktop is only asked to say them."""
 
 import asyncio
 
-from felt_core import db, song_remarks
-from felt_core.events import EventReaction
+from felt_core.core import song_remarks
+from felt_core.core.events import EventReaction
+from felt_core.db import store as db
 
 
 def _snap(track_id, playing=True, name="Song", artists=("A", "B"), album="Album"):
@@ -42,7 +43,7 @@ def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch
         db.save_message(config.db_path, session_id, "assistant", "Oh, this one.", kind=db.EVENT)
         return EventReaction(line="Oh, this one.", emotion="happy")
 
-    import felt_core.events as events
+    import felt_core.core.events as events
 
     monkeypatch.setattr(events, "react_to_event", fake_react)
     asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
@@ -64,7 +65,7 @@ def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
     async def quiet(event, details, config, session_id):
         return EventReaction(skipped="cooldown")
 
-    import felt_core.events as events
+    import felt_core.core.events as events
 
     monkeypatch.setattr(events, "react_to_event", quiet)
     asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]

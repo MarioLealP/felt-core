@@ -15,8 +15,8 @@ of them are as time-critical as being told to shut up mid-sentence.
 
 import logging
 
-from felt_core.params import get_single_param
-from felt_core.plugin import SkillResult, UIAction
+from felt_core.core.params import get_single_param
+from felt_core.models.plugin import SkillResult, UIAction
 
 name = "felt_presence"
 description = (

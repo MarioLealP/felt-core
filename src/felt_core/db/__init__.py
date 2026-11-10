@@ -1,0 +1,1 @@
+"""Felt's SQLite store."""

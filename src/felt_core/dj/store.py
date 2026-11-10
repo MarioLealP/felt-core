@@ -5,7 +5,7 @@ created on first use.
 
 import sqlite3
 
-from felt_core.db import _connect
+from felt_core.db.store import _connect
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS dj_picks (

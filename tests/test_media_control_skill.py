@@ -5,9 +5,9 @@ from pathlib import Path
 
 import httpx2
 
-from felt_core import spotify_client
+from felt_core.clients import spotify_client
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.models.plugin import ExecutionContext
 
 _spec = importlib.util.spec_from_file_location(
     "media_control_skill", Path(__file__).parents[1] / "plugins/media_control/skill.py"

@@ -6,7 +6,7 @@ no core code changes needed.
 
 from datetime import datetime
 
-from felt_core.plugin import SkillResult
+from felt_core.models.plugin import SkillResult
 
 name = "get_time"
 description = "Current local date and time."

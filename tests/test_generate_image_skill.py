@@ -76,7 +76,7 @@ def test_build_image_url_strips_trailing_slash():
 
 async def test_handle_reports_unavailable_when_not_configured():
     from felt_core.config import FeltConfig
-    from felt_core.plugin import ExecutionContext
+    from felt_core.models.plugin import ExecutionContext
 
     module = _load_skill()
 

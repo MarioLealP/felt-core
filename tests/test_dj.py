@@ -6,13 +6,13 @@ import time
 import httpx2
 import pytest
 
-from felt_core import spotify_client as sp
 from felt_core.brain.music_fast_path import music_fast_path
+from felt_core.clients import spotify_client as sp
 from felt_core.config import FeltConfig
-from felt_core.db import record_music_play
+from felt_core.core.events import build_prompt
+from felt_core.db.store import record_music_play
 from felt_core.dj import control, learning, picker, store
 from felt_core.dj.profile import build_profile
-from felt_core.events import build_prompt
 
 
 @pytest.fixture(autouse=True)

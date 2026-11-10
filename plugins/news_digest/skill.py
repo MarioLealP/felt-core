@@ -14,9 +14,9 @@ from datetime import datetime
 
 import httpx2
 
+from felt_core.clients.ha_calendar import TZ
 from felt_core.config import reveal
-from felt_core.ha_calendar import TZ
-from felt_core.plugin import SkillResult
+from felt_core.models.plugin import SkillResult
 
 name = "news_digest"
 description = (

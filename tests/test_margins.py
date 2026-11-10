@@ -5,10 +5,10 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
-from felt_core import margins
-from felt_core.api import app
-from felt_core.asides import current_asides
-from felt_core.db import save_message
+from felt_core.api.app import app
+from felt_core.core import margins
+from felt_core.core.asides import current_asides
+from felt_core.db.store import save_message
 
 SSO = {"X-Authentik-Username": "mario"}
 

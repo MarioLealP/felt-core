@@ -8,7 +8,7 @@ import httpx2
 import pytest
 
 from felt_core.config import FeltConfig
-from felt_core.plugin import ExecutionContext
+from felt_core.models.plugin import ExecutionContext
 
 _spec = importlib.util.spec_from_file_location(
     "board_status_skill", Path(__file__).parents[1] / "plugins/board_status/skill.py"
