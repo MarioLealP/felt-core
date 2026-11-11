@@ -172,7 +172,7 @@ async def warm_up_llm(config: FeltConfig) -> None:
     deliberately not wrapped in metrics.timed (it isn't a user turn).
     """
     registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
-    prefix = local_turn_messages("hello", [], config, None)
+    prefix = await local_turn_messages("hello", [], config, None)
     await local_llm.chat(prefix, max_tokens=1, tools=skill_tools(registry), config=config)
 
 

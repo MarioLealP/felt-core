@@ -1,8 +1,15 @@
-"""The SQLite connection: opens felt.db and brings its schema up to date first (db/migrate.py)."""
+"""felt.db sessions: `session()` (async ORM) and the old sync `_connect()`, both migrate the schema first."""
 
+import asyncio
 import sqlite3
 import threading
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
+
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from felt_core.db.migrate import migrate
 
@@ -32,12 +39,38 @@ _schema_ready: set[str] = set()
 _schema_lock = threading.Lock()
 
 
-def _connect(db_path: str) -> sqlite3.Connection:
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=30)
+def _ensure_schema(db_path: str) -> None:
     if db_path not in _schema_ready:
         with _schema_lock:
             if db_path not in _schema_ready:
+                Path(db_path).parent.mkdir(parents=True, exist_ok=True)
                 migrate(db_path)
                 _schema_ready.add(db_path)
-    return conn
+
+
+def _connect(db_path: str) -> sqlite3.Connection:
+    """The old sync connection - goes once every table has moved to `session()`."""
+    _ensure_schema(db_path)
+    return sqlite3.connect(db_path, timeout=30)
+
+
+# One engine per database. NullPool: a connection per session, closed after, like `_connect` - and nothing pooled
+# that's tied to an event loop that has since closed (each test runs its own loop).
+_engines: dict[str, AsyncEngine] = {}
+
+
+def _engine(db_path: str) -> AsyncEngine:
+    engine = _engines.get(db_path)
+    if engine is None:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", poolclass=NullPool, connect_args={"timeout": 30})
+        _engines[db_path] = engine
+    return engine
+
+
+@asynccontextmanager
+async def session(db_path: str) -> AsyncGenerator[AsyncSession]:
+    """An ORM session on felt.db, schema up to date; `await s.commit()` to keep writes."""
+    if db_path not in _schema_ready:
+        await asyncio.to_thread(_ensure_schema, db_path)
+    async with AsyncSession(_engine(db_path), expire_on_commit=False) as s:
+        yield s

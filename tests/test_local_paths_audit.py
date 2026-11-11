@@ -18,7 +18,7 @@ def _config(tmp_path, **kwargs):
 
 async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, fake_llm):
     config = _config(tmp_path)
-    save_fact(config.db_path, "likes pizza")
+    await save_fact(config.db_path, "likes pizza")
     fake_llm.script = ["local reply"]
 
     reply = await brain.phrase_skill_result("find my notes", "found 3 notes", [], config, tone="tired")

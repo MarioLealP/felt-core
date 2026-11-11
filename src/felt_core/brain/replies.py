@@ -46,8 +46,8 @@ def skill_tools(registry: dict[str, LoadedSkill]) -> list[dict]:
     ]
 
 
-def _facts_context(config: FeltConfig) -> list[dict]:
-    facts = get_all_facts(config.db_path)
+async def _facts_context(config: FeltConfig) -> list[dict]:
+    facts = await get_all_facts(config.db_path)
     if not facts:
         return []
     bullet_list = "\n".join(f"- {fact}" for fact in facts)
@@ -75,7 +75,7 @@ def _daily_persona() -> str:
     return daily_persona()
 
 
-def local_turn_messages(message: str, history: list[dict], config: FeltConfig, tone: str | None) -> list[dict]:
+async def local_turn_messages(message: str, history: list[dict], config: FeltConfig, tone: str | None) -> list[dict]:
     """The cache-stable layout for a local-first chat turn (WP-36, measured 2026-09-29).
 
     felt-llm's template renders the tool declarations right AFTER the
@@ -90,7 +90,7 @@ def local_turn_messages(message: str, history: list[dict], config: FeltConfig, t
     block = memory_block(config, message)
     if block:
         context.append(block)
-    context += [m["content"] for m in _facts_context(config) + music_taste_context(config)]
+    context += [m["content"] for m in await _facts_context(config) + music_taste_context(config)]
     # chat() appends the fresh screen description as a system entry.
     context += [m["content"] for m in history if m.get("role") == "system"]
     if tone:
@@ -120,7 +120,7 @@ async def local_reply(
     screen-reaction module and events.py all call this directly (WP-40).
     Raises LocalLLMUnavailableError when felt-llm is down.
     """
-    facts = _facts_context(config) if include_facts else []
+    facts = await _facts_context(config) if include_facts else []
     taste = music_taste_context(config) if include_facts else []
     last: dict = messages_tail[-1] if messages_tail else {}
     context_text = last.get("content") if isinstance(last.get("content"), str) else None

@@ -76,6 +76,35 @@ def _scrub_response_secrets(response):
     return response
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _migrated_template(tmp_path_factory):
+    """A new test database starts as a copy of one migrated per worker, not a fresh Alembic run.
+
+    ~450 tests each build a felt.db; a full migration apiece was over a quarter of the suite (and pushed slow CI
+    runners into the time cap). A database that already exists still goes through the real migrate(), and
+    test_db_migrate.py tests migrate() itself.
+    """
+    import shutil
+
+    from felt_core.db import session
+    from felt_core.db.migrate import migrate
+
+    template = tmp_path_factory.mktemp("schema") / "felt.db"
+    migrate(str(template))
+
+    def copy_or_migrate(db_path: str) -> None:
+        target = Path(db_path)
+        if target.exists() and target.stat().st_size:
+            migrate(db_path)
+        else:
+            shutil.copyfile(template, target)
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(session, "migrate", copy_or_migrate)
+    yield
+    mp.undo()
+
+
 @pytest.fixture(scope="module")
 def vcr_config():
     return {

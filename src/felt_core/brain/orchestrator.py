@@ -229,7 +229,7 @@ async def _chat_local(
     its result) phrases the answer. Raises LocalLLMUnavailableError if felt-llm is down at
     any point (the API answers 503).
     """
-    prefix = local_turn_messages(message, history, config, tone)
+    prefix = await local_turn_messages(message, history, config, tone)
     tools = skill_tools(registry)
     # cm-6b0: the semantic router's pick (a few ms, in a thread while
     # ha_assist runs), recorded next to what she does

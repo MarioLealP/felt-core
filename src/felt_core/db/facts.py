@@ -1,19 +1,19 @@
 """The `facts` table."""
 
-from felt_core.db.session import _connect
+from sqlmodel import col, select
+
+from felt_core.db.session import session
+from felt_core.db.tables import Fact
 
 
-def save_fact(db_path: str, content: str) -> None:
+async def save_fact(db_path: str, content: str) -> None:
     """Save one fact about Mario."""
-    conn = _connect(db_path)
-    with conn:
-        conn.execute("INSERT INTO facts (content) VALUES (?)", (content,))
-    conn.close()
+    async with session(db_path) as s:
+        s.add(Fact(content=content))
+        await s.commit()
 
 
-def get_all_facts(db_path: str) -> list[str]:
+async def get_all_facts(db_path: str) -> list[str]:
     """Every saved fact, oldest first."""
-    conn = _connect(db_path)
-    rows = conn.execute("SELECT content FROM facts ORDER BY id ASC").fetchall()
-    conn.close()
-    return [row[0] for row in rows]
+    async with session(db_path) as s:
+        return list((await s.exec(select(Fact.content).order_by(col(Fact.id)))).all())
