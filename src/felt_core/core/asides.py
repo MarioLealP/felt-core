@@ -195,13 +195,13 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
         _running.pop(session_id, None)
 
 
-def schedule_pick(config: FeltConfig, session_id: str) -> None:
+async def schedule_pick(config: FeltConfig, session_id: str) -> None:
     """After a remark is saved: re-pick in the background.
 
     Only the app's session has asides; a remark landing mid-pick reruns it
     once afterwards.
     """
-    if session_id != APP_SESSION or not features.enabled(config.db_path, "ambient.asides"):
+    if session_id != APP_SESSION or not await features.enabled(config.db_path, "ambient.asides"):
         return
     if session_id in _running:
         _again.add(session_id)

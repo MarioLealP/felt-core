@@ -45,7 +45,7 @@ async def handle(params, ctx):
         added = f"Added '{held['summary']}', {appointment_hold.when(held['start'])}"
         where = f"at {place}" if place else "no place"
         return SkillResult(text=f"{added}, {where}. Read it back to Mario as written.")
-    last = last_created(config, datetime.now(tz=TZ))
+    last = await last_created(config, datetime.now(tz=TZ))
     if place is None:
         if last is None:
             return SkillResult(text="Nothing to change.")

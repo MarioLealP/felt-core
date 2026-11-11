@@ -116,17 +116,24 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:  # also when the app stops on an exception
-        ntfy_task.cancel()
-        email_task.cancel()
-        poe_cache_task.cancel()
-        weather_task.cancel()
-        music_taste_task.cancel()
-        router_task.cancel()
-        warmup_task.cancel()
-        calendar_task.cancel()
-        incidents_task.cancel()
-        ender_task.cancel()
-        backup_task.cancel()
+        tasks = (
+            ntfy_task,
+            email_task,
+            poe_cache_task,
+            weather_task,
+            music_taste_task,
+            router_task,
+            warmup_task,
+            calendar_task,
+            incidents_task,
+            ender_task,
+            backup_task,
+        )
+        for task in tasks:
+            task.cancel()
+        # wait for them: a task cancelled mid-query closes its DB connection on the way out, and that needs
+        # the loop still running (left to the loop's own shutdown, a second cancel hit the close and it hung)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)

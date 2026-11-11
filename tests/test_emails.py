@@ -194,7 +194,7 @@ async def test_list_mail_waits_while_her_model_is_busy(tmp_path, fake_llm):
 
 async def test_switched_off_says_nothing(tmp_path, fake_llm):
     config = _config(tmp_path)
-    features.set_enabled(config.db_path, "email.new_mail", False)
+    await features.set_enabled(config.db_path, "email.new_mail", False)
     _ana(config.db_path)
     await emails.tick(config)
     assert _email_lines(config.db_path) == []

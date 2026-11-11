@@ -287,14 +287,14 @@ async def mention(config: FeltConfig) -> str | None:
         source_ref="email:" + ",".join(map(str, ids)),
     )
     enqueue_proactive(config, "email", line, ttl_s=_TTL_S, record=False)
-    schedule_pick(config, APP_SESSION)
+    await schedule_pick(config, APP_SESSION)
     logger.info("emails: mentioned %s -> %r", ids, line)
     return line
 
 
 async def tick(config: FeltConfig) -> None:
     """One email round: sort the new mail, then mention what's waiting."""
-    if not features.enabled(config.db_path, "email.new_mail"):
+    if not await features.enabled(config.db_path, "email.new_mail"):
         return
     await sort_new(config)
     await mention(config)

@@ -159,7 +159,7 @@ async def test_offline_is_not_a_transition(tmp_path, ha, said):
 
 async def test_restart_resumes_from_the_db(tmp_path, ha, said):
     config = _config(tmp_path)
-    set_setting(config.db_path, "ender_last_state", "printing")  # before the restart
+    await set_setting(config.db_path, "ender_last_state", "printing")  # before the restart
     ha.states = {"state": "cancelled"}
     assert await ender.check(config) == "The Ender's print was cancelled."
 
@@ -167,7 +167,7 @@ async def test_restart_resumes_from_the_db(tmp_path, ha, said):
 async def test_phone_down_still_says_it_at_the_desk(tmp_path, ha, said):
     config = _config(tmp_path)
     config.phone = None  # phone.notify raises PhoneUnavailableError
-    set_setting(config.db_path, "ender_last_state", "printing")
+    await set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "complete"}
     assert await ender.check(config) == "The Ender's print is done."
     assert said == ["The Ender's print is done."]
@@ -198,7 +198,7 @@ async def test_she_words_it_herself(tmp_path, ha, said, monkeypatch):
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", her)
     config = _config(tmp_path)
-    set_setting(config.db_path, "ender_last_state", "printing")
+    await set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "complete", "file": "Cube.gcode"}
     assert await ender.check(config) == "Your cube is done, go get it!"
     assert said == ["Your cube is done, go get it!"]
@@ -211,7 +211,7 @@ async def test_empty_reply_falls_back(tmp_path, ha, said, monkeypatch):
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", blank)
     config = _config(tmp_path)
-    set_setting(config.db_path, "ender_last_state", "printing")
+    await set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "cancelled"}
     assert await ender.check(config) == "The Ender's print was cancelled."
 
@@ -219,7 +219,7 @@ async def test_empty_reply_falls_back(tmp_path, ha, said, monkeypatch):
 async def test_a_runout_pause_says_why(tmp_path, ha, said):
     # 2026-10-22: Klipper's runout sensor paused it - she says so, desk + phone
     config = _config(tmp_path)
-    set_setting(config.db_path, "ender_last_state", "printing")
+    await set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "paused", "file": "Cube.gcode", "filament": "off"}
     line = "The Ender ran out of filament (Cube) - it's paused; load more and hit Resume."
     assert await ender.check(config) == line
@@ -229,7 +229,7 @@ async def test_a_runout_pause_says_why(tmp_path, ha, said):
 
 async def test_a_plain_pause_with_filament_in(tmp_path, ha, said):
     config = _config(tmp_path)
-    set_setting(config.db_path, "ender_last_state", "printing")
+    await set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "paused", "filament": "on"}
     assert await ender.check(config) == "The Ender paused."
 

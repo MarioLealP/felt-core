@@ -29,9 +29,9 @@ from felt_core.db.settings import get_setting, set_setting
 LAST_ID = "ntfy_last_id"
 
 
-def stream_params(db_path: str) -> dict:
+async def stream_params(db_path: str) -> dict:
     """Catch up from the last message seen; live only on the very first run."""
-    last = get_setting(db_path, LAST_ID)
+    last = await get_setting(db_path, LAST_ID)
     return {"since": last} if last else {}
 
 
@@ -70,7 +70,7 @@ async def listen(config: FeltConfig) -> None:
     while True:
         try:
             async with httpx2.AsyncClient(auth=auth, timeout=None) as client:
-                params = stream_params(config.db_path)
+                params = await stream_params(config.db_path)
                 if params:
                     logger.info("ntfy: catching up since %s", params["since"])
                 async with client.stream("GET", url, params=params) as response:
@@ -98,11 +98,11 @@ async def listen(config: FeltConfig) -> None:
                                 ntfy_event_id=event_id,
                             )
                             # WP-58: if it's Claude's, wake the responder now
-                            responder.wake(config.db_path)
+                            await responder.wake(config.db_path)
                         except Exception:
                             logger.exception("incident intake failed for %r", event.get("title"))
                         if event.get("id"):
-                            set_setting(config.db_path, LAST_ID, str(event["id"]))
+                            await set_setting(config.db_path, LAST_ID, str(event["id"]))
                         logger.info("ntfy event saved: %s", event.get("message"))
         except Exception:
             logger.exception("ntfy listener error, reconnecting in 10s")

@@ -144,7 +144,10 @@ def _no_morning_brief(request, monkeypatch):
     async def no_brief(*a, **k):
         return None
 
-    monkeypatch.setattr(brief, "will_open_with", lambda *a, **k: False)
+    async def not_opening(*a, **k) -> bool:
+        return False
+
+    monkeypatch.setattr(brief, "will_open_with", not_opening)
     monkeypatch.setattr(brief, "maybe_brief", no_brief)
 
 

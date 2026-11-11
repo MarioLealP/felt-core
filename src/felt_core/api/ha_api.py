@@ -83,8 +83,8 @@ class HaSetControl(BaseModel):
 
 
 async def _controls(config: FeltConfig, message: str | None = None) -> HaControls:
-    now = await asyncio.to_thread(controls.state, config.db_path)
-    desk = await asyncio.to_thread(controls.desktop, config.db_path)
+    now = await controls.state(config.db_path)
+    desk = await controls.desktop(config.db_path)
     return HaControls(
         quiet=now["quiet"]["on"],
         hide=now["hide"]["on"],
@@ -112,7 +112,7 @@ async def ha_set_control(req: HaSetControl) -> HaControls:
         elif not req.on:
             dj_control.stop("turned off in Home Assistant")
     else:
-        await asyncio.to_thread(controls.set_control, config.db_path, req.name, req.on)
+        await controls.set_control(config.db_path, req.name, req.on)
     return await _controls(config, message)
 
 

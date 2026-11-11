@@ -63,24 +63,24 @@ def _age(column: str) -> str:
     return f"(strftime('%s', ?) - strftime('%s', {column})) / 60.0"
 
 
-def wake(db_path: str) -> bool:
+async def wake(db_path: str) -> bool:
     """Rings the responder's doorbell if anything waits for Claude.
 
     Rings the responder's doorbell if anything waits for Claude: rewrites
     a marker file next to the database, which the host's path unit watches.
     """
-    if not waiting(db_path):
+    if not await waiting(db_path):
         return False
     Path(db_path).with_name(WAKE_FILE).write_text(datetime.now(UTC).isoformat())
     return True
 
 
-def waiting(db_path: str) -> int:
+async def waiting(db_path: str) -> int:
     """How many incidents are waiting for Claude - so the runner only checks the usage limits when there's work.
 
     None while he's switched off.
     """
-    if not claude_alerts(db_path):
+    if not await claude_alerts(db_path):
         return 0
     conn = _connect(db_path)
     try:
@@ -90,13 +90,13 @@ def waiting(db_path: str) -> int:
         conn.close()
 
 
-def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:
+async def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:
     """The next incident for Claude, marked as handed over.
 
     The next incident for Claude (most urgent, then oldest), marked as
     handed over; None when there's none or today's cap is spent.
     """
-    if not claude_alerts(db_path):
+    if not await claude_alerts(db_path):
         return None  # the kill switch: nothing is handed over
     now = now or datetime.now(UTC)
     day = _ts(now.replace(hour=0, minute=0, second=0, microsecond=0))
@@ -157,7 +157,7 @@ def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> b
     return cursor.rowcount == 1
 
 
-def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
+async def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
     """Incidents Claude didn't get to in time, by tier.
 
     Incidents Claude didn't get to in time, by tier: never claimed within
@@ -165,7 +165,7 @@ def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
     While he's switched off, every waiting one is missed at once ("off").
     """
     stamp = _ts(now or datetime.now(UTC))
-    switched_off = not claude_alerts(db_path)
+    switched_off = not await claude_alerts(db_path)
     off: list[int] = []
     conn = _connect(db_path)
     try:

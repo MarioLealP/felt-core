@@ -87,14 +87,14 @@ def claim_same(start: datetime) -> dict | None:
     return claim()
 
 
-def just_added(config: FeltConfig, summary: str, start: datetime) -> dict | None:
+async def just_added(config: FeltConfig, summary: str, start: datetime) -> dict | None:
     """The appointment create_calendar_event added in the last 10 min, if it's this one.
 
     This one: `start`, and the title one inside the other ("dentist" / "Dentist
     appointment"). Being called again for it is his answer, not a second one.
     """
     now = datetime.now(ha_calendar.TZ)
-    last = ha_calendar.last_created(config, now)
+    last = await ha_calendar.last_created(config, now)
     if last is None or datetime.fromisoformat(last["start"]) != start:
         return None
     a, b = summary.casefold().strip(), last["summary"].casefold().strip()
@@ -130,7 +130,7 @@ async def add(config: FeltConfig, held: dict, place: str | None) -> bool:
     except ha_calendar.CalendarUnavailableError:
         logger.warning("appointment hold: couldn't add %r", held["summary"])
         return False
-    ha_calendar.remember_created(config, held["calendar"], held["summary"], held["start"], held["end"])
+    await ha_calendar.remember_created(config, held["calendar"], held["summary"], held["start"], held["end"])
     return True
 
 
@@ -167,7 +167,7 @@ async def change_place(config: FeltConfig, last: dict, place: str) -> str:
             await ha_calendar.delete_event(config, calendar_id, event["uid"])
     except ha_calendar.CalendarUnavailableError, httpx2.HTTPError:
         return "I couldn't reach the calendar to add the place."
-    ha_calendar.remember_created(config, calendar_id, summary, start, end)
+    await ha_calendar.remember_created(config, calendar_id, summary, start, end)
     return f"'{summary}', {when(start)}, is now at {place}. Read it back to Mario as written."
 
 

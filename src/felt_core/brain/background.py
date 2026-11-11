@@ -151,7 +151,7 @@ async def weather_precompute_loop(config: FeltConfig) -> None:
     """Keep the weather precompute refreshed on its interval."""
     while True:
         try:
-            if features.enabled(config.db_path, "ambient.weather_line"):
+            if await features.enabled(config.db_path, "ambient.weather_line"):
                 with llm_gate.ambient("weather line"):
                     await refresh_weather_precompute(config)
         except Exception:
@@ -171,7 +171,7 @@ async def warm_up_llm(config: FeltConfig) -> None:
     turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailableError;
     deliberately not wrapped in metrics.timed (it isn't a user turn).
     """
-    registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
+    registry = await features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     prefix = await local_turn_messages("hello", [], config, None)
     await local_llm.chat(prefix, max_tokens=1, tools=skill_tools(registry), config=config)
 
@@ -275,7 +275,7 @@ async def music_taste_loop(config: FeltConfig) -> None:
                     if dj_control.is_on():
                         dj_control.on_poll(config, previous, current)
                     else:
-                        song_remarks.on_poll(config, previous, current)
+                        await song_remarks.on_poll(config, previous, current)
                     # Advance BEFORE recording: a record that fails must
                     # never leave `previous` pointing at the same item, or
                     # every later poll retries (and fails on) it forever.

@@ -106,16 +106,16 @@ async def test_felt_llm_down_says_the_facts(tmp_path, world):
 
 async def test_the_diary_greeting_opens_it(tmp_path, world):
     config = _config(tmp_path)
-    set_setting(config.db_path, brief.GREETING_KEY, "Slept well? You were up late.")
+    await set_setting(config.db_path, brief.GREETING_KEY, "Slept well? You were up late.")
     await brief.maybe_brief(config, MORNING)
     assert 'Open with this morning thought of yours: "Slept well?' in world.prompts[0]
-    assert get_setting(config.db_path, brief.GREETING_KEY) == ""
+    assert await get_setting(config.db_path, brief.GREETING_KEY) == ""
 
 
 async def test_switched_off(tmp_path, world):
     config = _config(tmp_path)
-    features.set_enabled(config.db_path, brief.FEATURE, False)
-    assert not brief.will_open_with(config, MORNING)
+    await features.set_enabled(config.db_path, brief.FEATURE, False)
+    assert not await brief.will_open_with(config, MORNING)
     assert await brief.maybe_brief(config, MORNING) is None
     assert world.said == []
 

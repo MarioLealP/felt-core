@@ -81,5 +81,10 @@ convention = "google"
 python-version = "3.14"
 
 [tool.ty.src]
-include = ["src", "tests"]
+include = ["src", "tests", "plugins", "tools"]
 exclude = ["**/__pycache__"]
+
+# the DB layer went async (PR 9c): a call that isn't awaited is a coroutine, always truthy - `if enabled(...)` lies
+[tool.ty.rules]
+unused-awaitable = "error"
+redundant-condition = "error"

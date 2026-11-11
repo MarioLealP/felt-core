@@ -178,7 +178,7 @@ async def process_screen_context(
         kind=REMARK,
         source_ref=f"screen:{obs_id}",
     )
-    schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
+    await schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=reply_raw, animation_tag=None)
 
 
@@ -298,7 +298,7 @@ async def react_to_screen(
     if trigger != "manual" and _on_cooldown(config, session_id):
         return ChatResult(reply="", animation_tag=None)
     switch = "ambient.poe_reactions" if poe_reactions.is_poe(app) else "ambient.screen_reactions"
-    if trigger != "manual" and not features.enabled(config.db_path, switch):
+    if trigger != "manual" and not await features.enabled(config.db_path, switch):
         return ChatResult(reply="", animation_tag=None)
 
     observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
@@ -348,5 +348,5 @@ async def react_to_screen(
 
     set_observation_reply(config.db_path, obs_id, line)
     save_message(config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}")
-    schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
+    await schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=line, animation_tag=None, emotion=emotion)

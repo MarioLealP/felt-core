@@ -39,7 +39,7 @@ def test_the_rules():
     assert notices.rules("low", "both", None, True)["sticky"]
 
 
-def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
+async def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
     db = str(tmp_path / "f.db")
     assert notices.latest(db) == 0
     assert notices.after(db, 0) == []
@@ -47,7 +47,7 @@ def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
     trivy = _in(db, "Trivy weekly: 1 critical")
     alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     alert_lines.store(db, trivy, "The weekly scan found one critical.")
-    responder.claim_next(db, T0)
+    await responder.claim_next(db, T0)
     responder.save_report(db, honeypot, {"verdict": "needs-mario", "summary": "x"}, "s1")
     alert_lines.store(db, honeypot, "Claude wants you to look.", "followup")
     lines = notices.after(db, 0)

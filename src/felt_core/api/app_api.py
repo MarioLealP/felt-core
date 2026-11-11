@@ -51,9 +51,9 @@ async def _ambient_mark(config, session_id: str) -> None:
         await maybe_mark(config, session_id)
 
 
-def schedule_mark(config, session_id: str = SESSION) -> None:
+async def schedule_mark(config, session_id: str = SESSION) -> None:
     """After a reply: maybe she marks his line (marks.py), off the hot path."""
-    if not features.enabled(config.db_path, "ambient.marks"):
+    if not await features.enabled(config.db_path, "ambient.marks"):
         return
     task = asyncio.create_task(_ambient_mark(config, session_id))
     _pending.add(task)
@@ -232,7 +232,7 @@ async def stream(request: Request, _user: Annotated[str, Depends(sso_user)]) -> 
     An app window opening is a sign of him, so it can start her day (diary.py).
     """
     config = load_config()
-    he_is_here(config)
+    await he_is_here(config)
     return StreamingResponse(
         notices(
             config.db_path,
@@ -264,5 +264,5 @@ async def say(req: SayRequest, _user: Annotated[str, Depends(sso_user)]) -> SayR
         if mine:
             link_answer(config.db_path, mine[-1], req.answering)
             rows = history_page(config.db_path, SESSION, limit=2)
-    schedule_mark(config)
+    await schedule_mark(config)
     return SayResponse(messages=[Message(**r) for r in rows])

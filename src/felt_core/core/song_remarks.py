@@ -64,10 +64,10 @@ async def remark_on(config: FeltConfig, details: dict) -> None:
         enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=SAY_WITHIN_S, record=False)
 
 
-def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:
+async def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:
     """Called each Spotify poll; starts the remark off the poll loop."""
     details = new_track_details(previous, current)
-    if details is None or not features.enabled(config.db_path, "ambient.song_remarks"):
+    if details is None or not await features.enabled(config.db_path, "ambient.song_remarks"):
         return
     task = asyncio.get_running_loop().create_task(remark_on(config, details))
     _tasks.add(task)

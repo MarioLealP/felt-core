@@ -71,7 +71,7 @@ def main() -> None:
             self.end_headers()
             self.wfile.write(b"Done - you can close this tab." if ok else b"Spotify said no - see the terminal.")
 
-        def log_message(self, *args) -> None:
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)

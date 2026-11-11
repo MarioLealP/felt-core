@@ -41,8 +41,8 @@ async def _voice_up(config: FeltConfig) -> bool | None:
 
 async def _page(config: FeltConfig) -> dict:
     db = config.db_path
-    now = await asyncio.to_thread(controls.state, db)
-    desk = await asyncio.to_thread(controls.desktop, db)
+    now = await controls.state(db)
+    desk = await controls.desktop(db)
     model, voice = await asyncio.gather(local_llm.is_healthy(config), _voice_up(config))
     return {
         **now,
@@ -71,7 +71,7 @@ async def app_set_control(req: SetControl, _user: Annotated[str, Depends(sso_use
     if req.minutes is not None and req.minutes not in controls.TIMERS:
         raise HTTPException(status_code=422, detail=f"minutes must be one of {controls.TIMERS}")
     config = load_config()
-    await asyncio.to_thread(controls.set_control, config.db_path, req.name, req.on, req.minutes)
+    await controls.set_control(config.db_path, req.name, req.on, req.minutes)
     return await _page(config)
 
 
@@ -85,15 +85,15 @@ class Settings(BaseModel):
 async def app_settings(_user: Annotated[str, Depends(sso_user)]) -> dict:
     """Return the app settings: whether the server's Claude looks into alerts."""
     db = load_config().db_path
-    return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
+    return {"claude_alerts": await controls.claude_alerts(db)}
 
 
 @router.post("/v1/app/settings")
 async def app_set_settings(req: Settings, _user: Annotated[str, Depends(sso_user)]) -> dict:
     """WP-58's kill switch: whether the server's Claude looks into alerts."""
     db = load_config().db_path
-    await asyncio.to_thread(controls.set_claude_alerts, db, req.claude_alerts)
-    return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
+    await controls.set_claude_alerts(db, req.claude_alerts)
+    return {"claude_alerts": await controls.claude_alerts(db)}
 
 
 class SetFeature(BaseModel):
@@ -103,14 +103,14 @@ class SetFeature(BaseModel):
     on: bool
 
 
-def _features(config: FeltConfig) -> list[dict]:
-    return features.listing(config.db_path, list(load_plugins(config.plugins_dir)))
+async def _features(config: FeltConfig) -> list[dict]:
+    return await features.listing(config.db_path, list(load_plugins(config.plugins_dir)))
 
 
 @router.get("/v1/app/features")
 async def app_features(_user: Annotated[str, Depends(sso_user)]) -> list[dict]:
     """Her feature switches (features.py), each with whether it's on."""
-    return await asyncio.to_thread(_features, load_config())
+    return await _features(load_config())
 
 
 @router.post("/v1/app/features")
@@ -122,18 +122,18 @@ async def app_set_feature(req: SetFeature, _user: Annotated[str, Depends(sso_use
     )
     if req.key not in features.FEATURES and not is_skill:
         raise HTTPException(status_code=422, detail=f"unknown feature {req.key!r}")
-    await asyncio.to_thread(features.set_enabled, config.db_path, req.key, req.on)
-    return await asyncio.to_thread(_features, config)
+    await features.set_enabled(config.db_path, req.key, req.on)
+    return await _features(config)
 
 
 @router.get("/v1/controls")
 async def desktop_controls() -> dict:
     """The tray: what the switches say, to apply to felt-animation."""
-    return await asyncio.to_thread(controls.state, load_config().db_path)
+    return await controls.state(load_config().db_path)
 
 
 @router.post("/v1/controls/desktop")
 async def desktop_report(report: dict) -> dict:
     """The tray's heartbeat: her real state on the PC."""
-    await asyncio.to_thread(controls.report_desktop, load_config().db_path, report)
+    await controls.report_desktop(load_config().db_path, report)
     return {"ok": True}

@@ -5,7 +5,7 @@ import contextlib
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated, Any, Protocol
 from urllib.parse import quote
 
@@ -181,7 +181,7 @@ async def _fill_open_stream(
     stream: reply_stream.ReplyStream,
     items: AsyncIterator[str | ReplyMeta | ChatResult],
     config: Any,
-    on_result: Callable[[ChatResult], None] | None,
+    on_result: Callable[[ChatResult], Awaitable[None]] | None,
 ) -> None:
     """Background half of a v2 reply: each further chunk as chat_streamed() writes it.
 
@@ -216,7 +216,7 @@ async def _fill_open_stream(
         else:
             stream.end(_result_body(result))
             if on_result is not None:
-                on_result(result)
+                await on_result(result)
 
 
 async def _first_chunk(items: AsyncIterator[str | ReplyMeta | ChatResult]) -> tuple[str | ChatResult | None, ReplyMeta]:
@@ -237,7 +237,7 @@ async def _whole_reply(
     config: Any,
     client: _TTSClient,
     extra_headers: dict[str, str] | None,
-    on_result: Callable[[ChatResult], None] | None,
+    on_result: Callable[[ChatResult], Awaitable[None]] | None,
 ) -> Response:
     """The whole reply in one response, the WP-54 way."""
     result = first if isinstance(first, ChatResult) else None
@@ -246,7 +246,7 @@ async def _whole_reply(
             result = item
     assert result is not None
     if on_result is not None:
-        on_result(result)
+        await on_result(result)
     return await _synthesize_reply(
         result.reply,
         result.ui_action.model_dump() if result.ui_action else None,
@@ -280,7 +280,7 @@ async def _reply_v2(
     config: Any,
     client: _TTSClient,
     extra_headers: dict[str, str] | None = None,
-    on_result: Callable[[ChatResult], None] | None = None,
+    on_result: Callable[[ChatResult], Awaitable[None]] | None = None,
 ) -> Response:
     """WP-65 protocol v2: chat_streamed(), and chunk 0's audio goes back the moment it exists.
 
@@ -384,16 +384,16 @@ async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
 
     if _wants_stream_v2(request, config):
 
-        def marks(_result: ChatResult) -> None:
+        async def marks(_result: ChatResult) -> None:
             if req.session_id == APP_SESSION:
-                schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
+                await schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
 
         async with voice_client(config, timeout=60) as client:
             return await _reply_v2(req.message, req.session_id, req.tone, config, client, on_result=marks)
 
     result = await chat(req.message, config, req.session_id, req.tone)
     if req.session_id == APP_SESSION:
-        schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
+        await schedule_mark(config)  # WP-42.2: the tray window's sends get her marks too
     async with voice_client(config, timeout=60) as client:
         return await _synthesize_reply(
             result.reply,

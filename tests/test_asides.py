@@ -136,7 +136,7 @@ async def test_two_or_fewer_need_no_call(tmp_path, monkeypatch):
 
 async def test_a_remark_mid_pick_reruns_it_once(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    features.set_enabled(config.db_path, "ambient.asides", True)  # off by default
+    await features.set_enabled(config.db_path, "ambient.asides", True)  # off by default
     started, release = asyncio.Event(), asyncio.Event()
     runs = []
 
@@ -147,11 +147,11 @@ async def test_a_remark_mid_pick_reruns_it_once(tmp_path, monkeypatch):
         return []
 
     monkeypatch.setattr(asides, "pick", slow_pick)
-    asides.schedule_pick(config, "other")  # not the app's session: nothing
-    asides.schedule_pick(config, "dashboard")
+    await asides.schedule_pick(config, "other")  # not the app's session: nothing
+    await asides.schedule_pick(config, "dashboard")
     await started.wait()
-    asides.schedule_pick(config, "dashboard")
-    asides.schedule_pick(config, "dashboard")
+    await asides.schedule_pick(config, "dashboard")
+    await asides.schedule_pick(config, "dashboard")
     release.set()
     while "dashboard" in asides._running:
         await asyncio.sleep(0)

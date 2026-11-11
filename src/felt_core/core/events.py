@@ -275,6 +275,6 @@ async def react_to_event(
     # like a screen remark does) - but never a screen observation.
     save_event_reaction(config.db_path, session_id, event, key, line)
     save_message(config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}")
-    schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
+    await schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     logger.info("event reaction %s (%s): %r", event, emotion or "policy", line)
     return EventReaction(line=line, emotion=emotion or table[event].emotion)

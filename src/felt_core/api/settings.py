@@ -21,7 +21,7 @@ class TemperatureUnitRequest(BaseModel):
 async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
     """Store the requested temperature unit and return it."""
     config = load_config()
-    set_setting(config.db_path, "temperature_unit", req.unit)
+    await set_setting(config.db_path, "temperature_unit", req.unit)
     return {"unit": req.unit}
 
 
@@ -29,4 +29,4 @@ async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
 async def get_temperature_unit() -> dict:
     """Return the stored temperature unit, defaulting to celsius."""
     config = load_config()
-    return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}
+    return {"unit": await get_setting(config.db_path, "temperature_unit", "celsius")}

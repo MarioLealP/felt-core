@@ -40,12 +40,12 @@ def test_each_incident_lands_in_its_area():
     assert systems.area_of("pc-agent", "", "") == "desktop"
 
 
-def test_areas_are_fine_unless_something_needs_him_and_the_worst_is_circled(tmp_path):
+async def test_areas_are_fine_unless_something_needs_him_and_the_worst_is_circled(tmp_path):
     db = str(tmp_path / "f.db")
     _in(db, "clockmost: update deployed", "immich - verified + healthy")  # noted
     trivy = _in(db, "Trivy weekly: 3 critical")  # Claude's, not claimed yet
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned", minutes=1)
-    responder.claim_next(db, T0 + timedelta(minutes=2))  # honeypot (urgent) first
+    await responder.claim_next(db, T0 + timedelta(minutes=2))  # honeypot (urgent) first
     responder.save_report(db, honeypot, REPORT, "s1")
     page = systems.page(db)
     by_area = {a["name"]: a for a in page["areas"]}
@@ -67,10 +67,10 @@ def test_dropped_noise_never_shows(tmp_path):
     assert systems.page(db)["incidents"] == []
 
 
-def test_details_carry_the_report_with_its_trail_and_the_raw_alerts(tmp_path):
+async def test_details_carry_the_report_with_its_trail_and_the_raw_alerts(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned", "Telnet connect on port 23")
-    responder.claim_next(db, T0)
+    await responder.claim_next(db, T0)
     responder.save_report(db, honeypot, REPORT, "s1")
     found = systems.details(db, honeypot, LINKS)
     assert found is not None
@@ -110,11 +110,11 @@ def test_routes_need_the_sso_header(tmp_path, monkeypatch):
         assert c.post(f"/v1/app/incidents/{backup}/handled", headers=SSO).status_code == 409
 
 
-def test_ask_felt_answers_her_alert_line_with_what_claude_found(tmp_path):
+async def test_ask_felt_answers_her_alert_line_with_what_claude_found(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned")
     alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
-    responder.claim_next(db, T0)
+    await responder.claim_next(db, T0)
     responder.save_report(db, honeypot, REPORT, "s1")
     alert_lines.store(db, honeypot, "Claude wants you to look at it.", "followup")
     line_id = systems.page(db)["incidents"][0]["line_message_id"]

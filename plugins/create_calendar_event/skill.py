@@ -81,7 +81,7 @@ async def _place_answer(config, title: str, start: datetime, place: str | None) 
         return SkillResult(text=f"{added}, {where}. Read it back to Mario as written.")
     # ...or for the one just added (it went in at once, or the 30 s ran out first):
     # his answer again, never a second event (cm-2hu, e2e 2026-10-23)
-    just = appointment_hold.just_added(config, title, start)
+    just = await appointment_hold.just_added(config, title, start)
     if just is None:
         return None
     if place is None:
@@ -132,7 +132,7 @@ async def _add(
         await create_event(config, calendar["id"], title, start, end, location=place)
     except CalendarUnavailableError:
         return SkillResult(text="I couldn't reach the calendar to add it.")
-    remember_created(config, calendar["id"], title, start, end)
+    await remember_created(config, calendar["id"], title, start, end)
     spot = f"at {place}" if place else "no place"
     return SkillResult(text=f"Added '{title}', {at}, {spot}, to {where}. Read it back to Mario as written.")
 

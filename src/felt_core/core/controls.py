@@ -33,77 +33,79 @@ def _now(now: datetime | None) -> datetime:
     return now or datetime.now(UTC)
 
 
-def _read(db_path: str, name: str) -> dict:
+async def _read(db_path: str, name: str) -> dict:
     try:
-        return json.loads(get_setting(db_path, f"control_{name}") or "{}")
+        return json.loads(await get_setting(db_path, f"control_{name}") or "{}")
     except ValueError:
         return {}
 
 
-def state(db_path: str, now: datetime | None = None) -> dict:
+async def state(db_path: str, now: datetime | None = None) -> dict:
     """Both switches as they are now (a timer that ran out is off).
 
     Plus a version that changes whenever either is set, for the tray.
     """
     now = _now(now)
-    out: dict = {"version": int(get_setting(db_path, "controls_version") or 0)}
+    out: dict = {"version": int(await get_setting(db_path, "controls_version") or 0)}
     for name in CONTROLS:
-        saved = _read(db_path, name)
+        saved = await _read(db_path, name)
         until = saved.get("until")
         on = bool(saved.get("on")) and (until is None or datetime.strptime(until, _FMT).replace(tzinfo=UTC) > now)
         out[name] = {"on": on, "until": until if on else None}
     return out
 
 
-def set_control(db_path: str, name: str, on: bool, minutes: int | None = None, now: datetime | None = None) -> dict:
+async def set_control(
+    db_path: str, name: str, on: bool, minutes: int | None = None, now: datetime | None = None
+) -> dict:
     """Tap (minutes None) = on until turned off; a slide = on for `minutes`."""
     if name not in CONTROLS:
         raise ValueError(f"unknown control {name!r}")
     until = (_now(now) + timedelta(minutes=minutes)).strftime(_FMT) if on and minutes else None
-    set_setting(db_path, f"control_{name}", json.dumps({"on": on, "until": until}))
-    set_setting(db_path, "controls_version", str(int(get_setting(db_path, "controls_version") or 0) + 1))
-    return state(db_path, now)
+    await set_setting(db_path, f"control_{name}", json.dumps({"on": on, "until": until}))
+    await set_setting(db_path, "controls_version", str(int(await get_setting(db_path, "controls_version") or 0) + 1))
+    return await state(db_path, now)
 
 
-def quiet(db_path: str, now: datetime | None = None) -> bool:
+async def quiet(db_path: str, now: datetime | None = None) -> bool:
     """Whether the quiet switch is on right now."""
-    return state(db_path, now)["quiet"]["on"]
+    return (await state(db_path, now))["quiet"]["on"]
 
 
 # -- the WP-58 kill switch -------------------------------------------------------
 
 
-def claude_alerts(db_path: str) -> bool:
+async def claude_alerts(db_path: str) -> bool:
     """Whether the server's Claude looks into alerts (WP-58's kill switch).
 
     In the app's settings. On unless Mario turned it off.
     """
-    return get_setting(db_path, "claude_alerts", "1") != "0"
+    return await get_setting(db_path, "claude_alerts", "1") != "0"
 
 
-def set_claude_alerts(db_path: str, on: bool) -> None:
+async def set_claude_alerts(db_path: str, on: bool) -> None:
     """Set whether the server's Claude looks into alerts (WP-58's kill switch)."""
-    set_setting(db_path, "claude_alerts", "1" if on else "0")
+    await set_setting(db_path, "claude_alerts", "1" if on else "0")
 
 
 # -- what the desktop reports ---------------------------------------------------
 
 
-def report_desktop(db_path: str, report: dict, now: datetime | None = None) -> None:
+async def report_desktop(db_path: str, report: dict, now: datetime | None = None) -> None:
     """The tray's heartbeat: her real presence, hush and mood on the PC."""
     keep = {k: report.get(k) for k in ("presence", "hushed", "mood", "animation", "applied")}
     keep["at"] = _now(now).strftime(_FMT)
-    set_setting(db_path, "desktop_state", json.dumps(keep))
+    await set_setting(db_path, "desktop_state", json.dumps(keep))
 
 
-def desktop(db_path: str, now: datetime | None = None) -> dict | None:
+async def desktop(db_path: str, now: datetime | None = None) -> dict | None:
     """The latest heartbeat, or None.
 
     None when the PC hasn't reported lately (off, asleep, or the tray
     isn't running).
     """
     try:
-        saved = json.loads(get_setting(db_path, "desktop_state") or "{}")
+        saved = json.loads(await get_setting(db_path, "desktop_state") or "{}")
         at = datetime.strptime(saved["at"], _FMT).replace(tzinfo=UTC)
     except ValueError, KeyError:
         return None

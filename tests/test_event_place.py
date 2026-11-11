@@ -17,6 +17,12 @@ from felt_core.core import appointment_hold
 from felt_core.models.plugin import ExecutionContext
 
 
+async def _settled() -> None:
+    """Wait for appointment_hold's background adds to finish - a fixed sleep raced the DB on slow CI runners."""
+    while appointment_hold._tasks:
+        await asyncio.gather(*appointment_hold._tasks)
+
+
 def _ctx(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "felt.db"), ha_url="http://ha", ha_token="t")
     return ExecutionContext(config=config, original_message="")
@@ -213,7 +219,7 @@ async def test_4_no_answer_adds_it_after_the_wait_and_says_so(monkeypatch, tmp_p
     await asyncio.sleep(0.05)
     assert cal.calls == []
     appointment_hold.start_wait(ctx.config)  # chat(): her reply is out
-    await asyncio.sleep(0.05)
+    await _settled()
     assert cal.calls == ["create None"]
     [line] = cal.lines
     assert line.startswith("Added dentist, ")
@@ -305,7 +311,7 @@ async def test_a_second_appointment_adds_the_waiting_one_now(monkeypatch, tmp_pa
     ctx = _ctx(tmp_path)
     await create.handle(DENTIST, ctx)
     await create.handle({"title": "haircut", "when": "tuesday at 3pm"}, ctx)
-    await asyncio.sleep(0.01)
+    await _settled()
     assert cal.calls == ["create None"]
     assert cal.lines[0].startswith("Added dentist")
     assert appointment_hold.claim() is not None  # the haircut waits for its place
@@ -350,12 +356,12 @@ async def test_unconfirmed_change_keeps_the_old_one(monkeypatch, tmp_path, cal):
     assert len(cal.events) == 1
 
 
-def test_the_late_answer_window_is_two_hours(tmp_path):
+async def test_the_late_answer_window_is_two_hours(tmp_path):
     config = _ctx(tmp_path).config
     start = datetime.now(ha_calendar.TZ)
-    ha_calendar.remember_created(config, "calendar.mario", "x", start, start)
-    assert ha_calendar.last_created(config, start + timedelta(hours=1)) is not None
-    assert ha_calendar.last_created(config, start + timedelta(hours=2, minutes=1)) is None
+    await ha_calendar.remember_created(config, "calendar.mario", "x", start, start)
+    assert await ha_calendar.last_created(config, start + timedelta(hours=1)) is not None
+    assert await ha_calendar.last_created(config, start + timedelta(hours=2, minutes=1)) is None
 
 
 @pytest.mark.parametrize(

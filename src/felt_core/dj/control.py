@@ -214,7 +214,7 @@ async def _say(config: FeltConfig, pick: dict) -> None:
     from felt_core.core.events import react_to_event
     from felt_core.core.proactive import enqueue_proactive
 
-    if not features.enabled(config.db_path, "ambient.dj_lines"):
+    if not await features.enabled(config.db_path, "ambient.dj_lines"):
         return
     details = {
         "title": pick["title"],

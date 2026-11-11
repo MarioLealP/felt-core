@@ -42,7 +42,7 @@ from felt_core.core import features, leave_by, llm_gate
 from felt_core.core.event_prompt import _game_name
 from felt_core.core.proactive import enqueue_proactive
 from felt_core.db.events import get_events_between
-from felt_core.db.settings import get_setting, set_setting
+from felt_core.db.settings import get_setting, set_setting, settings_with_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -148,9 +148,9 @@ def dedupe_key(event: dict, stage: Stage) -> str:
     return f"calendar_headsup:{event.get('id')}|{start.isoformat() if start else ''}|{stage.name}"
 
 
-def already_sent(config: FeltConfig, key: str) -> bool:
+async def already_sent(config: FeltConfig, key: str) -> bool:
     """Whether this heads-up was already sent."""
-    return get_setting(config.db_path, key) is not None
+    return await get_setting(config.db_path, key) is not None
 
 
 def plan(
@@ -293,9 +293,9 @@ async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stag
             return False
         assert start is not None
         reminder = is_reminder(event)
-        if due_stage(start, now, reminder) is not stage or already_sent(config, key):
+        if due_stage(start, now, reminder) is not stage or await already_sent(config, key):
             return False
-        set_setting(config.db_path, key, now.isoformat())
+        await set_setting(config.db_path, key, now.isoformat())
         minutes = minutes_left(start, now)
         title = str(fresh.get("summary") or "something on your calendar")
         line = await phrase(config, title, minutes, fresh.get("location"), current_game(config, now), reminder)
@@ -350,7 +350,7 @@ async def deliver_leave(
             return False
         start = event_start(fresh)
         assert start is not None
-        if start <= now or already_sent(config, key):
+        if start <= now or await already_sent(config, key):
             return False
         minutes = await leave_by.drive_minutes(config, fresh.get("location") or "", now)
         if minutes is None:
@@ -363,7 +363,7 @@ async def deliver_leave(
         leave = leave_by.leave_time(start, minutes)
         if stage is LEAVE_SOON and leave <= now:
             return False  # past the leave time already - "time to go" says it
-        set_setting(config.db_path, key, now.isoformat())
+        await set_setting(config.db_path, key, now.isoformat())
         title = str(fresh.get("summary") or "your appointment")
         at = start.astimezone(ha_calendar.TZ).strftime("%H:%M")
         drive_min = math.ceil(minutes)
@@ -397,7 +397,7 @@ async def _drive_times(config: FeltConfig, events: list[tuple[str, dict]], now: 
         start = event_start(event)
         if not (is_relevant(event) and leave_by.has_address(event)) or start is None or start <= now:
             continue
-        if all(already_sent(config, dedupe_key(event, st)) for st in LEAVE_STAGES):
+        if all([await already_sent(config, dedupe_key(event, st)) for st in LEAVE_STAGES]):
             continue
         minutes = await leave_by.drive_minutes(config, event["location"], now)
         if minutes is not None:
@@ -407,7 +407,7 @@ async def _drive_times(config: FeltConfig, events: list[tuple[str, dict]], now: 
 
 async def _deliver_later(config: FeltConfig, delay_s: float, calendar_id: str, event: dict, stage: Stage) -> None:
     await asyncio.sleep(delay_s)
-    if not features.enabled(config.db_path, "calendar.headsup"):
+    if not await features.enabled(config.db_path, "calendar.headsup"):
         return
     try:
         with llm_gate.timely("calendar"):
@@ -456,7 +456,8 @@ async def poll_once(config: FeltConfig, now: datetime | None = None) -> int:
     events = await fetch_upcoming(config, now)
     drive = await _drive_times(config, events, now)
     events = [(c, {**e, "_drive_min": drive[e["id"]]} if e.get("id") in drive else e) for c, e in events]
-    scheduled = plan(events, now, POLL_INTERVAL_S + 30, lambda key: already_sent(config, key), drive)
+    sent = await settings_with_prefix(config.db_path, "calendar_headsup:")  # one query for every dedupe_key
+    scheduled = plan(events, now, POLL_INTERVAL_S + 30, lambda key: key in sent, drive)
     for delay, calendar_id, event, stage in scheduled:
         _pending.add(dedupe_key(event, stage))
         task = asyncio.create_task(_deliver_later(config, delay, calendar_id, event, stage))
