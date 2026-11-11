@@ -233,7 +233,7 @@ async def test_chat_local_reply_without_tool(tmp_path, monkeypatch, fake_llm):
     assert call["messages"][0]["role"] == "system"
     assert call["messages"][-1] == {"role": "user", "content": "hi"}
     assert call["max_tokens"] == replies._REPLY_MAX_TOKENS
-    assert [m["content"] for m in get_history(config.db_path, "s1")][-1] == "hello there"
+    assert [m["content"] for m in await get_history(config.db_path, "s1")][-1] == "hello there"
 
 
 async def test_chat_local_home_command_is_done_by_ha_and_phrased(tmp_path, monkeypatch, fake_llm):
@@ -377,7 +377,7 @@ async def test_diary_generation_uses_felt_llm(tmp_path, fake_llm):
 
 async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_llm, caplog):
     config = _config(tmp_path)
-    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
+    await save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
     fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
 
     with caplog.at_level(logging.INFO, logger="felt_core.core.diary"):

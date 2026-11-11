@@ -86,7 +86,7 @@ async def _ha_assist_reply(
     router.record_pick(config, pick_task, message, router.HA_ASSIST, fast=True)
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
         reply = await phrase_skill_result(message, f"Home Assistant did it. It says: {done}", history, config, tone)
-    return ChatResult(reply=_said(config, session_id, reply, speaker))
+    return ChatResult(reply=await _said(config, session_id, reply, speaker))
 
 
 async def _first_turn(
@@ -258,7 +258,7 @@ async def _chat_local(
     if precompute is not None:
         logger.info("weather fast path: serving the precomputed line, no skill/phrasing calls")
         return ChatResult(
-            reply=_said(config, session_id, precompute["line"], speaker),
+            reply=await _said(config, session_id, precompute["line"], speaker),
             animation_tag=precompute["animation_tag"],
         )
 
@@ -270,7 +270,7 @@ async def _chat_local(
         if not reply:
             plain = await _reply_turn(prefix, config, speaker)
             reply = plain.text.strip()
-        return ChatResult(reply=_said(config, session_id, reply, speaker))
+        return ChatResult(reply=await _said(config, session_id, reply, speaker))
 
     skill_name = call[0]
     result, tool_output = await _run_skill_call(call, registry, config, message)
@@ -286,7 +286,7 @@ async def _chat_local(
         )
     if not reply:
         reply = await _phrase_steps(message, steps, tool_output, history, config, tone)
-    reply = _said(config, session_id, reply, speaker)
+    reply = await _said(config, session_id, reply, speaker)
     return _skill_chat_result(reply, result, skill_name, registry)
 
 
@@ -301,8 +301,8 @@ async def _summarize_mentioned_emails(config: FeltConfig, session_id: str, messa
         )
 
     emails.mark_summarised(config.db_path, [m["id"] for m in mails])
-    save_message(config.db_path, session_id, "user", message)
-    save_message(config.db_path, session_id, "assistant", summary)
+    await save_message(config.db_path, session_id, "user", message)
+    await save_message(config.db_path, session_id, "assistant", summary)
     return summary
 
 
@@ -341,15 +341,15 @@ async def chat(
     # back-and-forth out of the 20 lines. Her recent unprompted lines come
     # in as one note instead, so he can bring them up and she doesn't
     # repeat them.
-    history = get_history(config.db_path, session_id, exclude_remarks=True)
-    her_lines = get_her_recent_lines(config.db_path, session_id, limit=HER_LINES_N)
+    history = await get_history(config.db_path, session_id, exclude_remarks=True)
+    her_lines = await get_her_recent_lines(config.db_path, session_id, limit=HER_LINES_N)
     if her_lines:
         history = [*history, {"role": "system", "content": her_lines_note(her_lines)}]
 
     # WP-02: "what do you think of this?" needs something to refer to.
     # Only when fresh enough to still be "current" - a stale observation
     # would be a stale, misleading answer.
-    current_screen = get_current_screen_description(config.db_path, session_id, max_age_seconds=120)
+    current_screen = await get_current_screen_description(config.db_path, session_id, max_age_seconds=120)
     if current_screen:
         history = [*history, {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}]
 
@@ -361,7 +361,7 @@ async def chat(
             {"role": "system", "content": f'Mario is answering this remark you made earlier: "{answering}"'},
         ]
 
-    save_message(config.db_path, session_id, "user", message)
+    await save_message(config.db_path, session_id, "user", message)
     # any message from him, on any device, can start her day (diary.py)
     from felt_core.core.diary import he_is_here
 

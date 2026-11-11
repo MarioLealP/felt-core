@@ -45,7 +45,7 @@ def test_facts_carry_expected_todo_and_whos_on_it(tmp_path):
     assert "didn't fix itself within 10 minutes" in alert_lines.facts(caddy)
 
 
-def test_which_incidents_are_owed_a_line(tmp_path):
+async def test_which_incidents_are_owed_a_line(tmp_path):
     db = str(tmp_path / "f.db")
     backup = _incident(db, "backup full FAILED", at=_at(0))["id"]  # open at once
     caddy = _incident(db, "clockmost High: Caddy: an upstream is unhealthy", at=_at(0))["id"]
@@ -56,17 +56,17 @@ def test_which_incidents_are_owed_a_line(tmp_path):
     assert alert_lines.due(db, _at(15)) == [(backup, "line"), (update, "line")]
     incidents.promote_due(db, _at(11))
     assert (caddy, "line") in alert_lines.due(db, _at(15))
-    alert_lines.store(db, caddy, "Caddy's sulking.")
+    await alert_lines.store(db, caddy, "Caddy's sulking.")
     incidents.intake(db, "clockmost RESOLVED: Caddy: an upstream is unhealthy", at=_at(30))
     assert (caddy, "back") in alert_lines.due(db, _at(31))
-    alert_lines.store(db, caddy, "Caddy's back.", "back")
+    await alert_lines.store(db, caddy, "Caddy's back.", "back")
     assert all(i != caddy for i, _ in alert_lines.due(db, _at(32)))
 
 
-def test_lines_go_to_her_log_as_alerts_not_the_margins(tmp_path):
+async def test_lines_go_to_her_log_as_alerts_not_the_margins(tmp_path):
     db = str(tmp_path / "f.db")
     backup = _incident(db, "backup full FAILED", at=_at(0))["id"]
-    alert_lines.store(db, backup, "Backup failed, Claude's on it.")
+    await alert_lines.store(db, backup, "Backup failed, Claude's on it.")
     conn = _connect(db)
     rows = conn.execute("SELECT kind, source_ref, content FROM messages").fetchall()
     conn.close()
@@ -117,9 +117,9 @@ def test_long_replies_are_clipped():
     assert len(alert_lines._clip(" ".join(["word"] * 80)).split()) == alert_lines.MAX_WORDS
 
 
-def test_after_her_line_the_next_update_is_its_own_news(tmp_path):
+async def test_after_her_line_the_next_update_is_its_own_news(tmp_path):
     db = str(tmp_path / "f.db")
     first = _incident(db, "clockmost: update deployed", "immich", at=_at(0))["id"]
     assert _incident(db, "clockmost: update deployed", "caddy", at=_at(5))["id"] == first
-    alert_lines.store(db, first, "Updated immich and caddy.")
+    await alert_lines.store(db, first, "Updated immich and caddy.")
     assert _incident(db, "clockmost: update deployed", "felt-core", at=_at(20))["id"] != first

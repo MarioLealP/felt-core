@@ -58,7 +58,11 @@ def said(monkeypatch):
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     lines: list[str] = []
-    monkeypatch.setattr(ender, "enqueue_proactive", lambda config, kind, text, **kw: lines.append(text))
+
+    async def say(config, kind, text, **kw):
+        lines.append(text)
+
+    monkeypatch.setattr(ender, "enqueue_proactive", say)
     return lines
 
 

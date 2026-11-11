@@ -174,7 +174,7 @@ async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str 
 
     # Music taste keeps her opinions of a track consistent ("oh, this one
     # again?").
-    taste = music_taste_context(config) if event == "music_new_track" else []
+    taste = await music_taste_context(config) if event == "music_new_track" else []
 
     async with metrics.timed("event_reaction", route="local", model=config.local_llm_model):
         # No facts (an event remark doesn't need them); local_reply adds
@@ -188,12 +188,12 @@ async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str 
     return _line_and_emotion(text, EMOTIONS)
 
 
-def _skip_reason(
+async def _skip_reason(
     event: str, details: dict, table: dict, key: str | None, config: FeltConfig, session_id: str
 ) -> str | None:
     """Why this event gets no line right now (cooldowns, policy), or None."""
-    since_screen = seconds_since_last_spoken_reaction(config.db_path, session_id)
-    since_any_event = seconds_since_last_event_reaction(config.db_path)
+    since_screen = await seconds_since_last_spoken_reaction(config.db_path, session_id)
+    since_any_event = await seconds_since_last_event_reaction(config.db_path)
     since_any = min((s for s in (since_screen, since_any_event) if s is not None), default=None)
     return decide(
         event,
@@ -201,8 +201,8 @@ def _skip_reason(
         table,
         min_gap_s=config.event_reaction_min_gap_s,
         since_any_remark=since_any,
-        since_event=seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
-        since_same=seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
+        since_event=await seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
+        since_same=await seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
     )
 
 
@@ -231,7 +231,7 @@ async def react_to_event(
     table = policies(config)
     key = dedupe_key(event, details)
 
-    reason = _skip_reason(event, details, table, key, config, session_id)
+    reason = await _skip_reason(event, details, table, key, config, session_id)
     if reason is not None:
         logger.info("event reaction %s: no line (%s)", event, reason)
         return EventReaction(skipped=reason)
@@ -239,7 +239,7 @@ async def react_to_event(
     lyric = _text(details, "lyric") or None
     if event == "music_new_track" and lyric is None:
         lyric = await _lyric_for(details, config)
-    previous = last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
+    previous = await last_event_reaction_line(config.db_path, event) if event == "unhushed" else None
     if event == "poe_item":
         details = await _poe_item_details(details, config)
         if not details.get("prices"):
@@ -254,7 +254,7 @@ async def react_to_event(
     from felt_core.brain.screen_reactions import RECENT_LINES_N, recent_lines_block
 
     prompt += recent_lines_block(
-        [r["content"] for r in get_her_recent_lines(config.db_path, session_id, RECENT_LINES_N)]
+        [r["content"] for r in await get_her_recent_lines(config.db_path, session_id, RECENT_LINES_N)]
     )
 
     try:
@@ -273,8 +273,8 @@ async def react_to_event(
 
     # Cooldown state + chat history (her line shows in the chat window,
     # like a screen remark does) - but never a screen observation.
-    save_event_reaction(config.db_path, session_id, event, key, line)
-    save_message(config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}")
+    await save_event_reaction(config.db_path, session_id, event, key, line)
+    await save_message(config.db_path, session_id, "assistant", line, kind=EVENT, source_ref=f"event:{event}")
     await schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     logger.info("event reaction %s (%s): %r", event, emotion or "policy", line)
     return EventReaction(line=line, emotion=emotion or table[event].emotion)

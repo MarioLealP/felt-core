@@ -54,14 +54,14 @@ async def _facts_context(config: FeltConfig) -> list[dict]:
     return [{"role": "system", "content": f"Known facts about the user:\n{bullet_list}"}]
 
 
-def music_taste_context(config: FeltConfig) -> list[dict]:
+async def music_taste_context(config: FeltConfig) -> list[dict]:
     """WP-16 Part 2 - the listening-taste note.
 
     Empty until enough listening history exists to say anything (see
     music_taste.summarize_taste). Public (not underscore-prefixed):
     events.py's event reactions use it too (WP-40).
     """
-    note = summarize_taste(get_music_taste_stats(config.db_path))
+    note = summarize_taste(await get_music_taste_stats(config.db_path))
     if not note:
         return []
     return [{"role": "system", "content": note}]
@@ -90,7 +90,7 @@ async def local_turn_messages(message: str, history: list[dict], config: FeltCon
     block = memory_block(config, message)
     if block:
         context.append(block)
-    context += [m["content"] for m in await _facts_context(config) + music_taste_context(config)]
+    context += [m["content"] for m in await _facts_context(config) + await music_taste_context(config)]
     # chat() appends the fresh screen description as a system entry.
     context += [m["content"] for m in history if m.get("role") == "system"]
     if tone:
@@ -121,7 +121,7 @@ async def local_reply(
     Raises LocalLLMUnavailableError when felt-llm is down.
     """
     facts = await _facts_context(config) if include_facts else []
-    taste = music_taste_context(config) if include_facts else []
+    taste = await music_taste_context(config) if include_facts else []
     last: dict = messages_tail[-1] if messages_tail else {}
     context_text = last.get("content") if isinstance(last.get("content"), str) else None
     context = per_call_context(tone, context_text, config)

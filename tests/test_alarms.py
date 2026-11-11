@@ -1,6 +1,8 @@
+import asyncio
 from datetime import datetime, timedelta
 
 from felt_core.config import FeltConfig
+from felt_core.core import alarms
 from felt_core.core.alarms import (
     _fire_at,
     alarm_facts,
@@ -23,8 +25,8 @@ async def test_schedule_alarm_persists_a_pending_row(tmp_path):
     # loop — hence an async test, even though we only check persistence.
     config = _config(tmp_path)
     fire_at = datetime.now() + timedelta(hours=8)
-    schedule_alarm(config, fire_at, "wake up")
-    pending = get_pending_alarms(config.db_path)
+    await schedule_alarm(config, fire_at, "wake up")
+    pending = await get_pending_alarms(config.db_path)
     assert len(pending) == 1
     assert pending[0]["label"] == "wake up"
     assert pending[0]["fire_at"] == fire_at.isoformat()
@@ -32,25 +34,27 @@ async def test_schedule_alarm_persists_a_pending_row(tmp_path):
 
 async def test_fire_at_marks_alarm_fired_once_due(tmp_path, fake_llm):
     config = _config(tmp_path)
-    alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "test")
+    alarm_id = await save_alarm(config.db_path, datetime.now().isoformat(), "test")
     # Already in the past, so _fire_at fires immediately without sleeping.
     await _fire_at(config, alarm_id, datetime.now() - timedelta(seconds=1), "test")
-    assert get_pending_alarms(config.db_path) == []
+    assert await get_pending_alarms(config.db_path) == []
 
 
 async def test_reschedule_pending_alarms_schedules_one_task_per_pending_row(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_alarm(config.db_path, (datetime.now() + timedelta(hours=1)).isoformat(), "one")
-    save_alarm(config.db_path, (datetime.now() + timedelta(hours=2)).isoformat(), "two")
+    await save_alarm(config.db_path, (datetime.now() + timedelta(hours=1)).isoformat(), "one")
+    await save_alarm(config.db_path, (datetime.now() + timedelta(hours=2)).isoformat(), "two")
 
-    scheduled = []
-    monkeypatch.setattr("felt_core.core.alarms.asyncio.create_task", lambda coro: scheduled.append(coro))
+    # count what it scheduled - patching asyncio.create_task would patch it for the async DB layer too
+    scheduled: dict = {}
+    monkeypatch.setattr(alarms, "_scheduled_tasks", scheduled)
 
-    reschedule_pending_alarms(config)
+    await reschedule_pending_alarms(config)
 
     assert len(scheduled) == 2
-    for coro in scheduled:
-        coro.close()  # avoid "coroutine was never awaited" warnings
+    for task in scheduled.values():
+        task.cancel()  # both sleep an hour or more
+    await asyncio.gather(*scheduled.values(), return_exceptions=True)
 
 
 def test_alarm_facts():
@@ -76,7 +80,7 @@ async def test_alarm_in_her_words(tmp_path, monkeypatch, fake_llm):
 
     monkeypatch.setattr("felt_core.core.alarms.notify", fake_notify)
     fake_llm.script = ['"Up you get - stretch time!"']
-    alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
+    alarm_id = await save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now(), "stretch")
     assert sent == ["Up you get - stretch time!"]
     assert '"stretch"' in fake_llm.calls[0]["messages"][-1]["content"]
@@ -94,6 +98,6 @@ async def test_alarm_plain_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm
 
     monkeypatch.setattr("felt_core.core.alarms.notify", fake_notify)
     fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
-    alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
+    alarm_id = await save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now(), "stretch")
     assert sent == ["Alarm: stretch"]

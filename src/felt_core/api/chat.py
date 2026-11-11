@@ -125,7 +125,7 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
     restore what was actually said.
     """
     config = load_config()
-    return get_history(config.db_path, session_id, limit)
+    return await get_history(config.db_path, session_id, limit)
 
 
 @router.websocket("/v1/chat/ws")

@@ -139,7 +139,7 @@ async def me(user: Annotated[str, Depends(sso_user)]) -> Me:
 @router.get("/history", response_model=list[Message])
 async def history(_user: Annotated[str, Depends(sso_user)], before: int | None = None, limit: int = 50) -> list[dict]:
     """One page of the shared session history."""
-    return history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
+    return await history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
 @router.get("/asides", response_model=Asides)
@@ -258,11 +258,11 @@ async def say(req: SayRequest, _user: Annotated[str, Depends(sso_user)]) -> SayR
         if remark is None:
             raise HTTPException(status_code=422, detail="not one of her remarks")
     await chat(text, config, SESSION, answering=remark)
-    rows = history_page(config.db_path, SESSION, limit=2)
+    rows = await history_page(config.db_path, SESSION, limit=2)
     if req.answering is not None:
         mine = [r["id"] for r in rows if r["role"] == "user"]
         if mine:
             link_answer(config.db_path, mine[-1], req.answering)
-            rows = history_page(config.db_path, SESSION, limit=2)
+            rows = await history_page(config.db_path, SESSION, limit=2)
     await schedule_mark(config)
     return SayResponse(messages=[Message(**r) for r in rows])

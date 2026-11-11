@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     backup_task = asyncio.create_task(backup_loop(config.db_path))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
-    reschedule_pending_alarms(config)
+    await reschedule_pending_alarms(config)
     # WP-04: latency rows accumulate one row per stage per request forever
     # otherwise - a startup sweep is simpler than a second scheduled task
     # for what's meant to be a bounded rolling window, not permanent history.
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
     # already unreachable via claim_next_proactive, this just stops the
     # table growing forever.
     try:
-        prune_expired_proactive(config.db_path)
+        await prune_expired_proactive(config.db_path)
     except Exception:
         logger.exception("failed to prune expired proactive items")
     try:

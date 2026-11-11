@@ -154,14 +154,14 @@ async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: Fel
     return forced
 
 
-def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
+async def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
     """The reply as she said it (with anything already let out in front, WP-65), written to the history.
 
     once per turn, at the end.
     """
     if speaker is not None:
         reply = speaker.full_reply(reply)
-    save_message(config.db_path, session_id, "assistant", reply)
+    await save_message(config.db_path, session_id, "assistant", reply)
     return reply
 
 

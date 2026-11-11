@@ -26,27 +26,27 @@ def _client(tmp_path, monkeypatch, debug=False):
 # -- POST /v1/events ----------------------------------------------------------
 
 
-def test_events_endpoint_logs_and_returns_204(tmp_path, monkeypatch):
+async def test_events_endpoint_logs_and_returns_204(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
     response = client.post("/v1/events", json={"kind": "music_track", "data": {"title": "Song", "artist": "Artist"}})
 
     assert response.status_code == 204
     db_path = str(tmp_path / "felt.db")
-    rows = get_events_between(db_path, "2000-01-01 00:00:00", "2100-01-01 00:00:00")
+    rows = await get_events_between(db_path, "2000-01-01 00:00:00", "2100-01-01 00:00:00")
     assert len(rows) == 1
     assert rows[0]["kind"] == "music_track"
     assert json.loads(rows[0]["data_json"]) == {"title": "Song", "artist": "Artist"}
 
 
-def test_events_endpoint_accepts_any_kind_and_caps_oversized_data(tmp_path, monkeypatch):
+async def test_events_endpoint_accepts_any_kind_and_caps_oversized_data(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
     response = client.post("/v1/events", json={"kind": "some_totally_new_kind", "data": {"blob": "x" * 5000}})
 
     assert response.status_code == 204
     db_path = str(tmp_path / "felt.db")
-    rows = get_events_between(db_path, "2000-01-01 00:00:00", "2100-01-01 00:00:00")
+    rows = await get_events_between(db_path, "2000-01-01 00:00:00", "2100-01-01 00:00:00")
     assert len(rows) == 1
     assert len(rows[0]["data_json"]) < 5000
 

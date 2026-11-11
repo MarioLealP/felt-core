@@ -39,8 +39,8 @@ def test_pacing_line_tells_her_when_she_last_marked():
 
 async def test_mark_is_saved_and_shows_in_history(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
-    save_message(config.db_path, "dashboard", "assistant", "Done.")
+    await save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
+    await save_message(config.db_path, "dashboard", "assistant", "Done.")
     seen = {}
 
     async def fake_chat(messages, **kw):
@@ -53,14 +53,14 @@ async def test_mark_is_saved_and_shows_in_history(tmp_path, monkeypatch):
     assert mark["quote"] == "bin bags"
     assert "never marked" in seen["prompt"]
     assert "rare" in seen["prompt"]
-    page = history_page(config.db_path, "dashboard")
+    page = await history_page(config.db_path, "dashboard")
     assert page[0]["marks"][0]["type"] == "circle"
     assert page[1]["marks"] == []
 
 
 async def test_no_second_mark_on_the_same_line_and_she_is_told_how_long_ago(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
+    await save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
     prompts = []
 
     async def fake_chat(messages, **kw):
@@ -71,7 +71,7 @@ async def test_no_second_mark_on_the_same_line_and_she_is_told_how_long_ago(tmp_
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
     await marks.maybe_mark(config, "dashboard")
     assert await marks.maybe_mark(config, "dashboard") is None  # same line
-    save_message(config.db_path, "dashboard", "user", "more bin bags please")
+    await save_message(config.db_path, "dashboard", "user", "more bin bags please")
     await marks.maybe_mark(config, "dashboard")
     assert "just before this one" in prompts[-1]
 
@@ -101,8 +101,8 @@ def test_long_quotes_cant_be_circled():
 
 async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
-    save_message(config.db_path, "dashboard", "assistant", "Done, bin bags again.")
+    await save_message(config.db_path, "dashboard", "user", "add oat milk and bin bags")
+    await save_message(config.db_path, "dashboard", "assistant", "Done, bin bags again.")
     seen = {}
 
     async def fake_chat(messages, **kw):
@@ -112,7 +112,7 @@ async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
     monkeypatch.setattr(marks.local_llm, "chat", fake_chat)
     assert await marks.maybe_mark(config, "dashboard") is not None
     assert "Your answer: Done, bin bags again." in seen["prompt"]
-    page = history_page(config.db_path, "dashboard")
+    page = await history_page(config.db_path, "dashboard")
     assert page[0]["marks"] == []
     assert page[1]["marks"][0]["quote"] == "again"
     # one mark per exchange: a mark on her reply also closes it
@@ -121,7 +121,7 @@ async def test_she_can_mark_her_own_reply(tmp_path, monkeypatch):
 
 async def test_no_means_no_second_question(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "good morning")
+    await save_message(config.db_path, "dashboard", "user", "good morning")
     calls = []
 
     async def fake_chat(messages, **kw):
@@ -135,7 +135,7 @@ async def test_no_means_no_second_question(tmp_path, monkeypatch):
 
 async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "hi")
+    await save_message(config.db_path, "dashboard", "user", "hi")
 
     async def down(*a, **kw):
         raise local_llm.LocalLLMUnavailableError("down")
@@ -144,11 +144,11 @@ async def test_felt_llm_down_means_no_mark(tmp_path, monkeypatch):
     assert await marks.maybe_mark(config, "dashboard") is None
 
 
-def test_ink_is_seen_once_across_devices(tmp_path):
+async def test_ink_is_seen_once_across_devices(tmp_path):
     from felt_core.db.session import _connect
 
     db = str(tmp_path / "felt.db")
-    msg = save_message(db, "dashboard", "user", "add oat milk and bin bags")
+    msg = await save_message(db, "dashboard", "user", "add oat milk and bin bags")
     conn = _connect(db)
     marks._ensure(conn)
     with conn:
@@ -157,7 +157,7 @@ def test_ink_is_seen_once_across_devices(tmp_path):
             (msg,),
         )
     conn.close()
-    assert history_page(db, "dashboard")[0]["marks"][0]["seen"] is False
+    assert (await history_page(db, "dashboard"))[0]["marks"][0]["seen"] is False
     assert marks.mark_seen(db, ["mk1", "nope"]) == 1
     assert marks.mark_seen(db, ["mk1"]) == 0  # already seen
-    assert history_page(db, "dashboard")[0]["marks"][0]["seen"] is True
+    assert (await history_page(db, "dashboard"))[0]["marks"][0]["seen"] is True

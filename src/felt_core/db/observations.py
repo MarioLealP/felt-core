@@ -1,52 +1,41 @@
 """The `screen_observations` table: what she saw on the screen and what she said about it."""
 
-from felt_core.db.session import _connect, _require_lastrowid
+from sqlalchemy import func, update
+from sqlmodel import col, select
+
+from felt_core.db.session import require_id, session
+from felt_core.db.tables import ScreenObservation as Obs
 
 
-def save_observation(db_path: str, session_id: str, description: str) -> int:
+async def save_observation(db_path: str, session_id: str, description: str) -> int:
     """Save one screen observation and return its id."""
-    conn = _connect(db_path)
-    with conn:
-        cursor = conn.execute(
-            "INSERT INTO screen_observations (session_id, description) VALUES (?, ?)",
-            (session_id, description),
-        )
-        obs_id = _require_lastrowid(cursor)
-    conn.close()
-    return obs_id
+    row = Obs(session_id=session_id, description=description)
+    async with session(db_path) as s:
+        s.add(row)
+        await s.commit()
+    return require_id(row)
 
 
-def set_observation_reply(db_path: str, obs_id: int, reply: str) -> None:
+async def set_observation_reply(db_path: str, obs_id: int, reply: str) -> None:
     """Store the spoken reply on one observation."""
-    conn = _connect(db_path)
-    with conn:
-        conn.execute("UPDATE screen_observations SET spoken_reply = ? WHERE id = ?", (reply, obs_id))
-    conn.close()
+    async with session(db_path) as s:
+        await s.exec(update(Obs).where(col(Obs.id) == obs_id).values(spoken_reply=reply))
+        await s.commit()
 
 
-def get_recent_observations(db_path: str, session_id: str, limit: int = 3) -> list[dict]:
+async def get_recent_observations(db_path: str, session_id: str, limit: int = 3) -> list[dict]:
     """The most recent `limit` observations for the session, oldest first."""
-    conn = _connect(db_path)
-    # DESC + LIMIT then reverse, same "most recent N, chronological order"
-    # pattern as get_history above.
-    rows = conn.execute(
-        "SELECT id, description, spoken_reply, created_at FROM screen_observations "
-        "WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-        (session_id, limit),
-    ).fetchall()
-    conn.close()
+    # newest `limit` first, then reversed: "most recent N, chronological order", like get_history
+    query = select(Obs).where(Obs.session_id == session_id).order_by(col(Obs.id).desc()).limit(limit)
+    async with session(db_path) as s:
+        rows = list(await s.exec(query))
     return [
-        {
-            "id": obs_id,
-            "description": description,
-            "spoken_reply": spoken_reply,
-            "created_at": created_at,
-        }
-        for obs_id, description, spoken_reply, created_at in reversed(rows)
+        {"id": r.id, "description": r.description, "spoken_reply": r.spoken_reply, "created_at": r.created_at}
+        for r in reversed(rows)
     ]
 
 
-def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float | None:
+async def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float | None:
     """None if she's never actually spoken a screen reaction in this session.
 
     the caller (the cooldown check) treats that as "not on cooldown," not as "infinitely
@@ -54,43 +43,39 @@ def seconds_since_last_spoken_reaction(db_path: str, session_id: str) -> float |
     `datetime('now')` UTC string, and comparing it in Python would mean parsing that
     format back out for no benefit.
     """
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT (julianday('now') - julianday(created_at)) * 86400.0 "
-        "FROM screen_observations "
-        "WHERE session_id = ? AND spoken_reply IS NOT NULL "
-        "ORDER BY id DESC LIMIT 1",
-        (session_id,),
-    ).fetchone()
-    conn.close()
-    return row[0] if row else None
+    age = (func.julianday("now") - func.julianday(Obs.created_at)) * 86400.0
+    query = (
+        select(age)
+        .where(Obs.session_id == session_id, col(Obs.spoken_reply).is_not(None))
+        .order_by(col(Obs.id).desc())
+        .limit(1)
+    )
+    async with session(db_path) as s:
+        return (await s.exec(query)).first()
 
 
-def get_current_screen_description(db_path: str, session_id: str, max_age_seconds: int) -> str | None:
+async def get_current_screen_description(db_path: str, session_id: str, max_age_seconds: int) -> str | None:
     """The most recent observation for the session.
 
     if it's recent enough to still count as "what's currently on screen" (WP-02: normal
     chat gets a "Currently on Mario's screen: ..." system message when this is fresh, so
     "what do you think of this?" has something to refer to).
     """
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT description FROM screen_observations "
-        "WHERE session_id = ? AND created_at >= datetime('now', ?) "
-        "ORDER BY id DESC LIMIT 1",
-        (session_id, f"-{max_age_seconds} seconds"),
-    ).fetchone()
-    conn.close()
-    return row[0] if row else None
+    query = (
+        select(Obs.description)
+        .where(
+            Obs.session_id == session_id,
+            col(Obs.created_at) >= func.datetime("now", f"-{max_age_seconds} seconds"),
+        )
+        .order_by(col(Obs.id).desc())
+        .limit(1)
+    )
+    async with session(db_path) as s:
+        return (await s.exec(query)).first()
 
 
-def get_screen_observations_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
+async def get_screen_observations_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
     """List the screen observations recorded between `start_utc` and `end_utc`."""
-    conn = _connect(db_path)
-    rows = conn.execute(
-        "SELECT description, spoken_reply FROM screen_observations "
-        "WHERE created_at >= ? AND created_at < ? ORDER BY id ASC",
-        (start_utc, end_utc),
-    ).fetchall()
-    conn.close()
-    return [{"description": d, "spoken_reply": r} for d, r in rows]
+    query = select(Obs).where(col(Obs.created_at) >= start_utc, col(Obs.created_at) < end_utc).order_by(col(Obs.id))
+    async with session(db_path) as s:
+        return [{"description": r.description, "spoken_reply": r.spoken_reply} for r in await s.exec(query)]

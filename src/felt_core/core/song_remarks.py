@@ -61,7 +61,7 @@ async def remark_on(config: FeltConfig, details: dict) -> None:
         logger.warning("song remark: no line (%s)", details.get("title"), exc_info=True)
         return
     if result.line:
-        enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=SAY_WITHIN_S, record=False)
+        await enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=SAY_WITHIN_S, record=False)
 
 
 async def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:

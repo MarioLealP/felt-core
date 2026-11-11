@@ -113,10 +113,10 @@ def test_routes_need_the_sso_header(tmp_path, monkeypatch):
 async def test_ask_felt_answers_her_alert_line_with_what_claude_found(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned")
-    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    await alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     await responder.claim_next(db, T0)
     responder.save_report(db, honeypot, REPORT, "s1")
-    alert_lines.store(db, honeypot, "Claude wants you to look at it.", "followup")
+    await alert_lines.store(db, honeypot, "Claude wants you to look at it.", "followup")
     line_id = systems.page(db)["incidents"][0]["line_message_id"]
     assert line_id is not None
     text = remark_text(db, line_id)

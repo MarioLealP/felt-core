@@ -18,7 +18,7 @@ def _parse(chunk: str) -> tuple[str, dict]:
 
 async def test_new_lines_picks_and_marks_become_notices(tmp_path):
     db = str(tmp_path / "felt.db")
-    save_message(db, "dashboard", "user", "hi")
+    await save_message(db, "dashboard", "user", "hi")
     rounds = 0
 
     async def gone() -> bool:
@@ -28,9 +28,9 @@ async def test_new_lines_picks_and_marks_become_notices(tmp_path):
     assert _parse(await anext(stream)) == ("hello", {"newest": 1})
 
     # a reply and a remark land before the next check
-    save_message(db, "dashboard", "assistant", "Hey.")
-    save_message(db, "dashboard", "assistant", "Nice song.", kind="event")
-    save_message(db, "other", "assistant", "elsewhere")  # another session: silent
+    await save_message(db, "dashboard", "assistant", "Hey.")
+    await save_message(db, "dashboard", "assistant", "Nice song.", kind="event")
+    await save_message(db, "other", "assistant", "elsewhere")  # another session: silent
     rounds += 1
     assert _parse(await anext(stream)) == ("line", {"id": 2, "role": "assistant", "kind": "chat"})
     assert _parse(await anext(stream)) == ("line", {"id": 3, "role": "assistant", "kind": "event"})
@@ -48,7 +48,7 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     from felt_core.core import incidents, systems
 
     db = str(tmp_path / "felt.db")
-    save_message(db, "dashboard", "user", "hi")
+    await save_message(db, "dashboard", "user", "hi")
     shopping = ["1|t0"]  # HA's todo entity: unchecked count | last update
 
     async def lists_version() -> str:

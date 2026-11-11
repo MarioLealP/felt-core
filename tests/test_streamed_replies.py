@@ -245,8 +245,8 @@ def _alarm_call():
     }
 
 
-def _assistant_lines(config, session):
-    return [m["content"] for m in get_history(config.db_path, session) if m["role"] == "assistant"]
+async def _assistant_lines(config, session):
+    return [m["content"] for m in await get_history(config.db_path, session) if m["role"] == "assistant"]
 
 
 async def test_chat_streamed_yields_chunks_while_writing(tmp_path, monkeypatch, fake_llm):
@@ -270,7 +270,7 @@ async def test_chat_streamed_yields_chunks_while_writing(tmp_path, monkeypatch, 
     assert result.reply == PROSE[0]
     assert fake_llm.calls[0]["stream"]
     assert not fake_llm.calls[0]["tools"]
-    assert _assistant_lines(config, "s") == [PROSE[0]]  # written once, at the end
+    assert await _assistant_lines(config, "s") == [PROSE[0]]  # written once, at the end
 
 
 async def test_chat_streamed_same_result_as_chat(tmp_path, monkeypatch, fake_llm):
@@ -315,7 +315,7 @@ async def test_first_sentence_fake_claim_is_never_said(tmp_path, monkeypatch, fa
     assert " ".join(chunks) == "Alright, your alarm's on for seven thirty. Sleep well, okay?"
     assert result.reply == "Alright, your alarm's on for seven thirty. Sleep well, okay?"
     assert "correcting yourself" not in fake_llm.calls[2]["messages"][-1]["content"]
-    assert _assistant_lines(config, "s") == [result.reply]
+    assert await _assistant_lines(config, "s") == [result.reply]
 
 
 async def test_late_fake_claim_gets_corrected_out_loud(tmp_path, monkeypatch, fake_llm):
@@ -337,7 +337,7 @@ async def test_late_fake_claim_gets_corrected_out_loud(tmp_path, monkeypatch, fa
     assert tool_message["role"] == "tool"
     assert f'You already said this out loud: "{opening}"' in tool_message["content"]
     assert result.reply == " ".join(chunks)
-    assert _assistant_lines(config, "s") == [result.reply]
+    assert await _assistant_lines(config, "s") == [result.reply]
 
 
 async def test_forced_retry_without_a_tool_says_the_held_reply(tmp_path, monkeypatch, fake_llm):

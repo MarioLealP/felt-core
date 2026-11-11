@@ -158,9 +158,9 @@ async def maybe_brief(config: FeltConfig, now: datetime | None = None) -> str | 
     except Exception:
         logger.exception("brief: failed - the diary greeting goes out alone")
         if greeting:
-            enqueue_proactive(config, "diary", greeting, ttl_s=_TTL_S)
+            await enqueue_proactive(config, "diary", greeting, ttl_s=_TTL_S)
         return None
-    enqueue_proactive(config, "brief", line, ttl_s=_TTL_S)
+    await enqueue_proactive(config, "brief", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Good morning", line, tag="felt-brief")
     except phone.PhoneUnavailableError:

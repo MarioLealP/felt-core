@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from felt_core.db.migrate import migrate
@@ -27,6 +28,14 @@ def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
     if cursor.lastrowid is None:
         raise RuntimeError("INSERT did not produce a lastrowid")
     return cursor.lastrowid
+
+
+def require_id(row: SQLModel) -> int:
+    """A just-inserted row's id, narrowed to `int` - None here would mean the INSERT didn't happen."""
+    row_id = getattr(row, "id", None)
+    if row_id is None:
+        raise RuntimeError("INSERT did not produce an id")
+    return row_id
 
 
 # The schema is migrated once per database per process, not on every

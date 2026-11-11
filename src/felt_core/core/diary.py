@@ -149,7 +149,7 @@ async def _hand_over_greeting(config: FeltConfig, parsed: dict) -> None:
         if await brief.will_open_with(config):  # the brief opens with it (brief.py)
             await set_setting(config.db_path, brief.GREETING_KEY, greeting)
         else:
-            enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
+            await enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
 
 
 async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:

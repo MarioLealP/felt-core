@@ -1,8 +1,6 @@
 """Mario 10-03: her song remarks come from the server's own Spotify poll,
 so they happen with the desktop off; the desktop is only asked to say them."""
 
-import asyncio
-
 from felt_core.core import song_remarks
 from felt_core.core.events import EventReaction
 from felt_core.db.kinds import APP_SESSION, EVENT
@@ -35,7 +33,7 @@ def test_only_a_change_between_two_playing_tracks_counts():
     }
 
 
-def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch):
+async def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch):
     class Config:
         db_path = str(tmp_path / "f.db")
         voice_url = None
@@ -43,14 +41,14 @@ def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch
     async def fake_react(event, details, config, session_id):
         assert (event, session_id) == ("music_new_track", APP_SESSION)
         # react_to_event logs the line itself, as an event line
-        save_message(config.db_path, session_id, "assistant", "Oh, this one.", kind=EVENT)
+        await save_message(config.db_path, session_id, "assistant", "Oh, this one.", kind=EVENT)
         return EventReaction(line="Oh, this one.", emotion="happy")
 
     import felt_core.core.events as events
 
     monkeypatch.setattr(events, "react_to_event", fake_react)
-    asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
-    item = claim_next_proactive(Config.db_path)
+    await song_remarks.remark_on(Config(), {"title": "Next"})  # ty: ignore[invalid-argument-type]
+    item = await claim_next_proactive(Config.db_path)
     assert item is not None
     assert item["text"] == "Oh, this one."
     assert item["kind"] == "music"
@@ -60,7 +58,7 @@ def test_the_line_is_logged_once_and_handed_to_the_desktop(tmp_path, monkeypatch
     assert lines == [(EVENT,)]  # not a second, proactive copy
 
 
-def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
+async def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
     class Config:
         db_path = str(tmp_path / "f.db")
         voice_url = None
@@ -71,5 +69,5 @@ def test_no_line_means_nothing_for_the_desktop(tmp_path, monkeypatch):
     import felt_core.core.events as events
 
     monkeypatch.setattr(events, "react_to_event", quiet)
-    asyncio.run(song_remarks.remark_on(Config(), {"title": "Next"}))  # ty: ignore[invalid-argument-type]
-    assert claim_next_proactive(Config.db_path) is None
+    await song_remarks.remark_on(Config(), {"title": "Next"})  # ty: ignore[invalid-argument-type]
+    assert await claim_next_proactive(Config.db_path) is None

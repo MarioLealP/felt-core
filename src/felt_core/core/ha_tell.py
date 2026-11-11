@@ -38,7 +38,7 @@ async def tell(config: FeltConfig, text: str, title: str, tag: str) -> str | Non
         return None
     with llm_gate.timely("ha-tell"):
         line = await her_line(config, facts(text), text)
-    enqueue_proactive(config, "ha", line, ttl_s=_TTL_S)
+    await enqueue_proactive(config, "ha", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, title, line, tag=f"felt-ha-{tag}")
     except phone.PhoneUnavailableError:

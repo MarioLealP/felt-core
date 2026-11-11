@@ -81,7 +81,7 @@ async def listen(config: FeltConfig) -> None:
                         event = json.loads(line)
                         if event.get("event") != "message":
                             continue
-                        event_id = save_ntfy_event(
+                        event_id = await save_ntfy_event(
                             config.db_path,
                             event.get("title"),
                             event.get("message", ""),

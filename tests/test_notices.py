@@ -45,11 +45,11 @@ async def test_her_lines_come_with_what_the_pop_up_needs(tmp_path):
     assert notices.after(db, 0) == []
     honeypot = _in(db, "HONEYPOT: 192.168.10.201 banned")
     trivy = _in(db, "Trivy weekly: 1 critical")
-    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
-    alert_lines.store(db, trivy, "The weekly scan found one critical.")
+    await alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    await alert_lines.store(db, trivy, "The weekly scan found one critical.")
     await responder.claim_next(db, T0)
     responder.save_report(db, honeypot, {"verdict": "needs-mario", "summary": "x"}, "s1")
-    alert_lines.store(db, honeypot, "Claude wants you to look.", "followup")
+    await alert_lines.store(db, honeypot, "Claude wants you to look.", "followup")
     lines = notices.after(db, 0)
     assert [(n["incident_id"], n["kind"], n["pop"]) for n in lines] == [
         (honeypot, "line", True),

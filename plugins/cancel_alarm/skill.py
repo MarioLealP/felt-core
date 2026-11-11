@@ -24,9 +24,9 @@ def _format(alarm: dict) -> str:
     return f"{formatted}{suffix}"
 
 
-async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+async def handle(params, ctx):
     """Cancel the one pending alarm, or the one whose label matches which."""
-    pending = get_pending_alarms(ctx.config.db_path)
+    pending = await get_pending_alarms(ctx.config.db_path)
     if not pending:
         return SkillResult(text="No alarms are currently set.")
 
@@ -42,5 +42,5 @@ async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contrac
         return SkillResult(text="Which one? You have: " + "; ".join(_format(a) for a in matches))
 
     alarm = matches[0]
-    cancel_alarm(ctx.config, alarm["id"])
+    await cancel_alarm(ctx.config, alarm["id"])
     return SkillResult(text=f"Cancelled: {_format(alarm)}.")
