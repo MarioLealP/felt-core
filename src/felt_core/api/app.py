@@ -56,6 +56,7 @@ from felt_core.core.calendar_headsup import calendar_headsup_loop
 from felt_core.core.emails import watch as email_watch
 from felt_core.core.ender import watch as ender_watch
 from felt_core.core.ntfy_listener import listen as ntfy_listen
+from felt_core.db.backup import backup_loop
 from felt_core.db.latency import delete_old_latency_rows
 from felt_core.db.proactive import prune_expired_proactive
 
@@ -93,6 +94,8 @@ async def lifespan(app: FastAPI):
     incidents_task = asyncio.create_task(incidents.watch(config))
     # the Ender (via HA): says when a print finishes, fails, is cancelled or pauses
     ender_task = asyncio.create_task(ender_watch(config))
+    # a consistent felt.db copy for restic, which copies the live file raw
+    backup_task = asyncio.create_task(backup_loop(config.db_path))
     # A pending alarm set before a restart isn't just lost — see
     # alarms.py for why late-firing beats silently dropping it.
     reschedule_pending_alarms(config)
@@ -123,6 +126,7 @@ async def lifespan(app: FastAPI):
         calendar_task.cancel()
         incidents_task.cancel()
         ender_task.cancel()
+        backup_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
