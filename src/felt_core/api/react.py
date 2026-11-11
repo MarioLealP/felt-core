@@ -213,6 +213,6 @@ async def log_event_endpoint(req: EventLogRequest, background_tasks: BackgroundT
     """
     config = load_config()
     at_utc = diary_material.normalize_at(req.at)
-    save_event(config.db_path, req.kind[:64], diary_material.cap_event_data(req.data), at_utc)
+    await save_event(config.db_path, req.kind[:64], diary_material.cap_event_data(req.data), at_utc)
     background_tasks.add_task(diary.on_event, config, req.kind, at_utc)
     return Response(status_code=204)

@@ -74,6 +74,6 @@ async def test_spoken_reply_saved_as_assistant_message_not_the_observation(tmp_p
     result = await brain.process_screen_context("something interesting", config, session_id="wp02-test")
 
     assert result.reply == "look at that"
-    history = get_history(config.db_path, "wp02-test")
+    history = await get_history(config.db_path, "wp02-test")
     assert [m["content"] for m in history] == ["look at that"]
     assert history[0]["role"] == "assistant"

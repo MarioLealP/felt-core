@@ -293,7 +293,7 @@ _COLUMNS = {"line": ("line",), "back": ("back_line",), "followup": ("followup",)
 _COLUMNS["both"] = ("line", "followup")
 
 
-def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None:
+async def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None:
     """Store one alert line on the incident and in the message history."""
     conn = _connect(db_path)
     try:
@@ -306,7 +306,7 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
             )
     finally:
         conn.close()
-    save_message(
+    await save_message(
         db_path,
         APP_SESSION,
         "assistant",
@@ -339,7 +339,7 @@ async def write_due(config: FeltConfig) -> int:
             logger.warning("alert lines: felt-llm unavailable, plain line for %d", incident_id)
         if not text:
             continue
-        store(config.db_path, incident_id, text, kind)
+        await store(config.db_path, incident_id, text, kind)
         logger.info("alert line for incident %d (%s): %r", incident_id, incident["type"], text)
         written += 1
     return written

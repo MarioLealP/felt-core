@@ -45,7 +45,7 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
     returned).
     """
     config = load_config()
-    row = get_proactive_item(config.db_path, item_id)
+    row = await get_proactive_item(config.db_path, item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
     if not config.voice_url:
@@ -70,7 +70,7 @@ async def proactive_requeue_endpoint(item_id: int) -> dict:
     don't lose it, hand it out again on the next /next poll.
     """
     config = load_config()
-    return {"requeued": requeue_proactive(config.db_path, item_id)}
+    return {"requeued": await requeue_proactive(config.db_path, item_id)}
 
 
 class ProactiveDebugRequest(BaseModel):
@@ -93,7 +93,7 @@ async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
     config = load_config()
     if not config.debug:
         raise HTTPException(status_code=404, detail="not found")
-    item_id = enqueue_proactive(
+    item_id = await enqueue_proactive(
         config,
         req.kind,
         req.text,

@@ -1,70 +1,67 @@
 """The `proactive` table: the queue of things she brings up on her own."""
 
-from felt_core.db.session import _connect, _require_lastrowid
+from sqlalchemy import delete, func, or_, update
+from sqlmodel import col, select
+
+from felt_core.db.session import require_id, session
+from felt_core.db.tables import Proactive
 
 
-def insert_proactive(db_path: str, kind: str, text: str, payload_json: str, expires_at: str | None) -> int:
+def _unexpired():
+    return or_(col(Proactive.expires_at).is_(None), col(Proactive.expires_at) > func.datetime("now"))
+
+
+def _as_dict(row: Proactive) -> dict:
+    return row.model_dump(include={"id", "kind", "text", "payload_json", "created_at", "expires_at"})
+
+
+async def insert_proactive(db_path: str, kind: str, text: str, payload_json: str, expires_at: str | None) -> int:
     """Queue one proactive item; returns its id."""
-    conn = _connect(db_path)
-    with conn:
-        cursor = conn.execute(
-            "INSERT INTO proactive (kind, text, payload_json, expires_at) VALUES (?, ?, ?, ?)",
-            (kind, text, payload_json, expires_at),
-        )
-        item_id = _require_lastrowid(cursor)
-    conn.close()
-    return item_id
+    row = Proactive(kind=kind, text=text, payload_json=payload_json, expires_at=expires_at)
+    async with session(db_path) as s:
+        s.add(row)
+        await s.commit()
+    return require_id(row)
 
 
-def _row_to_proactive_dict(row: tuple) -> dict:
-    return {
-        "id": row[0],
-        "kind": row[1],
-        "text": row[2],
-        "payload_json": row[3],
-        "created_at": row[4],
-        "expires_at": row[5],
-    }
-
-
-def claim_next_proactive(db_path: str) -> dict | None:
+async def claim_next_proactive(db_path: str) -> dict | None:
     """Hands out the oldest undelivered, unexpired proactive item, or None.
 
-    Atomically returns and marks-delivered the oldest undelivered,
-    unexpired proactive item (WP-25's long-poll endpoint calls this on
-    every poll tick), or None if there's nothing to hand out right now.
-    Select-then-update in one `with conn:` transaction so two concurrent
-    long-poll callers can't both walk away with the same row. An expired
-    item is excluded here, not just filtered by a caller - the accept
-    test ("an expired one never is [spoken]") depends on this query never
-    returning one, not on a caller remembering to check.
+    One statement (UPDATE ... RETURNING): picks the oldest undelivered,
+    unexpired item and marks it delivered atomically, so two concurrent
+    long-poll callers (WP-25's endpoint calls this on every poll tick) can't
+    both walk away with the same row. An expired item is excluded here, not
+    just filtered by a caller - the accept test ("an expired one never is
+    [spoken]") depends on this query never returning one.
     """
-    conn = _connect(db_path)
-    row = None
-    with conn:
-        row = conn.execute(
-            "SELECT id, kind, text, payload_json, created_at, expires_at FROM proactive "
-            "WHERE delivered_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now')) "
-            "ORDER BY id ASC LIMIT 1"
-        ).fetchone()
-        if row is not None:
-            conn.execute("UPDATE proactive SET delivered_at = datetime('now') WHERE id = ?", (row[0],))
-    conn.close()
-    return _row_to_proactive_dict(row) if row is not None else None
+    oldest = (
+        select(Proactive.id)
+        .where(col(Proactive.delivered_at).is_(None), _unexpired())
+        .order_by(col(Proactive.id))
+        .limit(1)
+        .scalar_subquery()
+    )
+    claim = (
+        update(Proactive)
+        .where(col(Proactive.id) == oldest)
+        .values(delivered_at=func.datetime("now"))
+        .returning(col(Proactive.id))
+    )
+    async with session(db_path) as s:
+        claimed = (await s.exec(claim)).first()
+        row = await s.get(Proactive, claimed[0]) if claimed is not None else None
+        await s.commit()
+    return _as_dict(row) if row is not None else None
 
 
-def get_proactive_item(db_path: str, item_id: int) -> dict | None:
+async def get_proactive_item(db_path: str, item_id: int) -> dict | None:
     """One proactive item by id, or None."""
-    conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT id, kind, text, payload_json, created_at, expires_at FROM proactive WHERE id = ?",
-        (item_id,),
-    ).fetchone()
-    conn.close()
-    return _row_to_proactive_dict(row) if row else None
+    async with session(db_path) as s:
+        row = await s.get(Proactive, item_id)
+    return _as_dict(row) if row is not None else None
 
 
-def requeue_proactive(db_path: str, item_id: int) -> bool:
+async def requeue_proactive(db_path: str, item_id: int) -> bool:
     """Puts a delivered item back in the queue, unless it's gone or expired.
 
     Clears `delivered_at` so the item is handed out again on the next
@@ -73,26 +70,26 @@ def requeue_proactive(db_path: str, item_id: int) -> bool:
     hasn't since expired (an expired item must never come back around,
     same rule claim_next_proactive enforces) - returns whether it did.
     """
-    conn = _connect(db_path)
-    with conn:
-        cursor = conn.execute(
-            "UPDATE proactive SET delivered_at = NULL WHERE id = ? "
-            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
-            (item_id,),
-        )
-        requeued = cursor.rowcount > 0
-    conn.close()
+    requeue = (
+        update(Proactive)
+        .where(col(Proactive.id) == item_id, _unexpired())
+        .values(delivered_at=None)
+        .returning(col(Proactive.id))
+    )
+    async with session(db_path) as s:
+        requeued = (await s.exec(requeue)).first() is not None
+        await s.commit()
     return requeued
 
 
-def prune_expired_proactive(db_path: str) -> None:
+async def prune_expired_proactive(db_path: str) -> None:
     """Startup sweep: deletes expired proactive items.
 
     Startup sweep (same convention as delete_old_latency_rows) - an
     expired item is already unreachable via claim_next_proactive, this
     just stops the table growing forever.
     """
-    conn = _connect(db_path)
-    with conn:
-        conn.execute("DELETE FROM proactive WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')")
-    conn.close()
+    expired = col(Proactive.expires_at).is_not(None) & (col(Proactive.expires_at) <= func.datetime("now"))
+    async with session(db_path) as s:
+        await s.exec(delete(Proactive).where(expired))
+        await s.commit()

@@ -35,7 +35,7 @@ async def handle(params, ctx):
     except PhoneUnavailableError:
         lines.append("couldn't reach your phone")
 
-    for alarm in get_pending_alarms(ctx.config.db_path):
+    for alarm in await get_pending_alarms(ctx.config.db_path):
         suffix = f" ({alarm['label']})" if alarm["label"] else ""
         lines.append(f"{_when(datetime.fromisoformat(alarm['fire_at']))}{suffix} (Felt's own)")
     return SkillResult(text="Alarms: " + "; ".join(lines))

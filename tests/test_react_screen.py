@@ -36,7 +36,7 @@ async def test_react_to_screen_happy_path(tmp_path, fake_llm):
     assert parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert call["json_schema"] is not None
 
-    observations = get_recent_observations(config.db_path, "wp07-test", limit=1)
+    observations = await get_recent_observations(config.db_path, "wp07-test", limit=1)
     assert observations[0]["description"] == "a boss fight"
     assert observations[0]["spoken_reply"] == "Ooh, tough boss!"
 

@@ -206,14 +206,14 @@ def fallback_line(title: str, minutes: int, reminder: bool = False) -> str:
     return f"heads up, {title} in {minutes} minutes."
 
 
-def current_game(config: FeltConfig, now: datetime) -> str | None:
+async def current_game(config: FeltConfig, now: datetime) -> str | None:
     """The game Mario's in right now, else None.
 
     The game Mario's in right now per felt-animation's event log (the
     latest game_start with no game_stop after it), else None.
     """
     fmt = "%Y-%m-%d %H:%M:%S"
-    rows = get_events_between(
+    rows = await get_events_between(
         config.db_path,
         (now - _GAME_CONTEXT_WINDOW).astimezone(UTC).strftime(fmt),
         (now + timedelta(seconds=1)).astimezone(UTC).strftime(fmt),
@@ -298,13 +298,13 @@ async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stag
         await set_setting(config.db_path, key, now.isoformat())
         minutes = minutes_left(start, now)
         title = str(fresh.get("summary") or "something on your calendar")
-        line = await phrase(config, title, minutes, fresh.get("location"), current_game(config, now), reminder)
+        line = await phrase(config, title, minutes, fresh.get("location"), await current_game(config, now), reminder)
         ttl = (start - now).total_seconds()
         if stage is NORMAL:
             ttl = min(ttl, _NORMAL_TTL_S)
         elif stage is REMINDER:
             ttl = _REMINDER_TTL_S
-        enqueue_proactive(config, stage.kind, line, ttl_s=ttl)
+        await enqueue_proactive(config, stage.kind, line, ttl_s=ttl)
         logger.info("calendar heads-up: %s-min for %r enqueued as %s", stage.name, title, stage.kind)
         return True
     finally:
@@ -372,14 +372,14 @@ async def deliver_leave(
         from felt_core.brain.replies import local_reply
 
         try:
-            prompt = build_leave_prompt(title, at, drive_min, leave_in, go, current_game(config, now))
+            prompt = build_leave_prompt(title, at, drive_min, leave_in, go, await current_game(config, now))
             line = (await local_reply([{"role": "user", "content": prompt}], config, include_facts=False)).strip(
                 " \n\"'"
             )
         except local_llm.LocalLLMUnavailableError:
             line = ""
         line = line or fallback_leave_line(title, at, drive_min, leave_in, go)
-        enqueue_proactive(config, stage.kind, line, ttl_s=min(_LEAVE_TTL_S, (start - now).total_seconds()))
+        await enqueue_proactive(config, stage.kind, line, ttl_s=min(_LEAVE_TTL_S, (start - now).total_seconds()))
         try:
             await phone.notify(config, title, line, tag=f"felt-leave-{event['id']}")
         except phone.PhoneUnavailableError:

@@ -274,7 +274,7 @@ async def check(config: FeltConfig) -> str | None:
         return None
     with llm_gate.timely("print"):
         line = await phrase(config, event, await snapshot(config))
-    enqueue_proactive(config, "printer", line, ttl_s=_TTL_S)
+    await enqueue_proactive(config, "printer", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Ender", line, tag="felt-ender")
     except phone.PhoneUnavailableError:

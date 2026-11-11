@@ -1,20 +1,21 @@
 """The `event_reactions` table: her lines about desktop events."""
 
-from felt_core.db.session import _connect
+from sqlalchemy import func
+from sqlmodel import col, select
+
+from felt_core.db.session import session
+from felt_core.db.tables import EventReaction
 
 
-def save_event_reaction(db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str) -> None:
+async def save_event_reaction(db_path: str, session_id: str, event: str, dedupe_key: str | None, line: str) -> None:
     """Store one spoken event line with its event type and dedupe key."""
-    conn = _connect(db_path)
-    with conn:
-        conn.execute(
-            "INSERT INTO event_reactions (session_id, event, dedupe_key, line) VALUES (?, ?, ?, ?)",
-            (session_id, event, dedupe_key, line),
-        )
-    conn.close()
+    row = EventReaction(session_id=session_id, event=event, dedupe_key=dedupe_key, line=line)
+    async with session(db_path) as s:
+        s.add(row)
+        await s.commit()
 
 
-def seconds_since_last_event_reaction(
+async def seconds_since_last_event_reaction(
     db_path: str, event: str | None = None, dedupe_key: str | None = None
 ) -> float | None:
     """Age of the most recent spoken event line.
@@ -22,26 +23,21 @@ def seconds_since_last_event_reaction(
     Any event (event=None), one event type, or one event+dedupe_key (e.g. the same track). None if there's never been
     one. Global across sessions on purpose: there's one Felt, and cooldowns are about how often SHE talks.
     """
-    query = "SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM event_reactions WHERE 1=1"
-    params: list = []
+    age = (func.julianday("now") - func.julianday(EventReaction.created_at)) * 86400.0
+    query = select(age).order_by(col(EventReaction.id).desc()).limit(1)
     if event is not None:
-        query += " AND event = ?"
-        params.append(event)
+        query = query.where(EventReaction.event == event)
     if dedupe_key is not None:
-        query += " AND dedupe_key = ?"
-        params.append(dedupe_key)
-    conn = _connect(db_path)
-    row = conn.execute(query + " ORDER BY id DESC LIMIT 1", params).fetchone()
-    conn.close()
-    return row[0] if row else None
+        query = query.where(EventReaction.dedupe_key == dedupe_key)
+    async with session(db_path) as s:
+        return (await s.exec(query)).first()
 
 
-def last_event_reaction_line(db_path: str, event: str) -> str | None:
+async def last_event_reaction_line(db_path: str, event: str) -> str | None:
     """The most recent spoken line for one event type (None if never).
 
     Lets an event avoid saying the exact same thing twice in a row.
     """
-    conn = _connect(db_path)
-    row = conn.execute("SELECT line FROM event_reactions WHERE event = ? ORDER BY id DESC LIMIT 1", (event,)).fetchone()
-    conn.close()
-    return row[0] if row else None
+    query = select(EventReaction.line).where(EventReaction.event == event).order_by(col(EventReaction.id).desc())
+    async with session(db_path) as s:
+        return (await s.exec(query.limit(1))).first()

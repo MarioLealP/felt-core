@@ -36,7 +36,7 @@ def test_clamp_timeout_caps_at_thirty_seconds():
 
 async def test_wait_for_next_returns_an_already_enqueued_item(tmp_path):
     config = _config(tmp_path)
-    enqueue_proactive(config, "diary", "morning greeting", animation_tag="wave", emotion="happy")
+    await enqueue_proactive(config, "diary", "morning greeting", animation_tag="wave", emotion="happy")
 
     item = await wait_for_next(config, timeout_s=1)
 
@@ -60,7 +60,7 @@ async def test_wait_for_next_times_out_with_nothing_enqueued(tmp_path):
 
 async def test_wait_for_next_never_returns_an_expired_item(tmp_path):
     config = _config(tmp_path)
-    enqueue_proactive(config, "urgent", "too late", ttl_s=-10)
+    await enqueue_proactive(config, "urgent", "too late", ttl_s=-10)
 
     item = await wait_for_next(config, timeout_s=0.2)
 
@@ -69,7 +69,7 @@ async def test_wait_for_next_never_returns_an_expired_item(tmp_path):
 
 async def test_wait_for_next_marks_the_item_delivered(tmp_path):
     config = _config(tmp_path)
-    enqueue_proactive(config, "diary", "only once")
+    await enqueue_proactive(config, "diary", "only once")
 
     first = await wait_for_next(config, timeout_s=1)
     second = await wait_for_next(config, timeout_s=0.2)
@@ -80,7 +80,7 @@ async def test_wait_for_next_marks_the_item_delivered(tmp_path):
 
 async def test_wait_for_next_omits_animation_tag_and_emotion_when_unset(tmp_path):
     config = _config(tmp_path)
-    enqueue_proactive(config, "diary", "plain")
+    await enqueue_proactive(config, "diary", "plain")
 
     item = await wait_for_next(config, timeout_s=1)
 
@@ -224,10 +224,14 @@ async def test_enqueue_inside_the_loop_presynthesises_and_audio_joins_it(tmp_pat
         return b"RIFFwav"
 
     monkeypatch.setattr(proactive, "_synthesize", fake_synth)
-    monkeypatch.setattr(proactive, "insert_proactive", lambda *a, **k: 7)
+
+    async def insert(*a, **k) -> int:
+        return 7
+
+    monkeypatch.setattr(proactive, "insert_proactive", insert)
     cfg = SimpleNamespace(db_path=str(tmp_path / "x.db"), voice_url="http://voice")
     text = "prewarm check, unique 42"
-    assert proactive.enqueue_proactive(cfg, "test", text, ttl_s=60) == 7
+    assert await proactive.enqueue_proactive(cfg, "test", text, ttl_s=60) == 7
     fetch = asyncio.create_task(proactive.proactive_audio(cfg, text))
     await asyncio.sleep(0)
     gate.set()

@@ -78,7 +78,11 @@ class FakeCalendar:
 async def cal(monkeypatch):
     fake = FakeCalendar()
     monkeypatch.setattr(ha_calendar, "create_event", fake.create)
-    monkeypatch.setattr(appointment_hold, "enqueue_proactive", lambda c, k, t: fake.lines.append(t))
+
+    async def say(c, k, t):
+        fake.lines.append(t)
+
+    monkeypatch.setattr(appointment_hold, "enqueue_proactive", say)
 
     async def llm_down(*a, **kw):  # the plain lines; test_her_words_for_the_no_place_add has hers
         raise local_llm.LocalLLMUnavailableError("down")

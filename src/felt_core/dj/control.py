@@ -10,6 +10,8 @@ leaves it paused.
 import asyncio
 import logging
 import time
+from collections.abc import Coroutine
+from typing import Any
 
 import httpx2
 from pydantic import BaseModel, Field
@@ -229,10 +231,10 @@ async def _say(config: FeltConfig, pick: dict) -> None:
         logger.warning("dj: no line for %s", pick["title"], exc_info=True)
         return
     if result.line:
-        enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=_LINE_TTL_S, record=False)
+        await enqueue_proactive(config, "music", result.line, emotion=result.emotion, ttl_s=_LINE_TTL_S, record=False)
 
 
-def _spawn(coro) -> None:
+def _spawn(coro: Coroutine[Any, Any, Any]) -> None:
     task = asyncio.get_running_loop().create_task(coro)
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)

@@ -61,7 +61,11 @@ def world(monkeypatch):
         return World.reply
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", reply)
-    monkeypatch.setattr(brief, "enqueue_proactive", lambda config, kind, text, **kw: World.said.append(text))
+
+    async def say(config, kind, text, **kw):
+        World.said.append(text)
+
+    monkeypatch.setattr(brief, "enqueue_proactive", say)
 
     async def notify(config, title, message, tag):
         World.phone.append(message)

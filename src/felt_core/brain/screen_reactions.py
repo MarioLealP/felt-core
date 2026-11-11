@@ -78,14 +78,14 @@ def recent_lines_block(lines: list[str]) -> str:
     )
 
 
-def _recent_lines(config: FeltConfig, session_id: str) -> list[str]:
+async def _recent_lines(config: FeltConfig, session_id: str) -> list[str]:
     # Mario 10-03: every line she said on her own, not just screen remarks -
     # a song or mail line she just said shouldn't come back as a remark.
-    rows = get_her_recent_lines(config.db_path, session_id, limit=RECENT_LINES_N)
+    rows = await get_her_recent_lines(config.db_path, session_id, limit=RECENT_LINES_N)
     return [r["content"] for r in rows]
 
 
-def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
+async def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
     """WP-40 merge: the one cooldown check both process_screen_context and react_to_screen use.
 
     Previously each inlined an identical copy of this exact
@@ -93,7 +93,7 @@ def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
     True means "don't call a model, we're on cooldown" (already logged
     when true).
     """
-    seconds_since = seconds_since_last_spoken_reaction(config.db_path, session_id)
+    seconds_since = await seconds_since_last_spoken_reaction(config.db_path, session_id)
     if seconds_since is not None and seconds_since < config.screen_reaction_cooldown_s:
         logger.info(
             "screen reaction: on cooldown (%.0fs since last spoken reaction, need %ds) - no model call",
@@ -129,20 +129,20 @@ async def process_screen_context(
     after ~20 window switches, and made every observation show up as a
     fake "Mario said" bubble in the dashboard chat.
     """
-    obs_id = save_observation(config.db_path, session_id, description)
+    obs_id = await save_observation(config.db_path, session_id, description)
 
-    if _on_cooldown(config, session_id):
+    if await _on_cooldown(config, session_id):
         return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
-    instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(_recent_lines(config, session_id))
+    observations_block = _observations_block(await get_recent_observations(config.db_path, session_id, limit=3))
+    instruction = _SCREEN_REACTION_PROMPT + recent_lines_block(await _recent_lines(config, session_id))
 
     async def _attempt() -> str:
         # Last 4 REAL chat messages, not facts - facts are personal-info
         # recall, irrelevant to reacting to what's on screen right now.
         # "Real" excludes her own earlier screen remarks (audit
         # 2026-09-24) - those are saved as assistant messages too.
-        history_tail = get_history(config.db_path, session_id, exclude_remarks=True)[-4:]
+        history_tail = (await get_history(config.db_path, session_id, exclude_remarks=True))[-4:]
         async with metrics.timed("screen_reaction", route="local", model=config.local_llm_model):
             reply = await local_reply(
                 [
@@ -169,8 +169,8 @@ async def process_screen_context(
             logger.warning("screen reaction still empty after retry - returning silent")
             return ChatResult(reply="", animation_tag=None)
 
-    set_observation_reply(config.db_path, obs_id, reply_raw)
-    save_message(
+    await set_observation_reply(config.db_path, obs_id, reply_raw)
+    await save_message(
         config.db_path,
         session_id,
         "assistant",
@@ -295,17 +295,17 @@ async def react_to_screen(
     cooldown - every other trigger respects it, checked BEFORE any model
     call, same as process_screen_context.
     """
-    if trigger != "manual" and _on_cooldown(config, session_id):
+    if trigger != "manual" and await _on_cooldown(config, session_id):
         return ChatResult(reply="", animation_tag=None)
     switch = "ambient.poe_reactions" if poe_reactions.is_poe(app) else "ambient.screen_reactions"
     if trigger != "manual" and not await features.enabled(config.db_path, switch):
         return ChatResult(reply="", animation_tag=None)
 
-    observations_block = _observations_block(get_recent_observations(config.db_path, session_id, limit=3))
+    observations_block = _observations_block(await get_recent_observations(config.db_path, session_id, limit=3))
     system = daily_persona()
     context = per_call_context(tone, f"{app} {title}", config)
     context_line = f'App: {app} — "{title}"'
-    recent = recent_lines_block(_recent_lines(config, session_id))
+    recent = recent_lines_block(await _recent_lines(config, session_id))
 
     # WP-29: in Path of Exile 2 she also reads item tooltips (and prices them below).
     poe = poe_reactions.is_poe(app)
@@ -340,13 +340,13 @@ async def react_to_screen(
                 line = priced
                 emotion = emotion if emotion != "neutral" else "excited"
 
-    obs_id = save_observation(config.db_path, session_id, seen or f"(on screen: {app})")
+    obs_id = await save_observation(config.db_path, session_id, seen or f"(on screen: {app})")
 
     if not line:
         logger.warning("screen reaction: JSON parsed but 'line' was empty - no reaction")
         return ChatResult(reply="", animation_tag=None)
 
-    set_observation_reply(config.db_path, obs_id, line)
-    save_message(config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}")
+    await set_observation_reply(config.db_path, obs_id, line)
+    await save_message(config.db_path, session_id, "assistant", line, kind=REMARK, source_ref=f"screen:{obs_id}")
     await schedule_pick(config, session_id)  # WP-42.2: which asides wait in Talk
     return ChatResult(reply=line, animation_tag=None, emotion=emotion)

@@ -24,11 +24,11 @@ def _config(tmp_path) -> FeltConfig:
     return FeltConfig(db_path=str(tmp_path / "felt.db"), local_llm_url="http://felt-llm")
 
 
-def _remark(db: str, line: str, session: str = "dashboard") -> None:
+async def _remark(db: str, line: str, session: str = "dashboard") -> None:
     """A screen remark, stored the way screen_reactions.py stores one."""
-    obs = save_observation(db, session, "on screen: something")
-    set_observation_reply(db, obs, line)
-    save_message(db, session, "assistant", line, kind="remark")
+    obs = await save_observation(db, session, "on screen: something")
+    await set_observation_reply(db, obs, line)
+    await save_message(db, session, "assistant", line, kind="remark")
 
 
 def _ids(db: str) -> dict[str, int]:
@@ -44,29 +44,29 @@ def _all(db: str) -> list[dict]:
     return [{"id": i, "content": c} for i, c in rows]
 
 
-def test_only_remarks_since_his_last_line_and_the_newest_two_by_default(tmp_path):
+async def test_only_remarks_since_his_last_line_and_the_newest_two_by_default(tmp_path):
     db = str(tmp_path / "felt.db")
-    _remark(db, "old remark")
-    save_message(db, "dashboard", "user", "hi")
-    save_message(db, "dashboard", "assistant", "Hey.")  # a reply, not a remark
+    await _remark(db, "old remark")
+    await save_message(db, "dashboard", "user", "hi")
+    await save_message(db, "dashboard", "assistant", "Hey.")  # a reply, not a remark
     assert asides.current_asides(db) == {"asides": [], "more": 0}
     for i in range(5):
-        _remark(db, f"remark {i}")
-    save_event_reaction(db, "dashboard", "song", None, "good song")
-    save_message(db, "dashboard", "assistant", "good song", kind="event")
-    _remark(db, "elsewhere", session="other")
+        await _remark(db, f"remark {i}")
+    await save_event_reaction(db, "dashboard", "song", None, "good song")
+    await save_message(db, "dashboard", "assistant", "good song", kind="event")
+    await _remark(db, "elsewhere", session="other")
     got = asides.current_asides(db)
     assert [a["content"] for a in got["asides"]] == ["remark 4", "good song"]
     assert got["more"] == 4  # remark 0-3
     assert got["asides"][0]["created_at"].endswith("Z")
 
 
-def test_asides_older_than_six_hours_stop_waiting(tmp_path):
+async def test_asides_older_than_six_hours_stop_waiting(tmp_path):
     import sqlite3
 
     db = str(tmp_path / "felt.db")
-    _remark(db, "last night")
-    _remark(db, "this morning")
+    await _remark(db, "last night")
+    await _remark(db, "this morning")
     conn = sqlite3.connect(db)
     with conn:
         conn.execute(
@@ -90,9 +90,9 @@ def test_parse_picks_keeps_valid_distinct_positions():
 
 async def test_her_pick_is_stored_and_shown(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    save_message(config.db_path, "dashboard", "user", "brb")
+    await save_message(config.db_path, "dashboard", "user", "brb")
     for line in ["nice track", "I have standards, Mario.", "someone's here", "more notes?"]:
-        _remark(config.db_path, line)
+        await _remark(config.db_path, line)
     seen = {}
 
     async def fake_chat(messages, **kw):
@@ -108,11 +108,11 @@ async def test_her_pick_is_stored_and_shown(tmp_path, monkeypatch):
     assert [a["content"] for a in got["asides"]] == ["I have standards, Mario."]
     assert got["more"] == 3
     # his next line starts a new batch: the old pick no longer applies
-    save_message(config.db_path, "dashboard", "user", "back")
+    await save_message(config.db_path, "dashboard", "user", "back")
     assert asides.current_asides(config.db_path) == {"asides": [], "more": 0}
     # and the next pick clears the old one out of the table
     for line in ["a", "b", "c"]:
-        _remark(config.db_path, line)
+        await _remark(config.db_path, line)
     await asides.pick(config)
     import sqlite3
 
@@ -123,8 +123,8 @@ async def test_her_pick_is_stored_and_shown(tmp_path, monkeypatch):
 
 async def test_two_or_fewer_need_no_call(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    _remark(config.db_path, "one")
-    _remark(config.db_path, "two")
+    await _remark(config.db_path, "one")
+    await _remark(config.db_path, "two")
 
     async def boom(*a, **kw):
         raise AssertionError("no call expected")
@@ -164,34 +164,34 @@ def _client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
-def test_asides_route_is_sso_gated(tmp_path, monkeypatch):
+async def test_asides_route_is_sso_gated(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
-        _remark(str(tmp_path / "felt.db"), "psst")
+        await _remark(str(tmp_path / "felt.db"), "psst")
         assert c.get("/v1/app/asides").status_code == 401
         got = c.get("/v1/app/asides", headers=SSO).json()
         assert [a["content"] for a in got["asides"]] == ["psst"]
         assert got["more"] == 0
 
 
-def test_answering_an_aside_tells_her_and_links_it(tmp_path, monkeypatch):
+async def test_answering_an_aside_tells_her_and_links_it(tmp_path, monkeypatch):
     db = str(tmp_path / "felt.db")
     seen = {}
 
     async def fake_chat(text, config, session_id, answering=None):
         seen["answering"] = answering
-        save_message(config.db_path, session_id, "user", text)
-        save_message(config.db_path, session_id, "assistant", "Good.")
+        await save_message(config.db_path, session_id, "user", text)
+        await save_message(config.db_path, session_id, "assistant", "Good.")
 
     monkeypatch.setattr(app_api, "chat", fake_chat)
     with _client(tmp_path, monkeypatch) as c:
-        _remark(db, "You're redesigning my entire world, aren't you?")
+        await _remark(db, "You're redesigning my entire world, aren't you?")
         remark_id = c.get("/v1/app/asides", headers=SSO).json()["asides"][0]["id"]
         r = c.post("/v1/app/chat", json={"message": "a bit, yeah", "answering": remark_id}, headers=SSO)
         assert r.status_code == 200
         assert seen["answering"] == "You're redesigning my entire world, aren't you?"
         mine = r.json()["messages"][0]
         assert mine["answering"]["id"] == remark_id
-        assert history_page(db, "dashboard")[0]["answering"]["content"].startswith("You're")
+        assert (await history_page(db, "dashboard"))[0]["answering"]["content"].startswith("You're")
         # answered: his line closed the batch
         assert c.get("/v1/app/asides", headers=SSO).json()["asides"] == []
         # only her remarks can be answered this way

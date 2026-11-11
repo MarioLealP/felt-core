@@ -28,15 +28,15 @@ def _lines(db: str) -> list[tuple]:
     return rows
 
 
-def test_a_push_is_a_line_even_if_it_expires_undelivered(tmp_path):
+async def test_a_push_is_a_line_even_if_it_expires_undelivered(tmp_path):
     config = _config(tmp_path)
-    item = enqueue_proactive(config, "calendar_15", "Dentist in 15.", ttl_s=-10)
+    item = await enqueue_proactive(config, "calendar_15", "Dentist in 15.", ttl_s=-10)
     assert _lines(config.db_path) == [
         (APP_SESSION, "assistant", "Dentist in 15.", PROACTIVE, f"proactive:calendar_15:{item}")
     ]
     # it can wait in Talk to be answered, and she remembers saying it
     assert current_asides(config.db_path)["asides"][0]["content"] == "Dentist in 15."
-    assert get_history(config.db_path, APP_SESSION)[-1]["content"] == "Dentist in 15."
+    assert (await get_history(config.db_path, APP_SESSION))[-1]["content"] == "Dentist in 15."
 
 
 async def test_new_mail_is_a_line_she_remembers(tmp_path, fake_llm):
@@ -58,7 +58,7 @@ async def test_new_mail_is_a_line_she_remembers(tmp_path, fake_llm):
 
 async def test_an_alarm_is_a_line_but_never_an_aside(tmp_path):
     config = _config(tmp_path)
-    alarm_id = save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
+    alarm_id = await save_alarm(config.db_path, datetime.now().isoformat(), "stretch")
     await _fire_at(config, alarm_id, datetime.now() - timedelta(seconds=1), "stretch")
     assert _lines(config.db_path) == [(APP_SESSION, "assistant", "Alarm: stretch", ALARM, f"alarm:{alarm_id}")]
     assert current_asides(config.db_path)["asides"] == []

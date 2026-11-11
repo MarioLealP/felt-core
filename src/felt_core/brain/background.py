@@ -282,7 +282,7 @@ async def music_taste_loop(config: FeltConfig) -> None:
                     previous = current
                     if finished:
                         try:
-                            record_music_play(config.db_path, **finished)
+                            await record_music_play(config.db_path, **finished)
                         except Exception:
                             logger.exception(
                                 "music taste: couldn't record %r, skipping it",

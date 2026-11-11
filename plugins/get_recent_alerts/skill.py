@@ -11,9 +11,9 @@ description = "Recent alerts from Mario's server and systems (ntfy): 'any alerts
 parameters_schema = {"type": "object", "properties": {}}
 
 
-async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+async def handle(params, ctx):
     """Return the five most recent ntfy alerts, each with time, title and message."""
-    events = get_recent_ntfy_events(ctx.config.db_path, limit=5)
+    events = await get_recent_ntfy_events(ctx.config.db_path, limit=5)
     if not events:
         return SkillResult(text="No recent alerts.")
     lines = [f"[{e['received_at']}] {e['title'] or ''}: {e['message']}" for e in events]

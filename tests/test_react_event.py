@@ -167,18 +167,18 @@ async def test_event_is_never_a_screen_observation(tmp_path, fake_llm):
     result = await events.react_to_event("music_new_track", _TRACK, config, session_id="s")
 
     assert result.line
-    assert get_recent_observations(config.db_path, "s", limit=10) == []
-    assert seconds_since_last_spoken_reaction(config.db_path, "s") is None  # screen cooldown untouched
+    assert await get_recent_observations(config.db_path, "s", limit=10) == []
+    assert await seconds_since_last_spoken_reaction(config.db_path, "s") is None  # screen cooldown untouched
     # Her line is in chat history, but not as "real conversation".
-    assert [m["content"] for m in get_history(config.db_path, "s")] == [result.line]
-    assert get_history(config.db_path, "s", exclude_remarks=True) == []
+    assert [m["content"] for m in await get_history(config.db_path, "s")] == [result.line]
+    assert await get_history(config.db_path, "s", exclude_remarks=True) == []
 
 
 async def test_a_recent_screen_remark_blocks_an_event_line(tmp_path, fake_llm):
     config = _config(tmp_path)
     calls = _fake_llm(fake_llm)
-    obs = save_observation(config.db_path, "s", "a game")
-    set_observation_reply(config.db_path, obs, "nice")
+    obs = await save_observation(config.db_path, "s", "a game")
+    await set_observation_reply(config.db_path, obs, "nice")
 
     result = await events.react_to_event("gpu_hot", {"temp_c": 85}, config, session_id="s")
 
@@ -332,15 +332,15 @@ def test_same_line_ignores_case_and_punctuation():
 async def test_unhushed_speaks_right_after_another_remark_but_never_stores_a_screen_observation(tmp_path, fake_llm):
     config = _config(tmp_path)
     calls = _fake_llm(fake_llm, line="Couldn't last without me, huh?")
-    obs = save_observation(config.db_path, "s", "a game")
-    set_observation_reply(config.db_path, obs, "nice")
+    obs = await save_observation(config.db_path, "s", "a game")
+    await set_observation_reply(config.db_path, obs, "nice")
 
     result = await events.react_to_event("unhushed", _EARLY, config, session_id="s", tone="smug")
 
     assert result.line == "Couldn't last without me, huh?"
     assert result.emotion == "amused"
     assert "Right now: smug" in _user(calls[0])
-    assert len(get_recent_observations(config.db_path, "s", limit=10)) == 1  # only the one saved above
+    assert len(await get_recent_observations(config.db_path, "s", limit=10)) == 1  # only the one saved above
 
 
 async def test_unhushed_never_repeats_the_same_line_twice_in_a_row(tmp_path, fake_llm):
@@ -367,7 +367,7 @@ async def test_unhushed_gives_up_rather_than_repeat(tmp_path, fake_llm):
     from felt_core.db.session import _connect
 
     config = _config(tmp_path)
-    save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")
+    await save_event_reaction(config.db_path, "dashboard", "unhushed", None, "Missed me?")
     conn = _connect(config.db_path)
     with conn:
         conn.execute("UPDATE event_reactions SET created_at = datetime('now', '-60 seconds')")

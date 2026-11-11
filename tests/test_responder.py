@@ -140,7 +140,7 @@ async def test_her_follow_up_comes_after_her_first_line(tmp_path):
     honeypot = _in(db, "HONEYPOT: ssh touched")
     await responder.claim_next(db, _at(1))
     assert alert_lines.due(db, _at(1)) == [(honeypot, "line")]  # Claude still looking
-    alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
+    await alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     assert alert_lines.due(db, _at(1)) == []
     responder.save_report(db, honeypot, {**REPORT, "verdict": "needs-mario", "for_mario": "check the NAS"}, "s1")
     assert alert_lines.due(db, _at(2)) == [(honeypot, "followup")]
@@ -148,14 +148,14 @@ async def test_her_follow_up_comes_after_her_first_line(tmp_path):
     assert "it needs Mario" in facts
     assert "check the NAS" in facts
     assert "join Claude" in facts
-    alert_lines.store(db, honeypot, "It was the NAS, have a look.", "followup")
+    await alert_lines.store(db, honeypot, "It was the NAS, have a look.", "followup")
     assert alert_lines.due(db, _at(3)) == []
 
 
 async def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
     db = str(tmp_path / "f.db")
     unclaimed = _in(db, "HONEYPOT: ssh touched")
-    alert_lines.store(db, unclaimed, "Honeypot, Claude's on it.")
+    await alert_lines.store(db, unclaimed, "Honeypot, Claude's on it.")
     await responder.mark_missed(db, _at(16))
     facts = alert_lines.followup_facts(_get(db, unclaimed))
     assert "didn't get to it" in facts
@@ -258,7 +258,7 @@ async def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
     await responder.claim_next(db, _at(0))
     responder.save_report(db, trivy, REPORT, "s1")  # expected -> handled, no line yet
     assert alert_lines.due(db, _at(1)) == [(trivy, "both")]
-    alert_lines.store(db, trivy, "The weekly scan ran; Claude says it's our own deploy.", "both")
+    await alert_lines.store(db, trivy, "The weekly scan ran; Claude says it's our own deploy.", "both")
     incident = _get(db, trivy)
     assert incident["line"] == incident["followup"]
     assert alert_lines.due(db, _at(2)) == []

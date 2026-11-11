@@ -229,7 +229,7 @@ def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
     return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
 
-async def gather_material(config: FeltConfig, date_str: str) -> str:  # ruff: ignore[unused-async]  # sync sqlite until the data layer pass
+async def gather_material(config: FeltConfig, date_str: str) -> str:
     """Material for one Europe/Lisbon calendar date.
 
     Material for one Europe/Lisbon calendar date: screen `seen` text
@@ -237,9 +237,9 @@ async def gather_material(config: FeltConfig, date_str: str) -> str:  # ruff: ig
     session windows.
     """
     start, end = _lisbon_date_bounds_utc(date_str)
-    seen = get_screen_observations_between(config.db_path, start, end)
-    events = get_events_between(config.db_path, start, end)
-    sessions = get_message_sessions_between(config.db_path, start, end)
+    seen = await get_screen_observations_between(config.db_path, start, end)
+    events = await get_events_between(config.db_path, start, end)
+    sessions = await get_message_sessions_between(config.db_path, start, end)
 
     chat_windows: list[str] = []
     for session in sessions:

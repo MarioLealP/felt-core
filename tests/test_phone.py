@@ -149,7 +149,11 @@ async def test_alarm_skill_falls_back_when_the_phone_is_unreachable(tmp_path, ha
     skill = load_plugin_module("set_alarm/skill.py")
     ha.status = 500
     scheduled = []
-    monkeypatch.setattr(skill, "schedule_alarm", lambda c, at, label: scheduled.append(at))
+
+    async def schedule(c, at, label):
+        scheduled.append(at)
+
+    monkeypatch.setattr(skill, "schedule_alarm", schedule)
     result = await skill.handle({"time": "7:30am"}, _ctx(tmp_path))
     assert len(scheduled) == 1
     assert "on your phone" not in result.text

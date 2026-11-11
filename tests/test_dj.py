@@ -122,7 +122,7 @@ async def test_discoveries_are_new_artists_with_real_tracks(tmp_path, monkeypatc
 async def test_pick_fills_with_familiar_when_discoveries_fail(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
     # recorded just now -> too recent to come back as a familiar pick
-    record_music_play(config.db_path, "id-old", "Old Fave", "Known", 200_000, 200_000, False)
+    await record_music_play(config.db_path, "id-old", "Old Fave", "Known", 200_000, 200_000, False)
     fake_llm.script = [json.dumps({"artists": []})]
 
     async def none(*a, **k):

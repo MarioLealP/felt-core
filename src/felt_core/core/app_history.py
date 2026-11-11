@@ -8,37 +8,19 @@ ids and times and pages backwards, for a long-running scroll.
 
 from felt_core.core.asides import answered
 from felt_core.core.marks import marks_for
-from felt_core.db.messages import CHAT_ONLY_SQL
-from felt_core.db.session import _connect
+from felt_core.db.messages import chat_page
 
 MAX_PAGE = 200
 
 
-def history_page(db_path: str, session_id: str, *, before_id: int | None = None, limit: int = 50) -> list[dict]:
+async def history_page(db_path: str, session_id: str, *, before_id: int | None = None, limit: int = 50) -> list[dict]:
     """Up to `limit` messages older than `before_id` (newest page when None), oldest first.
 
     Each row: id, role, content, created_at (UTC, ISO-8601), marks (her
     marks on that message, see marks.py) and answering (the aside of hers
     his line answers, see asides.py, else None).
     """
-    limit = max(1, min(limit, MAX_PAGE))
-    before = "AND id < ? " if before_id is not None else ""
-    params: tuple = (session_id,)
-    if before_id is not None:
-        params += (before_id,)
-    params += (limit,)
-    conn = _connect(db_path)
-    try:
-        rows = conn.execute(
-            "SELECT id, role, content, created_at FROM messages "  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
-            "WHERE session_id = ? AND content NOT LIKE '[System Observation%' "
-            + before
-            + CHAT_ONLY_SQL
-            + " ORDER BY id DESC LIMIT ?",
-            params,
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = await chat_page(db_path, session_id, before_id, max(1, min(limit, MAX_PAGE)))
     marks = marks_for(db_path, [r[0] for r in rows])
     answers = answered(db_path, [r[0] for r in rows if r[1] == "user"])
     return [

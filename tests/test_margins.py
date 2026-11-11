@@ -13,7 +13,7 @@ from felt_core.db.messages import save_message
 SSO = {"X-Authentik-Username": "mario"}
 
 
-def _lines(db: str) -> dict[str, int]:
+async def _lines(db: str) -> dict[str, int]:
     """A conversation with one of each kind; returns content -> id."""
     rows = [
         ("user", "hi", "chat", None),
@@ -23,14 +23,14 @@ def _lines(db: str) -> dict[str, int]:
         ("assistant", "Dentist in 15.", "proactive", "proactive:calendar_15:1"),
         ("assistant", "Alarm: stretch", "alarm", "alarm:2"),
     ]
-    ids = {c: save_message(db, "dashboard", r, c, kind=k, source_ref=s) for r, c, k, s in rows}
-    save_message(db, "other", "assistant", "elsewhere", kind="remark")
+    ids = {c: await save_message(db, "dashboard", r, c, kind=k, source_ref=s) for r, c, k, s in rows}
+    await save_message(db, "other", "assistant", "elsewhere", kind="remark")
     return ids
 
 
-def test_the_page_is_her_non_chat_lines_with_a_source(tmp_path):
+async def test_the_page_is_her_non_chat_lines_with_a_source(tmp_path):
     db = str(tmp_path / "felt.db")
-    _lines(db)
+    await _lines(db)
     got = margins.page(db)
     assert [(m["content"], m["source"]) for m in got] == [
         ("Spreadsheets again?", "remark"),
@@ -45,9 +45,9 @@ def test_the_page_is_her_non_chat_lines_with_a_source(tmp_path):
     assert [m["content"] for m in older] == ["Good song."]
 
 
-def test_read_dismiss_and_snooze(tmp_path):
+async def test_read_dismiss_and_snooze(tmp_path):
     db = str(tmp_path / "felt.db")
-    ids = _lines(db)
+    ids = await _lines(db)
     # chat lines and other sessions can't be touched
     assert margins.mark(db, [ids["hi"], ids["Hey."]], "read") == 0
     assert margins.mark(db, [ids["Spreadsheets again?"]], "read") == 1
@@ -67,9 +67,9 @@ def test_read_dismiss_and_snooze(tmp_path):
     assert back[0]["read"] is False
 
 
-def test_read_all_leaves_snoozed_lines_and_other_sessions(tmp_path):
+async def test_read_all_leaves_snoozed_lines_and_other_sessions(tmp_path):
     db = str(tmp_path / "felt.db")
-    ids = _lines(db)
+    ids = await _lines(db)
     assert margins.mark(db, [ids["Dentist in 15."]], "snooze", hours=2) == 1
     assert margins.read_all(db) == 3
     assert margins.unread(db) == 0
@@ -82,9 +82,9 @@ def test_read_all_leaves_snoozed_lines_and_other_sessions(tmp_path):
     assert margins.unread(db) == 1
 
 
-def test_a_dismissed_line_stops_waiting_as_an_aside(tmp_path):
+async def test_a_dismissed_line_stops_waiting_as_an_aside(tmp_path):
     db = str(tmp_path / "felt.db")
-    ids = _lines(db)
+    ids = await _lines(db)
     before = [a["content"] for a in current_asides(db)["asides"]]
     assert "Dentist in 15." in before
     margins.mark(db, [ids["Dentist in 15."]], "dismiss")
@@ -97,9 +97,9 @@ def _client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
-def test_routes_are_sso_gated_and_work(tmp_path, monkeypatch):
+async def test_routes_are_sso_gated_and_work(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
-        ids = _lines(str(tmp_path / "felt.db"))
+        ids = await _lines(str(tmp_path / "felt.db"))
         assert c.get("/v1/app/margins").status_code == 401
         assert c.get("/v1/app/margins/count").status_code == 401
         assert c.post("/v1/app/margins/mark", json={}).status_code == 401

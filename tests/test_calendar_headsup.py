@@ -69,14 +69,14 @@ def test_moved_event_gets_a_new_dedupe_key():
     assert ch.dedupe_key(_event(30), ch.URGENT) != ch.dedupe_key(_event(45), ch.URGENT)
 
 
-def test_current_game_is_the_unstopped_game_start(tmp_path):
+async def test_current_game_is_the_unstopped_game_start(tmp_path):
     config = _config(tmp_path)
     at = (NOW - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
-    save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
-    assert ch.current_game(config, NOW) == "PathOfExile"
+    await save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
+    assert await ch.current_game(config, NOW) == "PathOfExile"
     later = (NOW - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-    save_event(config.db_path, "game_stop", "{}", later)
-    assert ch.current_game(config, NOW) is None
+    await save_event(config.db_path, "game_stop", "{}", later)
+    assert await ch.current_game(config, NOW) is None
 
 
 # -- deliver ---------------------------------------------------------------
@@ -99,8 +99,8 @@ def _patch(monkeypatch, fresh, line="dentist in ten, go"):
     return prompts
 
 
-def _queued(config):
-    return claim_next_proactive(config.db_path)
+async def _queued(config):
+    return await claim_next_proactive(config.db_path)
 
 
 async def test_urgent_heads_up_is_enqueued_once(tmp_path, monkeypatch):
@@ -109,28 +109,28 @@ async def test_urgent_heads_up_is_enqueued_once(tmp_path, monkeypatch):
     prompts = _patch(monkeypatch, event)
 
     assert await ch.deliver(config, "cal", event, ch.URGENT, now=NOW)
-    item = _queued(config)
+    item = await _queued(config)
     assert item is not None
     assert item["kind"] == "urgent"
     assert item["text"] == "dentist in ten, go"
     assert "in 10 minutes" in prompts[0]
     # Same event, same stage: never twice, even after the queue drained.
     assert not await ch.deliver(config, "cal", event, ch.URGENT, now=NOW)
-    assert _queued(config) is None
+    assert await _queued(config) is None
 
 
 async def test_deleted_event_is_dropped(tmp_path, monkeypatch):
     config = _config(tmp_path)
     _patch(monkeypatch, None)
     assert not await ch.deliver(config, "cal", _event(10), ch.URGENT, now=NOW)
-    assert _queued(config) is None
+    assert await _queued(config) is None
 
 
 async def test_moved_event_is_dropped_for_the_next_poll(tmp_path, monkeypatch):
     config = _config(tmp_path)
     _patch(monkeypatch, _event(40))
     assert not await ch.deliver(config, "cal", _event(10), ch.URGENT, now=NOW)
-    assert _queued(config) is None
+    assert await _queued(config) is None
 
 
 async def test_stale_normal_stage_is_not_sent_late(tmp_path, monkeypatch):
@@ -143,12 +143,12 @@ async def test_stale_normal_stage_is_not_sent_late(tmp_path, monkeypatch):
 async def test_game_context_reaches_the_prompt(tmp_path, monkeypatch):
     config = _config(tmp_path)
     at = (NOW - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
-    save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
+    await save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
     event = _event(25)
     prompts = _patch(monkeypatch, event)
     assert await ch.deliver(config, "cal", event, ch.NORMAL, now=NOW)
     assert "PathOfExile" in prompts[0]
-    item = _queued(config)
+    item = await _queued(config)
     assert item is not None
     assert item["kind"] == "calendar"
 
@@ -158,7 +158,7 @@ async def test_plain_line_when_her_model_is_down(tmp_path, monkeypatch):
     event = _event(10)
     _patch(monkeypatch, event, line=None)
     assert await ch.deliver(config, "cal", event, ch.URGENT, now=NOW)
-    item = _queued(config)
+    item = await _queued(config)
     assert item is not None
     assert item["text"] == "heads up, Dentist in 10 minutes."
 
@@ -262,7 +262,7 @@ async def test_leave_soon_goes_to_desk_and_phone(tmp_path, monkeypatch):
     trip = _trip(65)  # leave at 65-50 = 15 out
     prompts, notified = _patch_trip(monkeypatch, trip, line="leave in 15 for the TAC")
     assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
-    item = _queued(config)
+    item = await _queued(config)
     assert item["kind"] == "urgent"
     assert item["text"] == "leave in 15 for the TAC"
     assert "leave in 15 minutes" in prompts[0]
@@ -276,7 +276,7 @@ async def test_traffic_eased_waits_for_the_new_time(tmp_path, monkeypatch):
     trip = _trip(65)
     _patch_trip(monkeypatch, trip, drive=20.0)  # leave now 10 min later
     assert not await ch.deliver_leave(config, "cal", trip, ch.LEAVE_SOON, now=NOW)
-    assert _queued(config) is None
+    assert await _queued(config) is None
 
 
 async def test_traffic_worse_goes_out_now(tmp_path, monkeypatch):
@@ -292,7 +292,7 @@ async def test_time_to_go_plain_line_when_her_model_is_down(tmp_path, monkeypatc
     trip = _trip(50)
     _patch_trip(monkeypatch, trip, line=None)
     assert await ch.deliver_leave(config, "cal", trip, ch.LEAVE_NOW, now=NOW)
-    assert _queued(config)["text"].startswith("time to go: TAC at ")
+    assert (await _queued(config))["text"].startswith("time to go: TAC at ")
 
 
 async def test_poll_asks_drive_times_only_for_addresses(tmp_path, monkeypatch):

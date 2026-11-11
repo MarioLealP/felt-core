@@ -4,11 +4,11 @@ from felt_core.api.app import app
 from felt_core.db.messages import save_message
 
 
-def test_history_endpoint_returns_saved_messages(tmp_path, monkeypatch):
+async def test_history_endpoint_returns_saved_messages(tmp_path, monkeypatch):
     db_path = str(tmp_path / "felt.db")
     monkeypatch.setenv("FELT_DB_PATH", db_path)
-    save_message(db_path, "default", "user", "hi")
-    save_message(db_path, "default", "assistant", "hello")
+    await save_message(db_path, "default", "user", "hi")
+    await save_message(db_path, "default", "assistant", "hello")
 
     with TestClient(app) as client:
         response = client.get("/v1/history")
@@ -20,11 +20,11 @@ def test_history_endpoint_returns_saved_messages(tmp_path, monkeypatch):
     ]
 
 
-def test_history_endpoint_is_scoped_per_session(tmp_path, monkeypatch):
+async def test_history_endpoint_is_scoped_per_session(tmp_path, monkeypatch):
     db_path = str(tmp_path / "felt.db")
     monkeypatch.setenv("FELT_DB_PATH", db_path)
-    save_message(db_path, "default", "user", "for default")
-    save_message(db_path, "other", "user", "for other")
+    await save_message(db_path, "default", "user", "for default")
+    await save_message(db_path, "other", "user", "for other")
 
     with TestClient(app) as client:
         response = client.get("/v1/history", params={"session_id": "other"})

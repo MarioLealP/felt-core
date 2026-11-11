@@ -278,7 +278,7 @@ async def mention(config: FeltConfig) -> str | None:
     _set_state(config.db_path, ids, "mentioned", mentioned=True)
     # her log (Margins, asides, her history) under its own kind; the desktop
     # just says it
-    save_message(
+    await save_message(
         config.db_path,
         APP_SESSION,
         "assistant",
@@ -286,7 +286,7 @@ async def mention(config: FeltConfig) -> str | None:
         kind=EMAIL,
         source_ref="email:" + ",".join(map(str, ids)),
     )
-    enqueue_proactive(config, "email", line, ttl_s=_TTL_S, record=False)
+    await enqueue_proactive(config, "email", line, ttl_s=_TTL_S, record=False)
     await schedule_pick(config, APP_SESSION)
     logger.info("emails: mentioned %s -> %r", ids, line)
     return line

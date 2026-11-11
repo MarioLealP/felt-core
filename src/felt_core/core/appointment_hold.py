@@ -18,7 +18,9 @@ Held in memory: a felt-core restart inside the 30 s loses it.
 import asyncio
 import logging
 import re
+from collections.abc import Coroutine
 from datetime import datetime, timedelta
+from typing import Any
 
 import httpx2
 
@@ -45,7 +47,7 @@ _timer: asyncio.Task | None = None
 _tasks: set[asyncio.Task] = set()
 
 
-def _spawn(coro) -> asyncio.Task:
+def _spawn(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
     task = asyncio.create_task(coro)
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -195,7 +197,7 @@ async def _add_and_say(config: FeltConfig, held: dict) -> None:
         facts = f'You tried to add "{title}" ({at}) to Mario\'s calendar and it failed - ask him to tell you again.'
         fallback = f"I couldn't add {title} ({at}) to your calendar - can you tell me again?"
         line = await her_line(config, facts, fallback)
-    enqueue_proactive(config, "calendar", line)
+    await enqueue_proactive(config, "calendar", line)
 
 
 async def _add_after_wait(config: FeltConfig) -> None:

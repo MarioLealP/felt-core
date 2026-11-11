@@ -60,12 +60,15 @@ async def test_write_diary_for_date_skips_when_no_material(tmp_path):
 
 async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
+    await save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = _DAILY_JSON
     enqueued = []
 
-    monkeypatch.setattr(diary, "enqueue_proactive", lambda cfg, kind, text, **kw: enqueued.append((kind, text)))
+    async def enqueue(cfg, kind, text, **kw):
+        enqueued.append((kind, text))
+
+    monkeypatch.setattr(diary, "enqueue_proactive", enqueue)
 
     first = await diary.write_diary_for_date(config, "2026-09-22")
     second = await diary.write_diary_for_date(config, "2026-09-22")
@@ -87,7 +90,7 @@ async def test_write_diary_for_date_writes_both_diary_and_self_memory_once(tmp_p
 
 async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path, fake_llm):
     config = _config(tmp_path)
-    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
+    await save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
 
@@ -99,7 +102,7 @@ async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path,
 
 async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, fake_llm):
     config = _config(tmp_path)
-    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
+    await save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = "not json at all"
 
@@ -114,10 +117,14 @@ async def test_write_diary_for_date_skips_on_unparsable_response(tmp_path, fake_
 
 async def test_on_event_writes_yesterday_once_then_never_again(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
-    save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
+    await save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
     fake_llm.default = _DAILY_JSON
-    monkeypatch.setattr(diary, "enqueue_proactive", lambda *a, **kw: None)
+
+    async def enqueue(*a, **kw):
+        return None
+
+    monkeypatch.setattr(diary, "enqueue_proactive", enqueue)
 
     await diary.on_event(config, "day_start", "2026-09-23 08:00:00")
     assert get_diary(config.db_path, "2026-09-22") is not None
@@ -143,7 +150,7 @@ async def test_sunday_write_triggers_weekly_compression(tmp_path, fake_llm):
     for i in range(1, 7):
         d = (sunday - timedelta(days=i)).isoformat()
         insert_diary(config.db_path, d, f"entry for {d}", "[]", "fine")
-    save_event(
+    await save_event(
         config.db_path,
         "game_start",
         json.dumps({"name": "x.exe"}),

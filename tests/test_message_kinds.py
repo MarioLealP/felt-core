@@ -44,7 +44,7 @@ def _old_database(path: str) -> None:
     conn.close()
 
 
-def test_an_old_database_gets_kinds_once(tmp_path):
+async def test_an_old_database_gets_kinds_once(tmp_path):
     db = str(tmp_path / "felt.db")
     _old_database(db)
     conn = _connect(db)
@@ -60,13 +60,13 @@ def test_an_old_database_gets_kinds_once(tmp_path):
     }
     # a second connection doesn't redo it (nor fail on the existing columns)
     _connect(db).close()
-    assert [m["content"] for m in get_history(db, "s", exclude_remarks=True)] == ["hi", "Hey."]
+    assert [m["content"] for m in await get_history(db, "s", exclude_remarks=True)] == ["hi", "Hey."]
 
 
-def test_save_message_returns_its_id_and_keeps_kind_and_source(tmp_path):
+async def test_save_message_returns_its_id_and_keeps_kind_and_source(tmp_path):
     db = str(tmp_path / "felt.db")
-    first = save_message(db, "s", "user", "hi")
-    second = save_message(db, "s", "assistant", "Nice track.", kind=EVENT, source_ref="event:song")
+    first = await save_message(db, "s", "user", "hi")
+    second = await save_message(db, "s", "assistant", "Nice track.", kind=EVENT, source_ref="event:song")
     assert second == first + 1
     conn = _connect(db)
     row = conn.execute("SELECT kind, source_ref FROM messages WHERE id = ?", (second,)).fetchone()

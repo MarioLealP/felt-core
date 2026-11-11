@@ -80,5 +80,5 @@ async def handle(params, ctx):
         except PhoneUnavailableError:
             pass  # phone unreachable — fall through to felt's own scheduling
 
-    schedule_alarm(config, fire_at, label)
+    await schedule_alarm(config, fire_at, label)
     return SkillResult(text=f"Alarm set for {_format(fire_at, label)}.")

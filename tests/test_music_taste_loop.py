@@ -106,7 +106,7 @@ async def test_loop_advances_past_an_item_whose_record_fails(tmp_path, monkeypat
 
     recorded = []
 
-    def failing_record(db_path, **finished):
+    async def failing_record(db_path, **finished):
         recorded.append(finished["track_id"])
         raise RuntimeError("NOT NULL constraint failed")
 

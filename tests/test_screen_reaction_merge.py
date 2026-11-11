@@ -16,35 +16,35 @@ from felt_core.db.observations import save_observation, set_observation_reply
 # -- _on_cooldown: the pure(ish) truth table, isolated from either caller ---
 
 
-def test_on_cooldown_true_when_a_recent_spoken_reaction_exists(tmp_path):
+async def test_on_cooldown_true_when_a_recent_spoken_reaction_exists(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "felt.db"), screen_reaction_cooldown_s=90)
-    obs = save_observation(config.db_path, "s", "a game")
-    set_observation_reply(config.db_path, obs, "nice")
+    obs = await save_observation(config.db_path, "s", "a game")
+    await set_observation_reply(config.db_path, obs, "nice")
 
-    assert screen_reactions._on_cooldown(config, "s") is True
+    assert await screen_reactions._on_cooldown(config, "s") is True
 
 
-def test_on_cooldown_false_with_no_prior_spoken_reaction(tmp_path):
+async def test_on_cooldown_false_with_no_prior_spoken_reaction(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "felt.db"), screen_reaction_cooldown_s=90)
 
-    assert screen_reactions._on_cooldown(config, "s") is False
+    assert await screen_reactions._on_cooldown(config, "s") is False
 
 
-def test_on_cooldown_false_once_the_window_has_a_zero_cooldown(tmp_path):
+async def test_on_cooldown_false_once_the_window_has_a_zero_cooldown(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "felt.db"), screen_reaction_cooldown_s=0)
-    obs = save_observation(config.db_path, "s", "a game")
-    set_observation_reply(config.db_path, obs, "nice")
+    obs = await save_observation(config.db_path, "s", "a game")
+    await set_observation_reply(config.db_path, obs, "nice")
 
-    assert screen_reactions._on_cooldown(config, "s") is False
+    assert await screen_reactions._on_cooldown(config, "s") is False
 
 
-def test_on_cooldown_is_per_session(tmp_path):
+async def test_on_cooldown_is_per_session(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "felt.db"), screen_reaction_cooldown_s=90)
-    obs = save_observation(config.db_path, "session-a", "a game")
-    set_observation_reply(config.db_path, obs, "nice")
+    obs = await save_observation(config.db_path, "session-a", "a game")
+    await set_observation_reply(config.db_path, obs, "nice")
 
-    assert screen_reactions._on_cooldown(config, "session-a") is True
-    assert screen_reactions._on_cooldown(config, "session-b") is False
+    assert await screen_reactions._on_cooldown(config, "session-a") is True
+    assert await screen_reactions._on_cooldown(config, "session-b") is False
 
 
 # -- both entry points, driven by the same shared helper, behave alike -----
@@ -62,8 +62,8 @@ async def test_both_entry_points_go_silent_on_the_same_cooldown_state(tmp_path, 
 
     # Prime the cooldown exactly once, via whichever entry point - both read
     # the same screen_observations table through the same helper.
-    obs = save_observation(config.db_path, session_id, "priming")
-    set_observation_reply(config.db_path, obs, "already reacted")
+    obs = await save_observation(config.db_path, session_id, "priming")
+    await set_observation_reply(config.db_path, obs, "already reacted")
 
     screen_result = await screen_reactions.process_screen_context("new thing", config, session_id=session_id)
     image_result = await screen_reactions.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id=session_id)

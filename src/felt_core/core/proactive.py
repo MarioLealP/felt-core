@@ -118,7 +118,7 @@ def clamp_timeout(timeout_s: float) -> float:
     return max(_MIN_TIMEOUT_S, min(_MAX_TIMEOUT_S, timeout_s))
 
 
-def enqueue_proactive(
+async def enqueue_proactive(
     config: Any,
     kind: str,
     text: str,
@@ -143,11 +143,11 @@ def enqueue_proactive(
     if emotion is not None:
         payload["emotion"] = emotion
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_s)).strftime("%Y-%m-%d %H:%M:%S")
-    item_id = insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
+    item_id = await insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
     # WP-42.3: she said it, whether or not the desktop catches it in time;
     # it's in her history and in the Margins
     if record:
-        save_message(
+        await save_message(
             config.db_path,
             APP_SESSION,
             "assistant",
@@ -180,7 +180,7 @@ async def wait_for_next(config: Any, timeout_s: float) -> dict | None:
     """
     deadline = time.monotonic() + timeout_s
     while True:
-        row = claim_next_proactive(config.db_path)
+        row = await claim_next_proactive(config.db_path)
         if row is not None:
             return _item_to_response(row)
         remaining = deadline - time.monotonic()

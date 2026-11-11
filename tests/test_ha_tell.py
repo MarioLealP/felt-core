@@ -12,7 +12,7 @@ from felt_core.core import features, ha_tell
 def out(monkeypatch):
     sent = {"desk": [], "phone": []}
 
-    def desk(config, kind, text, **kw):
+    async def desk(config, kind, text, **kw):
         sent["desk"].append((kind, text))
         return 1
 

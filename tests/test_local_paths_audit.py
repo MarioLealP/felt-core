@@ -33,20 +33,20 @@ async def test_local_skill_phrasing_uses_the_shared_local_helper(tmp_path, fake_
     assert call["max_tokens"] == brain._REPLY_MAX_TOKENS
 
 
-def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
+async def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
     db = str(tmp_path / "felt.db")
-    save_message(db, "s", "user", "hey felt")
-    save_message(db, "s", "assistant", "hey mario")
-    obs = save_observation(db, "s", "a spreadsheet")
-    set_observation_reply(db, obs, "spreadsheets again?")
-    save_message(db, "s", "assistant", "spreadsheets again?", kind="remark")
+    await save_message(db, "s", "user", "hey felt")
+    await save_message(db, "s", "assistant", "hey mario")
+    obs = await save_observation(db, "s", "a spreadsheet")
+    await set_observation_reply(db, obs, "spreadsheets again?")
+    await save_message(db, "s", "assistant", "spreadsheets again?", kind="remark")
 
-    assert [m["content"] for m in get_history(db, "s")] == [
+    assert [m["content"] for m in await get_history(db, "s")] == [
         "hey felt",
         "hey mario",
         "spreadsheets again?",
     ]
-    assert [m["content"] for m in get_history(db, "s", exclude_remarks=True)] == [
+    assert [m["content"] for m in await get_history(db, "s", exclude_remarks=True)] == [
         "hey felt",
         "hey mario",
     ]
@@ -54,11 +54,11 @@ def test_get_history_exclude_remarks_drops_spoken_screen_reactions(tmp_path):
 
 async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_path, fake_llm):
     config = _config(tmp_path, screen_reaction_cooldown_s=0)
-    save_message(config.db_path, "s", "user", "real question")
-    save_message(config.db_path, "s", "assistant", "real answer")
-    obs = save_observation(config.db_path, "s", "earlier thing")
-    set_observation_reply(config.db_path, obs, "old screen remark")
-    save_message(config.db_path, "s", "assistant", "old screen remark", kind="remark")
+    await save_message(config.db_path, "s", "user", "real question")
+    await save_message(config.db_path, "s", "assistant", "real answer")
+    obs = await save_observation(config.db_path, "s", "earlier thing")
+    await set_observation_reply(config.db_path, obs, "old screen remark")
+    await save_message(config.db_path, "s", "assistant", "old screen remark", kind="remark")
     fake_llm.default = "new remark"
 
     await screen_reactions.process_screen_context("new thing", config, session_id="s")
@@ -68,7 +68,7 @@ async def test_local_screen_path_history_excludes_her_own_screen_remarks(tmp_pat
     assert "real answer" in contents
     assert "old screen remark" not in contents
     # and the new remark is itself stored as one (WP-42.3: kind, not text matching)
-    chat = [m["content"] for m in get_history(config.db_path, "s", exclude_remarks=True)]
+    chat = [m["content"] for m in await get_history(config.db_path, "s", exclude_remarks=True)]
     assert chat == ["real question", "real answer"]
 
 
