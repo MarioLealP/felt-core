@@ -14,11 +14,14 @@ router = APIRouter()
 
 @router.get("/v1/self-memory")
 async def self_memory_list_endpoint(status: str | None = None) -> list[dict]:
+    """Her self-memories, optionally only those with `status`."""
     config = load_config()
     return get_self_memories(config.db_path, status=status)
 
 
 class SelfMemoryPatchRequest(BaseModel):
+    """The fields Mario can change on one self-memory."""
+
     text: str | None = None
     pinned: bool | None = None
     status: str | None = None
@@ -26,10 +29,11 @@ class SelfMemoryPatchRequest(BaseModel):
 
 @router.patch("/v1/self-memory/{memory_id}")
 async def self_memory_patch_endpoint(memory_id: int, req: SelfMemoryPatchRequest) -> dict:
-    """Mario's view/pin/edit/veto controls (WP-26 combined with personality
-    plan P4, Decision 3). `status: "vetoed"` means never re-added - its
-    text feeds the nightly writer's "never" list (diary._build_writer_prompt)
-    for as long as the vetoed row exists.
+    """Mario's view/pin/edit/veto controls (WP-26 combined with personality plan P4, Decision 3).
+
+    `status: "vetoed"` means never re-added - its text feeds the nightly
+    writer's "never" list (diary._build_writer_prompt) for as long as the
+    vetoed row exists.
     """
     config = load_config()
     if get_self_memory(config.db_path, memory_id) is None:
@@ -40,5 +44,6 @@ async def self_memory_patch_endpoint(memory_id: int, req: SelfMemoryPatchRequest
 
 @router.delete("/v1/self-memory/{memory_id}")
 async def self_memory_delete_endpoint(memory_id: int) -> dict:
+    """Delete one self-memory."""
     config = load_config()
     return {"deleted": delete_self_memory(config.db_path, memory_id)}

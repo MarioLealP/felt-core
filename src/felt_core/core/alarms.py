@@ -1,4 +1,6 @@
-"""Time-of-day alarms — distinct from set_timer's duration-based
+"""Time-of-day alarms, kept in SQLite so they survive a restart.
+
+Time-of-day alarms — distinct from set_timer's duration-based
 countdown (Mario, 2026-09-12: "another one skill i remembered was set an
 alarm / timer", naming it as a separate, missing capability). Persisted
 in SQLite, unlike set_timer's fire-and-forget in-process asyncio task:
@@ -67,15 +69,17 @@ async def _fire_at(config: FeltConfig, alarm_id: int, fire_at: datetime, label: 
 
 
 def schedule_alarm(config: FeltConfig, fire_at: datetime, label: str) -> int:
+    """Save an alarm and schedule it to fire; returns its id."""
     alarm_id = save_alarm(config.db_path, fire_at.isoformat(), label)
     _scheduled_tasks[alarm_id] = asyncio.create_task(_fire_at(config, alarm_id, fire_at, label))
     return alarm_id
 
 
 def cancel_alarm(config: FeltConfig, alarm_id: int) -> bool:
-    """True if a pending alarm with this id was actually cancelled. Stops
-    the sleeping task first (see _scheduled_tasks above) — deleting only
-    the DB row would leave it scheduled to fire anyway.
+    """True if a pending alarm with this id was actually cancelled.
+
+    Stops the sleeping task first (see _scheduled_tasks above) — deleting
+    only the DB row would leave it scheduled to fire anyway.
     """
     task = _scheduled_tasks.pop(alarm_id, None)
     if task is not None:
@@ -85,13 +89,15 @@ def cancel_alarm(config: FeltConfig, alarm_id: int) -> bool:
 
 
 def reschedule_pending_alarms(config: FeltConfig) -> None:
-    """Called once at startup. A pending alarm from before a restart
-    doesn't just vanish: one still in the future gets a fresh asyncio
-    task at its original time; one whose time already passed while
-    felt-core was down fires immediately (late, but not silently
-    dropped — the alternative of only ever firing on-time alarms would
-    quietly lose exactly the overnight "wake me up at 7am" case this
-    exists for, if felt-core happened to restart at 6am).
+    """Called once at startup.
+
+    A pending alarm from before a restart doesn't just vanish: one
+    still in the future gets a fresh asyncio task at its original
+    time; one whose time already passed while felt-core was down fires
+    immediately (late, but not silently dropped — the alternative of
+    only ever firing on-time alarms would quietly lose exactly the
+    overnight "wake me up at 7am" case this exists for, if felt-core
+    happened to restart at 6am).
     """
     for alarm in get_pending_alarms(config.db_path):
         fire_at = datetime.fromisoformat(alarm["fire_at"])

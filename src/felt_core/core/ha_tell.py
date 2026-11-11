@@ -1,8 +1,9 @@
-"""Anything Home Assistant wants Mario told (2026-11-02, Mario: "any text in
--> llmed -> notification out"). An automation calls the integration's
-`felt.tell` action with plain text ("the dehumidifier's tank is full"); she
-words it like every other line (her_line), says it at the desk and puts it on
-the phone. The text itself is the plain line when felt-llm is down.
+"""Anything Home Assistant wants Mario told (2026-11-02, Mario: "any text in -> llmed -> notification out").
+
+An automation calls the integration's `felt.tell` action with plain text
+("the dehumidifier's tank is full"); she words it like every other line
+(her_line), says it at the desk and puts it on the phone. The text itself is
+the plain line when felt-llm is down.
 
 No catalogue, no rules: deciding *when* to tell him stays in the HA
 automation. `tag` lets a later call replace the earlier phone notification
@@ -29,8 +30,9 @@ def facts(text: str) -> str:
 
 
 async def tell(config: FeltConfig, text: str, title: str, tag: str) -> str | None:
-    """Her line for `text`, said at the desk and on the phone. None when the
-    feature is off.
+    """Her line for `text`, said at the desk and on the phone.
+
+    None when the feature is off.
     """
     if not features.enabled(config.db_path, FEATURE):
         return None

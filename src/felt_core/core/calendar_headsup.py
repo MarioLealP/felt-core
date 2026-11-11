@@ -1,8 +1,9 @@
-"""WP-31: calendar heads-up. A background loop polls every calendar Mario
-has in Home Assistant (same set as the list_calendar_events skill) every 5 min for
-the next 2 h and schedules a proactive (WP-25) heads-up per event at
-T-30 min (`calendar`, normal) and T-10 min (`urgent` - felt-tray delivers
-those even while she's hidden or away).
+"""WP-31: calendar heads-up.
+
+A background loop polls every calendar Mario has in Home Assistant (same set as
+the list_calendar_events skill) every 5 min for the next 2 h and schedules a
+proactive (WP-25) heads-up per event at T-30 min (`calendar`, normal) and T-10 min
+(`urgent` - felt-tray delivers those even while she's hidden or away).
 
 Each heads-up is timed to the second with its own sleep rather than
 waiting for the next poll, and re-fetches the event right before it's
@@ -56,6 +57,8 @@ _GAME_CONTEXT_WINDOW = timedelta(hours=6)
 
 
 class Stage(BaseModel):
+    """One heads-up step: its name, how long before the event, and its kind."""
+
     model_config = ConfigDict(frozen=True)
 
     name: str
@@ -87,7 +90,9 @@ _tasks: set[asyncio.Task] = set()
 
 
 def event_start(event: dict) -> datetime | None:
-    """Pure: the event's start as an aware datetime, or None for an
+    """Pure: the event's start as an aware datetime, or None for an all-day event.
+
+    Pure: the event's start as an aware datetime, or None for an
     all-day event (those have a `date`, not a `dateTime`).
     """
     raw = event.get("start", {}).get("dateTime")
@@ -100,25 +105,27 @@ def is_relevant(event: dict) -> bool:
 
 
 def is_reminder(event: dict) -> bool:
-    """Pure: one of set_reminder's events (fetch_upcoming marks the ones from
-    the reminders calendar).
-    """
+    """Pure: one of set_reminder's events (fetch_upcoming marks the ones from the reminders calendar)."""
     return event.get("_reminder") is True
 
 
 def stages_for(event: dict, routable: bool = False) -> tuple[Stage, ...]:
+    """The heads-up stages for an event: reminder, leave-by (when it can be routed) or the normal ones."""
     if is_reminder(event):
         return (REMINDER,)
     return LEAVE_STAGES if routable and leave_by.has_address(event) else STAGES
 
 
 def leave_fire_at(start: datetime, drive_min: float, stage: Stage) -> datetime:
+    """When a leave-by stage fires: the leave time, or a few minutes before it for LEAVE_SOON."""
     leave = leave_by.leave_time(start, drive_min)
     return leave - timedelta(minutes=leave_by.SOON_MIN) if stage is LEAVE_SOON else leave
 
 
 def due_stage(start: datetime, now: datetime, reminder: bool = False) -> Stage | None:
-    """Pure: which heads-up is right for `now` - URGENT inside the last
+    """Pure: which heads-up is right for `now`, if any.
+
+    Pure: which heads-up is right for `now` - URGENT inside the last
     10 min, NORMAL between 30 and 10 min out, else none. A late first
     sight (8 min out) skips the 30-min one rather than sending both.
     A reminder: REMINDER from a minute before its time to a few after.
@@ -136,11 +143,13 @@ def due_stage(start: datetime, now: datetime, reminder: bool = False) -> Stage |
 
 
 def dedupe_key(event: dict, stage: Stage) -> str:
+    """The settings key that records one stage of one event as sent."""
     start = event_start(event)
     return f"calendar_headsup:{event.get('id')}|{start.isoformat() if start else ''}|{stage.name}"
 
 
 def already_sent(config: FeltConfig, key: str) -> bool:
+    """Whether this heads-up was already sent."""
     return get_setting(config.db_path, key) is not None
 
 
@@ -151,7 +160,9 @@ def plan(
     sent,
     drive: dict[str, float] | None = None,
 ) -> list[tuple[float, str, dict, Stage]]:
-    """Pure (given `sent`): the heads-ups to schedule from this poll, as
+    """Pure (given `sent`): the heads-ups to schedule from this poll.
+
+    Pure (given `sent`): the heads-ups to schedule from this poll, as
     (delay_s, calendar_id, event, stage) - every stage whose fire time is
     before the next poll (`horizon_s`) and that isn't sent or pending.
     A fire time already past gets delay 0; `deliver` then re-checks with
@@ -184,17 +195,21 @@ def plan(
 
 
 def minutes_left(start: datetime, now: datetime) -> int:
+    """Whole minutes until `start`, at least 1."""
     return max(1, round((start - now).total_seconds() / 60))
 
 
 def fallback_line(title: str, minutes: int, reminder: bool = False) -> str:
+    """The plain heads-up line, for when her model is down."""
     if reminder:
         return f"reminder: {title}."
     return f"heads up, {title} in {minutes} minutes."
 
 
 def current_game(config: FeltConfig, now: datetime) -> str | None:
-    """The game Mario's in right now per felt-animation's event log (the
+    """The game Mario's in right now, else None.
+
+    The game Mario's in right now per felt-animation's event log (the
     latest game_start with no game_stop after it), else None.
     """
     fmt = "%Y-%m-%d %H:%M:%S"
@@ -216,6 +231,7 @@ def current_game(config: FeltConfig, now: datetime) -> str | None:
 
 
 def build_prompt(title: str, minutes: int, location: str | None, game: str | None, reminder: bool = False) -> str:
+    """The prompt asking her model for a heads-up line about an event."""
     where = f" at {location}" if location else ""
     context = f" He's in the middle of {game} right now." if game else ""
     if reminder:
@@ -238,6 +254,7 @@ async def phrase(
     game: str | None,
     reminder: bool = False,
 ) -> str:
+    """Her heads-up line for an event, or the plain one if her model fails."""
     from felt_core.brain.replies import local_reply
 
     prompt = build_prompt(title, minutes, location, game, reminder)
@@ -259,8 +276,9 @@ async def _fresh(config: FeltConfig, calendar_id: str, event: dict) -> dict | No
 
 
 async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stage, now: datetime | None = None) -> bool:
-    """Re-check the event, then phrase and enqueue one heads-up. Returns
-    whether it was enqueued.
+    """Re-check the event, then phrase and enqueue one heads-up.
+
+    Returns whether it was enqueued.
     """
     key = dedupe_key(event, stage)
     try:
@@ -294,6 +312,7 @@ async def deliver(config: FeltConfig, calendar_id: str, event: dict, stage: Stag
 
 
 def build_leave_prompt(title: str, at: str, drive_min: int, leave_in: int, now: bool, game: str | None) -> str:
+    """The prompt asking her model to tell Mario when to leave."""
     context = f" He's in the middle of {game} right now." if game else ""
     if now:
         ask = (
@@ -309,6 +328,7 @@ def build_leave_prompt(title: str, at: str, drive_min: int, leave_in: int, now: 
 
 
 def fallback_leave_line(title: str, at: str, drive_min: int, leave_in: int, now: bool) -> str:
+    """The plain leave-by line, for when her model is down."""
     if now:
         return f"time to go: {title} at {at}, {drive_min} min drive."
     return f"leave in {leave_in} min for {title} at {at} ({drive_min} min drive)."
@@ -317,9 +337,10 @@ def fallback_leave_line(title: str, at: str, drive_min: int, leave_in: int, now:
 async def deliver_leave(
     config: FeltConfig, calendar_id: str, event: dict, stage: Stage, now: datetime | None = None
 ) -> bool:
-    """A leave-by nudge: re-check the event and the traffic, then say it at
-    the desk and on the phone. A leave time that traffic pushed later waits
-    for the next poll; one pushed earlier goes out at once.
+    """A leave-by nudge: re-check the event and the traffic, then say it at the desk and on the phone.
+
+    A leave time that traffic pushed later waits for the next poll; one
+    pushed earlier goes out at once.
     """
     key = dedupe_key(event, stage)
     try:
@@ -408,6 +429,7 @@ def same_event_key(event: dict) -> tuple:
 
 
 async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, dict]]:
+    """Every event on HA's calendars from now to the look-ahead, de-duplicated, with its calendar id."""
     async with httpx2.AsyncClient(timeout=15) as client:
         calendars = await ha_calendar.list_calendars(client, config)
         out: list[tuple[str, dict]] = []
@@ -426,8 +448,9 @@ async def fetch_upcoming(config: FeltConfig, now: datetime) -> list[tuple[str, d
 
 
 async def poll_once(config: FeltConfig, now: datetime | None = None) -> int:
-    """One poll: fetch the next 4 h and schedule what's due before the
-    next poll. Returns how many heads-ups it scheduled.
+    """One poll: fetch the next 4 h and schedule what's due before the next poll.
+
+    Returns how many heads-ups it scheduled.
     """
     now = now or datetime.now(UTC)
     events = await fetch_upcoming(config, now)
@@ -443,6 +466,7 @@ async def poll_once(config: FeltConfig, now: datetime | None = None) -> int:
 
 
 async def calendar_headsup_loop(config: FeltConfig) -> None:
+    """Background task: poll the calendars and schedule heads-ups, while HA is connected."""
     if not ha_calendar.connected(config):
         logger.info("calendar heads-up: Home Assistant not connected, loop off")
         return

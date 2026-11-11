@@ -40,7 +40,9 @@ _SEVERAL_ON_A_LIST = re.compile(r"(\band\b|,|&).*\blist\b", re.IGNORECASE)
 
 
 def clean(message: str) -> str:
-    """Pure: the command without the pleasantries HA's sentences don't
+    """Pure: the command without the pleasantries.
+
+    Pure: the command without the pleasantries HA's sentences don't
     allow - "Felt, can you turn the shelf light on please :)" -> "turn the
     shelf light on".
     """

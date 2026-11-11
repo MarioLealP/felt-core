@@ -13,6 +13,8 @@ from felt_core.config import FeltConfig  # a runtime import: pydantic validates 
 
 
 class UIAction(BaseModel):
+    """Something a skill asks the client to show, e.g. a toast or an image."""
+
     kind: str  # e.g. "toast", "show_image"
     payload: dict[str, Any]
 

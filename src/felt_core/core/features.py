@@ -1,4 +1,6 @@
-"""Her feature switches (Mario 2026-10-21: "do a full feature system, this way
+"""Her feature switches.
+
+Her feature switches (Mario 2026-10-21: "do a full feature system, this way
 i can actually know what she does and what she doesn't"). The list with what
 each one costs is runbooks/felt-features.md in the workspace repo; the keys
 here are the same.
@@ -43,10 +45,12 @@ def _key(name: str) -> str:
 
 
 def known(name: str) -> bool:
+    """Whether `name` is a feature or a skill switch."""
     return name in FEATURES or name.startswith(SKILL_PREFIX)
 
 
 def enabled(db_path: str, name: str) -> bool:
+    """Whether a feature is on (its default until Mario sets it)."""
     if not known(name):
         raise ValueError(f"unknown feature {name!r}")
     default = FEATURES[name][0] if name in FEATURES else True
@@ -55,6 +59,7 @@ def enabled(db_path: str, name: str) -> bool:
 
 
 def set_enabled(db_path: str, name: str, on: bool) -> None:
+    """Switch a feature on or off."""
     if not known(name):
         raise ValueError(f"unknown feature {name!r}")
     set_setting(db_path, _key(name), "1" if on else "0")
@@ -68,6 +73,7 @@ def enabled_skills(db_path: str, registry: dict) -> dict:
 
 
 def listing(db_path: str, skill_names: list[str]) -> list[dict]:
+    """Every feature and skill switch with its state, default and description."""
     rows = [{"key": k, "on": enabled(db_path, k), "default": d, "what": what} for k, (d, what) in FEATURES.items()]
     rows += [
         {"key": SKILL_PREFIX + n, "on": enabled(db_path, SKILL_PREFIX + n), "default": True}

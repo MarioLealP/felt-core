@@ -1,4 +1,6 @@
-"""Something she tells Mario unprompted, in her own words (Mario 2026-10-19:
+"""Something she tells Mario unprompted, in her own words.
+
+Something she tells Mario unprompted, in her own words (Mario 2026-10-19:
 "everything that comes through felt should be routed through her llm so it
 gets her personality").
 
@@ -23,6 +25,7 @@ def prompt(facts: str) -> str:
 
 
 async def her_line(config: FeltConfig, facts: str, fallback: str, timeout_s: float = 30) -> str:
+    """`facts` worded by her model as one short line, or `fallback` if that fails."""
     from felt_core.brain.replies import local_reply
 
     try:

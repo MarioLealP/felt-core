@@ -4,6 +4,7 @@ from felt_core.db.session import _connect, _require_lastrowid
 
 
 def save_event(db_path: str, kind: str, data_json: str, at_utc: str) -> int:
+    """Log one desktop event; returns its id."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute("INSERT INTO events (kind, data_json, at) VALUES (?, ?, ?)", (kind, data_json, at_utc))
@@ -13,7 +14,9 @@ def save_event(db_path: str, kind: str, data_json: str, at_utc: str) -> int:
 
 
 def get_events_between(db_path: str, start_utc: str, end_utc: str) -> list[dict]:
-    """Every logged event whose `at` falls in [start_utc, end_utc) - both
+    """Every logged event in [start_utc, end_utc).
+
+    Every logged event whose `at` falls in [start_utc, end_utc) - both
     already-formatted 'YYYY-MM-DD HH:MM:SS' UTC strings, same convention as
     every other timestamp column here, so plain string comparison works.
     """

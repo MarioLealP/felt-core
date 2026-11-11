@@ -1,8 +1,10 @@
-"""Her picks. Familiar ones come straight from his listening history (songs
-he plays through, never the last few days', never ones he skips); new ones
-are artists he doesn't listen to yet, named by felt-llm with a "because",
-with real tracks from Spotify. The model only names artists - a local model
-knows artists far better than exact song titles (2026-10-17 dry run: of nine
+"""Her picks.
+
+Familiar ones come straight from his listening history (songs he plays
+through, never the last few days', never ones he skips); new ones are
+artists he doesn't listen to yet, named by felt-llm with a "because", with
+real tracks from Spotify. The model only names artists - a local model knows
+artists far better than exact song titles (2026-10-17 dry run: of nine
 suggested titles, one existed).
 """
 
@@ -70,7 +72,9 @@ def _recent(last: str | None, days: int) -> bool:
 
 
 def familiar(history: dict[str, dict], count: int, avoid: set[str]) -> list[dict]:
-    """Pure-ish (random): songs he plays through, weighted by how often;
+    """Pure-ish (random): a song he plays through, weighted by how often.
+
+    Pure-ish (random): songs he plays through, weighted by how often;
     never one he mostly skips, played in the last few days, or in `avoid`.
     """
     pool = [
@@ -157,7 +161,9 @@ async def discoveries(
 
 
 async def pick(client: httpx2.AsyncClient, config: FeltConfig, count: int, avoid: set[str]) -> list[dict]:
-    """Up to `count` picks {uri, title, artist, discovery[, because]}, about
+    """Up to `count` picks, some by artists new to him.
+
+    Up to `count` picks {uri, title, artist, discovery[, because]}, about
     discovery_share of them by artists new to him.
     """
     db = config.db_path

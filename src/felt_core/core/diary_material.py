@@ -27,7 +27,9 @@ _MAX_EVENT_DATA_CHARS = 2000
 
 
 def normalize_at(at: str | None) -> str:
-    """Pure: whatever felt-animation sent (an ISO8601 string, possibly
+    """Pure: a felt-animation timestamp as this DB's UTC 'YYYY-MM-DD HH:MM:SS' string.
+
+    Pure: whatever felt-animation sent (an ISO8601 string, possibly
     with a 'Z' suffix and no offset - treated as local Europe/Lisbon time
     - or nothing at all) into the UTC 'YYYY-MM-DD HH:MM:SS' string every
     other timestamp column in this DB is stored as, so date-range queries
@@ -47,7 +49,9 @@ def normalize_at(at: str | None) -> str:
 
 
 def cap_event_data(data: dict) -> str:
-    """Pure: `data` json-encoded, or a stand-in marker if it's too big
+    """Pure: `data` as JSON, or a stand-in marker if it's too big.
+
+    Pure: `data` json-encoded, or a stand-in marker if it's too big
     ("cap data size" - WP-26's spec) - never a chopped, invalid-JSON
     string.
     """
@@ -76,9 +80,10 @@ def _num(data: dict, key: str) -> float | None:
 
 
 def _event_line(kind: str, data: dict) -> str | None:
-    """Pure: one compact, cloud-safe line for a logged event, or None for
-    a kind with nothing worth saying. Whitelisted fields only - same
-    discipline as events.py's build_prompt, never dumps `data` wholesale.
+    """Pure: one compact, cloud-safe line for a logged event, or None for a kind with nothing worth saying.
+
+    Whitelisted fields only - same discipline as events.py's
+    build_prompt, never dumps `data` wholesale.
     """
     if kind == "game_start":
         name = _text(data, "name")
@@ -141,6 +146,8 @@ def _as_float(v: Any) -> float:
 
 
 class RawMaterial(BaseModel):
+    """One day's raw diary material: screen sightings, desktop events and chat windows."""
+
     model_config = ConfigDict(frozen=True)
 
     seen: list[dict]
@@ -149,9 +156,10 @@ class RawMaterial(BaseModel):
 
 
 def compact_material(raw: RawMaterial) -> str:
-    """Pure: dedupes and caps raw rows into one compact block for the
-    writer prompt. Never touches facts - this whole module never reads
-    the facts table at all.
+    """Pure: dedupes and caps raw rows into one compact block for the writer prompt.
+
+    Never touches facts - this whole module never reads the facts
+    table at all.
     """
     lines: list[str] = []
     for obs in raw.seen:
@@ -179,7 +187,9 @@ def compact_material(raw: RawMaterial) -> str:
 
 
 def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
-    """Pure: the [start, end) of one Europe/Lisbon calendar date, as UTC
+    """Pure: the [start, end) of one Europe/Lisbon date as UTC strings.
+
+    Pure: the [start, end) of one Europe/Lisbon calendar date, as UTC
     'YYYY-MM-DD HH:MM:SS' strings - what every created_at/at column in
     this DB is stored as, so a plain string comparison works.
     """
@@ -190,7 +200,9 @@ def _lisbon_date_bounds_utc(date_str: str) -> tuple[str, str]:
 
 
 async def gather_material(config: FeltConfig, date_str: str) -> str:  # ruff: ignore[unused-async]  # sync sqlite until the data layer pass
-    """Material for one Europe/Lisbon calendar date: screen `seen` text
+    """Material for one Europe/Lisbon calendar date.
+
+    Material for one Europe/Lisbon calendar date: screen `seen` text
     plus her spoken replies, logged desktop events, and chat as whole
     session windows.
     """

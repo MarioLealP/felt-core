@@ -1,4 +1,6 @@
-"""felt-core's brain: chat orchestration, reply generation (felt-llm),
+"""felt-core's brain, split by responsibility.
+
+felt-core's brain: chat orchestration, reply generation (felt-llm),
 screen reactions, and the background weather/music-taste/warm-up loops -
 split (WP-40) out of a single 1080-line brain.py into a package by
 responsibility:

@@ -125,7 +125,9 @@ def intake(
     at: datetime | None = None,
     ntfy_event_id: int | None = None,
 ) -> int | None:
-    """Files one alert; returns the incident it landed in (None for a
+    """Files one alert and returns the incident it landed in.
+
+    Files one alert; returns the incident it landed in (None for a
     RESOLVED that matched nothing - the problem it answers predates us).
     """
     now = at or datetime.now(UTC)
@@ -227,7 +229,9 @@ def _resolve(conn, parsed: Parsed, now: datetime) -> int | None:
 
 
 def promote_due(db_path: str, now: datetime | None = None) -> list[int]:
-    """Pending incidents whose wait ran out without a RESOLVED become open;
+    """Opens pending incidents whose wait ran out without a RESOLVED.
+
+    Pending incidents whose wait ran out without a RESOLVED become open;
     returns their ids (step 2 tells him about them).
     """
     stamp = _ts(now or datetime.now(UTC))
@@ -258,7 +262,9 @@ _ATTACK_TITLE = re.compile(r"prob(e|ing)|brute|intrusion|attack|unexpected|\bdue
 
 
 def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
-    """Open incidents that only wait on Mario by default - Claude missed them,
+    """Expires open incidents that only wait on Mario by default.
+
+    Open incidents that only wait on Mario by default - Claude missed them,
     or they're hers to tell - and haven't recurred in EXPIRE_UNSEEN_H expire.
     Claude's own "needs Mario" / "unknown" reports never expire.
     """
@@ -288,6 +294,7 @@ def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
 
 
 def get(db_path: str, incident_id: int) -> dict | None:
+    """One incident row, or None."""
     conn = _connect(db_path)
     try:
         _ensure(conn)
@@ -311,7 +318,9 @@ PROMOTE_EVERY_S = 60.0
 
 
 async def watch(config) -> None:
-    """Background task: turns pending incidents whose wait ran out into
+    """Background task: moves incidents along and writes the lines she owes.
+
+    Background task: turns pending incidents whose wait ran out into
     open ones, marks the ones Claude didn't get to (responder.py), then
     writes the lines she owes (alert_lines.py).
     """

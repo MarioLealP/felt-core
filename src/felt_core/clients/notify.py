@@ -1,8 +1,9 @@
-"""Felt's outbound push channel — publishes to a dedicated, write-only
-ntfy topic. Deliberately a separate credential from the read-only
-subscription in ntfy_listener.py: least-privilege, the ability to push
-notifications to Mario's phone is not the same credential that can only
-read the existing clockmost topic.
+"""Felt's outbound push channel — publishes to a dedicated, write-only ntfy topic.
+
+Deliberately a separate credential from the read-only subscription in
+ntfy_listener.py: least-privilege, the ability to push notifications to
+Mario's phone is not the same credential that can only read the
+existing clockmost topic.
 
 Unset config means proactive notifications simply aren't available yet,
 not a hardcoded assumption they are.

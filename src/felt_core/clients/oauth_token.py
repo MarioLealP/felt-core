@@ -1,4 +1,6 @@
-"""Shared OAuth refresh-token flow (WP-40) - spotify_client.py and
+"""The shared OAuth refresh-token flow (WP-40).
+
+Shared OAuth refresh-token flow (WP-40) - spotify_client.py and
 google_calendar.py (gone since 2026-10-19: the calendar is read through
 Home Assistant) each had an identical, independently-written
 `_get_access_token`: a module-level `{"access_token", "expires_at"}`

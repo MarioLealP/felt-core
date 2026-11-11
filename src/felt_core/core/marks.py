@@ -1,4 +1,6 @@
-"""WP-42.2: her marks — now and then she circles, underlines or strikes
+"""Her marks in their shared notebook (WP-42.2).
+
+WP-42.2: her marks — now and then she circles, underlines or strikes
 something in their shared notebook, with a few words of handwriting.
 
 She can mark whatever she finds interesting (Mario 10-02), his line or her own
@@ -137,9 +139,7 @@ def mark_seen(db_path: str, mark_ids: list[str]) -> int:
 
 
 def _since_last(conn: sqlite3.Connection, session_id: str) -> int | None:
-    """How many of his lines since her last mark (None: she never marked);
-    0 means this exchange already carries one.
-    """
+    """How many of his lines since her last mark (None: she never marked); 0 means this exchange already carries one."""
     last = conn.execute(
         "SELECT mm.message_id FROM message_marks mm"
         " JOIN messages m ON m.id = mm.message_id WHERE m.session_id = ?"
@@ -155,6 +155,7 @@ def _since_last(conn: sqlite3.Connection, session_id: str) -> int | None:
 
 
 def pacing_line(since: int | None) -> str:
+    """One line telling her model how recently she last marked something."""
     if since is None:
         return "You have never marked anything yet."
     if since == 0:
@@ -165,7 +166,9 @@ def pacing_line(since: int | None) -> str:
 
 
 def latest_exchange(db_path: str, session_id: str) -> dict[str, tuple[int, str]]:
-    """His latest line and her reply to it, as {"his": (id, text), "mine": ...};
+    """His latest line and her reply to it.
+
+    His latest line and her reply to it, as {"his": (id, text), "mine": ...};
     "mine" is missing when she hasn't answered (yet).
     """
     conn = _connect(db_path)
@@ -190,6 +193,7 @@ def latest_exchange(db_path: str, session_id: str) -> dict[str, tuple[int, str]]
 
 
 def wants_to_mark(text: str) -> bool:
+    """Whether the model's answer says it wants to mark something."""
     try:
         d = json.loads(text)
     except ValueError, TypeError:
@@ -198,7 +202,9 @@ def wants_to_mark(text: str) -> bool:
 
 
 def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
-    """The model's JSON -> a mark to keep (with "line": his/mine), or None (bad
+    """The model's JSON as a mark to keep, or None.
+
+    The model's JSON -> a mark to keep (with "line": his/mine), or None (bad
     JSON, an unknown type, a quote that isn't in either line, or one too long for
     its shape). A real quote filed under the wrong line is moved to the right one.
     """
@@ -223,6 +229,7 @@ def parse_decision(text: str, lines: dict[str, str]) -> dict | None:
 
 async def decide(config: FeltConfig, lines: dict[str, str], since: int | None) -> dict | None:
     """Ask her about one exchange ({"his": text, "mine": text}); writes nothing.
+
     Returns the mark she wants (with "line"), or None.
     """
     shown = f"His line: {lines['his']}"

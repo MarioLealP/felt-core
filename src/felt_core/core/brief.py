@@ -56,9 +56,7 @@ PARTS = (
 
 
 def due(now: datetime, last: str | None) -> str | None:
-    """Pure: today's local date if the brief is due now (after 05:00, not
-    given yet today), else None.
-    """
+    """Pure: today's local date if the brief is due now (after 05:00, not given yet today), else None."""
     local = now.astimezone(LISBON)
     if local.hour < _START_HOUR:
         return None
@@ -67,8 +65,9 @@ def due(now: datetime, last: str | None) -> str | None:
 
 
 def overnight(db_path: str, now: datetime) -> str:
-    """The server since 22:00 last night: what's still wrong, and how many
-    came and went. Empty when all was quiet.
+    """The server since 22:00 last night: what's still wrong, and how many came and went.
+
+    Empty when all was quiet.
     """
     local = now.astimezone(LISBON)
     since = datetime.combine(local.date() - timedelta(days=1), datetime.min.time(), LISBON)
@@ -92,9 +91,7 @@ def overnight(db_path: str, now: datetime) -> str:
 
 
 def will_open_with(config: FeltConfig, now: datetime | None = None) -> bool:
-    """Whether today's brief is still to come - then the diary's greeting
-    waits for it instead of going out alone.
-    """
+    """Whether today's brief is still to come - then the diary's greeting waits for it instead of going out alone."""
     now = now or datetime.now(UTC)
     last = get_setting(config.db_path, _DONE_KEY)
     return features.enabled(config.db_path, FEATURE) and due(now, last) is not None
@@ -127,6 +124,7 @@ def fallback(facts: str) -> str:
 
 
 async def word(config: FeltConfig, facts: str, greeting: str | None) -> str:
+    """Her wording of the morning brief from `facts`, opening with her greeting if any."""
     from felt_core.brain.replies import local_reply
 
     opening = f'Open with this morning thought of yours: "{greeting}"\n\n' if greeting else ""
@@ -143,8 +141,9 @@ async def word(config: FeltConfig, facts: str, greeting: str | None) -> str:
 
 
 async def maybe_brief(config: FeltConfig, now: datetime | None = None) -> str | None:
-    """The day's brief if it's due: gathered, worded, sent to the desk and
-    the phone. Returns what she said (None when not due / off).
+    """The day's brief if it's due: gathered, worded, sent to the desk and the phone.
+
+    Returns what she said (None when not due / off).
     """
     now = now or datetime.now(UTC)
     today = due(now, get_setting(config.db_path, _DONE_KEY))
