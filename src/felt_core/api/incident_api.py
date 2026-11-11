@@ -21,13 +21,13 @@ router = APIRouter(prefix="/v1/incidents")
 @router.get("/waiting")
 async def waiting() -> dict:
     """How many incidents wait for Claude, without claiming any."""
-    return {"waiting": await asyncio.to_thread(responder.waiting, load_config().db_path)}
+    return {"waiting": await responder.waiting(load_config().db_path)}
 
 
 @router.post("/handoff")
 async def handoff() -> dict:
     """Claims the next incident for Claude; {"incident": null} when there's nothing to do (or today's cap is spent)."""
-    incident = await asyncio.to_thread(responder.claim_next, load_config().db_path)
+    incident = await responder.claim_next(load_config().db_path)
     return {"incident": incident}
 
 

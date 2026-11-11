@@ -17,7 +17,7 @@ tool out of her list, for chat and the warm-up alike, so the cached prefix
 stays the one chat uses.
 """
 
-from felt_core.db.settings import get_setting, set_setting
+from felt_core.db.settings import get_setting, set_setting, settings_with_prefix
 
 FEATURES: dict[str, tuple[bool, str]] = {
     "ambient.screen_reactions": (True, "Comments on your screen (screenshot), ~90 s cooldown"),
@@ -49,34 +49,47 @@ def known(name: str) -> bool:
     return name in FEATURES or name.startswith(SKILL_PREFIX)
 
 
-def enabled(db_path: str, name: str) -> bool:
-    """Whether a feature is on (its default until Mario sets it)."""
+def _is_on(name: str, value: str | None) -> bool:
     if not known(name):
         raise ValueError(f"unknown feature {name!r}")
     default = FEATURES[name][0] if name in FEATURES else True
-    value = get_setting(db_path, _key(name))
     return default if value is None else value == "1"
 
 
-def set_enabled(db_path: str, name: str, on: bool) -> None:
+async def enabled(db_path: str, name: str) -> bool:
+    """Whether a feature is on (its default until Mario sets it)."""
+    return _is_on(name, await get_setting(db_path, _key(name)))
+
+
+async def set_enabled(db_path: str, name: str, on: bool) -> None:
     """Switch a feature on or off."""
     if not known(name):
         raise ValueError(f"unknown feature {name!r}")
-    set_setting(db_path, _key(name), "1" if on else "0")
+    await set_setting(db_path, _key(name), "1" if on else "0")
 
 
-def enabled_skills(db_path: str, registry: dict) -> dict:
+async def _switches(db_path: str) -> dict[str, str]:
+    """Every stored switch, keyed by feature / skill name - one query instead of one per switch."""
+    stored = await settings_with_prefix(db_path, _key(""))
+    return {key.removeprefix(_key("")): value for key, value in stored.items()}
+
+
+async def enabled_skills(db_path: str, registry: dict) -> dict:
     """The skill registry without the switched-off skills."""
     if not registry:
         return registry
-    return {n: s for n, s in registry.items() if enabled(db_path, SKILL_PREFIX + n)}
+    switches = await _switches(db_path)
+    return {n: s for n, s in registry.items() if _is_on(SKILL_PREFIX + n, switches.get(SKILL_PREFIX + n))}
 
 
-def listing(db_path: str, skill_names: list[str]) -> list[dict]:
+async def listing(db_path: str, skill_names: list[str]) -> list[dict]:
     """Every feature and skill switch with its state, default and description."""
-    rows = [{"key": k, "on": enabled(db_path, k), "default": d, "what": what} for k, (d, what) in FEATURES.items()]
+    switches = await _switches(db_path)
+    rows = [
+        {"key": k, "on": _is_on(k, switches.get(k)), "default": d, "what": what} for k, (d, what) in FEATURES.items()
+    ]
     rows += [
-        {"key": SKILL_PREFIX + n, "on": enabled(db_path, SKILL_PREFIX + n), "default": True}
+        {"key": SKILL_PREFIX + n, "on": _is_on(SKILL_PREFIX + n, switches.get(SKILL_PREFIX + n)), "default": True}
         for n in sorted(skill_names)
     ]
     return rows

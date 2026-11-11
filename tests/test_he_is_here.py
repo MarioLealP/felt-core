@@ -34,7 +34,7 @@ def _calls(monkeypatch):
 
 def _run(config, now):
     async def go():
-        diary.he_is_here(config, now)
+        await diary.he_is_here(config, now)
         await asyncio.sleep(0)
 
     asyncio.run(go())

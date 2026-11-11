@@ -90,16 +90,16 @@ def overnight(db_path: str, now: datetime) -> str:
     return ". ".join(lines)
 
 
-def will_open_with(config: FeltConfig, now: datetime | None = None) -> bool:
+async def will_open_with(config: FeltConfig, now: datetime | None = None) -> bool:
     """Whether today's brief is still to come - then the diary's greeting waits for it instead of going out alone."""
     now = now or datetime.now(UTC)
-    last = get_setting(config.db_path, _DONE_KEY)
-    return features.enabled(config.db_path, FEATURE) and due(now, last) is not None
+    last = await get_setting(config.db_path, _DONE_KEY)
+    return await features.enabled(config.db_path, FEATURE) and due(now, last) is not None
 
 
 async def gather(config: FeltConfig, now: datetime) -> str:
     """Her facts for the brief, one block per part that has something."""
-    registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
+    registry = await features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     ctx = ExecutionContext(config=config, original_message="good morning")
     blocks = []
     for skill, params, label in PARTS:
@@ -146,12 +146,12 @@ async def maybe_brief(config: FeltConfig, now: datetime | None = None) -> str | 
     Returns what she said (None when not due / off).
     """
     now = now or datetime.now(UTC)
-    today = due(now, get_setting(config.db_path, _DONE_KEY))
-    if today is None or not features.enabled(config.db_path, FEATURE):
+    today = due(now, await get_setting(config.db_path, _DONE_KEY))
+    if today is None or not await features.enabled(config.db_path, FEATURE):
         return None
-    set_setting(config.db_path, _DONE_KEY, today)  # once, even if it fails below
-    greeting = get_setting(config.db_path, GREETING_KEY) or None
-    set_setting(config.db_path, GREETING_KEY, "")
+    await set_setting(config.db_path, _DONE_KEY, today)  # once, even if it fails below
+    greeting = await get_setting(config.db_path, GREETING_KEY) or None
+    await set_setting(config.db_path, GREETING_KEY, "")
     try:
         facts = await gather(config, now)
         line = await asyncio.wait_for(word(config, facts, greeting), _TIMEOUT_S)

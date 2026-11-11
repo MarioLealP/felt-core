@@ -140,14 +140,14 @@ def _save_self_updates(config: FeltConfig, date_str: str, parsed: dict) -> None:
             add_self_memory(config, kind, text, keywords, date_str)
 
 
-def _hand_over_greeting(config: FeltConfig, parsed: dict) -> None:
+async def _hand_over_greeting(config: FeltConfig, parsed: dict) -> None:
     """Her morning greeting: the brief opens with it, or it's queued on its own."""
     greeting = str(parsed.get("greeting") or "").strip()
-    if greeting and features.enabled(config.db_path, "ambient.morning_greeting"):
+    if greeting and await features.enabled(config.db_path, "ambient.morning_greeting"):
         from felt_core.core import brief
 
-        if brief.will_open_with(config):  # the brief opens with it (brief.py)
-            set_setting(config.db_path, brief.GREETING_KEY, greeting)
+        if await brief.will_open_with(config):  # the brief opens with it (brief.py)
+            await set_setting(config.db_path, brief.GREETING_KEY, greeting)
         else:
             enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
 
@@ -161,7 +161,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     was AFK/away the whole day), felt-llm was unavailable, the response
     didn't parse, or the diary is switched off.
     """
-    if not features.enabled(config.db_path, "memory.diary"):
+    if not await features.enabled(config.db_path, "memory.diary"):
         return False
     if get_diary(config.db_path, date_str) is not None:
         return False
@@ -190,7 +190,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     if not _save_entry(config, date_str, parsed):
         return False
     _save_self_updates(config, date_str, parsed)
-    _hand_over_greeting(config, parsed)
+    await _hand_over_greeting(config, parsed)
     await _maybe_compress_week(config, date_str)
     return True
 
@@ -328,7 +328,7 @@ _tried: dict[str, float] = {}
 _tasks: set = set()
 
 
-def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
+async def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
     """Fire-and-forget day-start trigger.
 
     Yesterday's diary entry if it's missing (not retried within RETRY_S),
@@ -347,7 +347,7 @@ def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
     last = _tried.get(target)
     if last is not None and at.timestamp() - last < RETRY_S:
         # the diary was just tried; the brief (WP-45) may still be due
-        if brief.will_open_with(config, at):
+        if await brief.will_open_with(config, at):
             work = _brief(config)
         else:
             return
@@ -355,7 +355,7 @@ def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
         _tried[target] = at.timestamp()
         if get_diary(config.db_path, target) is None:
             work = on_event(config, "day_start", at_str)  # the diary, then the brief
-        elif brief.will_open_with(config, at):
+        elif await brief.will_open_with(config, at):
             work = _brief(config)
         else:
             return

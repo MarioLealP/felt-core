@@ -33,38 +33,38 @@ def _get(db, incident_id):
     return incident
 
 
-def test_claims_the_most_urgent_first_and_only_once(tmp_path):
+async def test_claims_the_most_urgent_first_and_only_once(tmp_path):
     db = str(tmp_path / "f.db")
     trivy = _in(db, "Trivy: 3 new HIGH vulnerabilities")  # default tier
     _in(db, "clockmost: update deployed")  # expected, Felt's
     honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent
-    assert responder.waiting(db) == 2
-    first = responder.claim_next(db, _at(1))
+    assert await responder.waiting(db) == 2
+    first = await responder.claim_next(db, _at(1))
     assert first is not None
     assert first["id"] == honeypot
-    second = responder.claim_next(db, _at(1))
+    second = await responder.claim_next(db, _at(1))
     assert second is not None
     assert second["id"] == trivy
-    assert responder.claim_next(db, _at(1)) is None
+    assert await responder.claim_next(db, _at(1)) is None
 
 
-def test_the_daily_cap_holds_until_the_next_day(tmp_path):
+async def test_the_daily_cap_holds_until_the_next_day(tmp_path):
     db = str(tmp_path / "f.db")
     for n in range(3):
         _in(db, f"HONEYPOT: probe {n}")
-    assert responder.claim_next(db, _at(1), cap=2) is not None
-    assert responder.claim_next(db, _at(2), cap=2) is not None
-    assert responder.claim_next(db, _at(3), cap=2) is None
-    assert responder.claim_next(db, _at(24 * 60), cap=2) is not None
+    assert await responder.claim_next(db, _at(1), cap=2) is not None
+    assert await responder.claim_next(db, _at(2), cap=2) is not None
+    assert await responder.claim_next(db, _at(3), cap=2) is None
+    assert await responder.claim_next(db, _at(24 * 60), cap=2) is not None
 
 
-def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path):
+async def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path):
     db = str(tmp_path / "f.db")
     fine = _in(db, "Trivy: weekly scan")
     real = _in(db, "HONEYPOT: smb touched")
     assert not responder.save_report(db, fine, REPORT, "s1")  # never handed over
-    responder.claim_next(db, _at(1))
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     assert responder.save_report(db, fine, REPORT, "s1")
     assert not responder.save_report(db, fine, REPORT, "s1")  # only once
     assert responder.save_report(db, real, {**REPORT, "verdict": "needs-mario"}, "s2")
@@ -74,71 +74,71 @@ def test_a_report_closes_the_incident_only_when_mario_has_nothing_to_do(tmp_path
     assert real_incident["session_id"] == "s2"
 
 
-def test_one_claude_doesnt_get_to_is_missed_sooner_the_more_urgent(tmp_path):
+async def test_one_claude_doesnt_get_to_is_missed_sooner_the_more_urgent(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent: claim 2, report 8
     trivy = _in(db, "Trivy: weekly scan")  # default: claim 5
     backup = _in(db, "backup full FAILED")  # urgent, reported in time
-    assert responder.claim_next(db, _at(1))["id"] == honeypot  # ty: ignore[not-subscriptable]
-    assert responder.claim_next(db, _at(1))["id"] == backup  # ty: ignore[not-subscriptable]
+    assert (await responder.claim_next(db, _at(1)))["id"] == honeypot  # ty: ignore[not-subscriptable]
+    assert (await responder.claim_next(db, _at(1)))["id"] == backup  # ty: ignore[not-subscriptable]
     responder.save_report(db, backup, REPORT, "s1")
-    assert responder.mark_missed(db, _at(4)) == []
-    assert responder.mark_missed(db, _at(5)) == [trivy]  # never claimed
-    assert responder.mark_missed(db, _at(9)) == [honeypot]  # claimed, no report
-    assert responder.claim_next(db, _at(10)) is None  # missed ones aren't handed later
+    assert await responder.mark_missed(db, _at(4)) == []
+    assert await responder.mark_missed(db, _at(5)) == [trivy]  # never claimed
+    assert await responder.mark_missed(db, _at(9)) == [honeypot]  # claimed, no report
+    assert await responder.claim_next(db, _at(10)) is None  # missed ones aren't handed later
 
 
-def test_when_felt_takes_over_she_gets_her_own_longer_deadline(tmp_path):
+async def test_when_felt_takes_over_she_gets_her_own_longer_deadline(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")  # urgent: report within 8 for Claude
     assert not responder.take_local(db, honeypot, _at(1))  # not claimed yet
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     assert responder.take_local(db, honeypot, _at(5))  # Claude out of quota: hers from 5
-    assert responder.mark_missed(db, _at(34)) == []
-    assert responder.mark_missed(db, _at(35)) == [honeypot]
+    assert await responder.mark_missed(db, _at(34)) == []
+    assert await responder.mark_missed(db, _at(35)) == [honeypot]
     assert not responder.take_local(db, honeypot, _at(36))  # missed: too late to take
 
 
-def test_her_report_counts_like_claudes(tmp_path):
+async def test_her_report_counts_like_claudes(tmp_path):
     db = str(tmp_path / "f.db")
     trivy = _in(db, "Trivy: weekly scan")
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     responder.take_local(db, trivy, _at(2))
     assert responder.save_report(db, trivy, {**REPORT, "by": "felt"}, "felt-local")
     assert _get(db, trivy)["state"] == "handled"
     assert _get(db, trivy)["investigator"] == "felt"
 
 
-def test_an_urgent_one_nobody_claims_is_missed_after_two_minutes(tmp_path):
+async def test_an_urgent_one_nobody_claims_is_missed_after_two_minutes(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")
-    assert responder.mark_missed(db, _at(1)) == []
-    assert responder.mark_missed(db, _at(2)) == [honeypot]
+    assert await responder.mark_missed(db, _at(1)) == []
+    assert await responder.mark_missed(db, _at(2)) == [honeypot]
 
 
-def test_a_self_fixing_one_counts_from_when_it_opened(tmp_path):
+async def test_a_self_fixing_one_counts_from_when_it_opened(tmp_path):
     db = str(tmp_path / "f.db")
     caddy = _in(db, "clockmost High: Caddy: an upstream is unhealthy")  # high, waits 10 min
     incidents.promote_due(db, _at(11))
-    assert responder.mark_missed(db, _at(12)) == []
-    assert responder.mark_missed(db, _at(13)) == [caddy]
+    assert await responder.mark_missed(db, _at(12)) == []
+    assert await responder.mark_missed(db, _at(13)) == [caddy]
 
 
-def test_the_doorbell_rings_only_when_something_waits(tmp_path):
+async def test_the_doorbell_rings_only_when_something_waits(tmp_path):
     db = str(tmp_path / "f.db")
     bell = tmp_path / responder.WAKE_FILE
     _in(db, "clockmost: update deployed")  # Felt's, not Claude's
-    assert not responder.wake(db)
+    assert not await responder.wake(db)
     assert not bell.exists()
     _in(db, "HONEYPOT: ssh touched")
-    assert responder.wake(db)
+    assert await responder.wake(db)
     assert bell.exists()
 
 
-def test_her_follow_up_comes_after_her_first_line(tmp_path):
+async def test_her_follow_up_comes_after_her_first_line(tmp_path):
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     assert alert_lines.due(db, _at(1)) == [(honeypot, "line")]  # Claude still looking
     alert_lines.store(db, honeypot, "Someone poked the honeypot, Claude's on it.")
     assert alert_lines.due(db, _at(1)) == []
@@ -152,23 +152,23 @@ def test_her_follow_up_comes_after_her_first_line(tmp_path):
     assert alert_lines.due(db, _at(3)) == []
 
 
-def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
+async def test_the_missed_follow_up_says_claude_couldnt_look(tmp_path):
     db = str(tmp_path / "f.db")
     unclaimed = _in(db, "HONEYPOT: ssh touched")
     alert_lines.store(db, unclaimed, "Honeypot, Claude's on it.")
-    responder.mark_missed(db, _at(16))
+    await responder.mark_missed(db, _at(16))
     facts = alert_lines.followup_facts(_get(db, unclaimed))
     assert "didn't get to it" in facts
     assert "look himself" in facts
     assert alert_lines.due(db, _at(17)) == [(unclaimed, "followup")]
 
 
-def test_the_follow_up_says_who_looked(tmp_path):
+async def test_the_follow_up_says_who_looked(tmp_path):
     db = str(tmp_path / "f.db")
     looked = {}
     for by in ("claude", "checks", "felt"):
         incident_id = _in(db, f"HONEYPOT: {by} touched")
-        responder.claim_next(db, _at(1))
+        await responder.claim_next(db, _at(1))
         report = {**REPORT, "verdict": "needs-mario", "by": by}
         responder.save_report(db, incident_id, report, "s")
         looked[by] = alert_lines.followup_facts(_get(db, incident_id))
@@ -180,10 +180,10 @@ def test_the_follow_up_says_who_looked(tmp_path):
     assert "join" not in looked["felt"]
 
 
-def test_an_old_report_without_by_was_claudes(tmp_path):
+async def test_an_old_report_without_by_was_claudes(tmp_path):
     db = str(tmp_path / "f.db")
     incident_id = _in(db, "HONEYPOT: ssh touched")
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     responder.save_report(db, incident_id, REPORT, "s1")
     incident = _get(db, incident_id)
     assert "Who looked into it: Claude." in alert_lines.followup_facts(incident)
@@ -238,13 +238,13 @@ def test_felt_takes_over_over_http(tmp_path, monkeypatch):
         assert c.post(f"/v1/incidents/{incident_id}/report", headers=resp, json=body).status_code == 422
 
 
-def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
+async def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
     db = str(tmp_path / "f.db")
     title = "Wazuh L12 [clockmost]: clockmost: sensitive Linux file changed: /etc/a"
     first = _in(db, title)
     during = _in(db, title.replace("/etc/a", "/etc/b"), at=_at(1))
     assert during == first  # still being looked at: same problem
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     assert _in(db, title.replace("/etc/a", "/etc/c"), at=_at(2)) == first  # he sees it live
     responder.save_report(db, first, REPORT, "s1")
     after = _in(db, title.replace("/etc/a", "/etc/shadow"), at=_at(5))
@@ -252,10 +252,10 @@ def test_a_new_alert_after_claudes_report_is_its_own_incident(tmp_path):
     assert _get(db, after)["state"] == "open"
 
 
-def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
+async def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
     db = str(tmp_path / "f.db")
     trivy = _in(db, "Trivy: weekly scan")
-    responder.claim_next(db, _at(0))
+    await responder.claim_next(db, _at(0))
     responder.save_report(db, trivy, REPORT, "s1")  # expected -> handled, no line yet
     assert alert_lines.due(db, _at(1)) == [(trivy, "both")]
     alert_lines.store(db, trivy, "The weekly scan ran; Claude says it's our own deploy.", "both")
@@ -264,33 +264,33 @@ def test_when_claude_beats_her_first_line_she_says_both_in_one(tmp_path):
     assert alert_lines.due(db, _at(2)) == []
 
 
-def test_one_mario_closed_himself_gets_no_line(tmp_path):
+async def test_one_mario_closed_himself_gets_no_line(tmp_path):
     db = str(tmp_path / "f.db")
     from felt_core.core import systems
 
     honeypot = _in(db, "HONEYPOT: ssh touched")
-    responder.claim_next(db, _at(0))
+    await responder.claim_next(db, _at(0))
     responder.save_report(db, honeypot, {**REPORT, "verdict": "needs-mario"}, "s1")
     systems.mark_handled(db, honeypot)
     assert alert_lines.due(db, _at(1)) == []
 
 
-def test_the_kill_switch_stops_handing_over_and_she_says_why(tmp_path):
+async def test_the_kill_switch_stops_handing_over_and_she_says_why(tmp_path):
     from felt_core.core import controls
 
     db = str(tmp_path / "f.db")
     honeypot = _in(db, "HONEYPOT: ssh touched")
-    controls.set_claude_alerts(db, False)
-    assert responder.waiting(db) == 0
-    assert responder.claim_next(db, _at(0)) is None
-    assert responder.mark_missed(db, _at(0)) == [honeypot]  # at once, not after the wait
+    await controls.set_claude_alerts(db, False)
+    assert await responder.waiting(db) == 0
+    assert await responder.claim_next(db, _at(0)) is None
+    assert await responder.mark_missed(db, _at(0)) == [honeypot]  # at once, not after the wait
     incident = _get(db, honeypot)
     assert incident["missed_why"] == "off"
     assert "switched off" in alert_lines.followup_facts(incident)
-    controls.set_claude_alerts(db, True)
+    await controls.set_claude_alerts(db, True)
     late = _in(db, "Trivy weekly: 1 critical")
-    assert responder.waiting(db) == 1
-    assert responder.mark_missed(db, _at(6)) == [late]
+    assert await responder.waiting(db) == 1
+    assert await responder.mark_missed(db, _at(6)) == [late]
     assert _get(db, late)["missed_why"] == "late"
 
 
@@ -308,52 +308,52 @@ def test_the_switch_from_the_app(tmp_path, monkeypatch):
 FIM = "Wazuh L12 [clockmost]: clockmost: sensitive Linux file changed: /usr/local/sbin/x.sh"
 
 
-def _missed(db, title):
+async def _missed(db: str, title: str) -> int:
     incident_id = _in(db, title)
-    responder.mark_missed(db, _at(5))
+    await responder.mark_missed(db, _at(5))
     assert _get(db, incident_id)["missed_at"] is not None
     return incident_id
 
 
-def test_a_missed_one_unseen_for_two_days_expires(tmp_path):
+async def test_a_missed_one_unseen_for_two_days_expires(tmp_path):
     db = str(tmp_path / "f.db")
-    fim = _missed(db, FIM)
+    fim = await _missed(db, FIM)
     assert incidents.expire_unseen(db, _at(48 * 60 - 1)) == []
     assert incidents.expire_unseen(db, _at(48 * 60)) == [fim]
     incident = _get(db, fim)
     assert (incident["state"], incident["handled_by"]) == ("expired", "expiry")
 
 
-def test_one_that_keeps_happening_stays_red(tmp_path):
+async def test_one_that_keeps_happening_stays_red(tmp_path):
     db = str(tmp_path / "f.db")
-    fim = _missed(db, FIM)
+    fim = await _missed(db, FIM)
     again = _in(db, FIM, at=_at(47 * 60))  # after a miss, a repeat is its own incident
     assert again != fim
     assert incidents.expire_unseen(db, _at(48 * 60)) == [fim]
     assert _get(db, again)["state"] == "open"
 
 
-def test_attacks_never_expire(tmp_path):
+async def test_attacks_never_expire(tmp_path):
     db = str(tmp_path / "f.db")
-    _missed(db, "HONEYPOT: ssh touched")
-    _missed(
+    await _missed(db, "HONEYPOT: ssh touched")
+    await _missed(
         db,
         "Wazuh L12 [clockmost]: clockmost-ops: 5+ refused requests in 10 min - agent probing the gateway?",
     )
-    _missed(db, "vault: tray card issued to an UNEXPECTED address")
+    await _missed(db, "vault: tray card issued to an UNEXPECTED address")
     assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
 
 
-def test_reminders_for_mario_never_expire(tmp_path):
+async def test_reminders_for_mario_never_expire(tmp_path):
     db = str(tmp_path / "f.db")
-    _missed(db, "Zeek decision due")
+    await _missed(db, "Zeek decision due")
     assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
 
 
-def test_claudes_needs_mario_never_expires(tmp_path):
+async def test_claudes_needs_mario_never_expires(tmp_path):
     db = str(tmp_path / "f.db")
     fim = _in(db, FIM)
-    responder.claim_next(db, _at(1))
+    await responder.claim_next(db, _at(1))
     responder.save_report(db, fim, {**REPORT, "verdict": "needs-mario"}, "s1")
     assert incidents.expire_unseen(db, _at(30 * 24 * 60)) == []
 

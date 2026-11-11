@@ -14,37 +14,39 @@ T0 = datetime(2026, 10, 3, 21, 0, tzinfo=UTC)
 SSO = {"X-Authentik-Username": "mario"}
 
 
-def test_tap_is_on_until_turned_off_and_a_slide_is_a_timer(tmp_path):
+async def test_tap_is_on_until_turned_off_and_a_slide_is_a_timer(tmp_path):
     db = str(tmp_path / "f.db")
-    assert controls.state(db, T0) == {
+    assert await controls.state(db, T0) == {
         "version": 0,
         "hide": {"on": False, "until": None},
         "quiet": {"on": False, "until": None},
     }
-    controls.set_control(db, "hide", True, now=T0)  # tap
-    later = controls.state(db, T0 + timedelta(days=3))
+    await controls.set_control(db, "hide", True, now=T0)  # tap
+    later = await controls.state(db, T0 + timedelta(days=3))
     assert later["hide"] == {"on": True, "until": None}
     assert later["version"] == 1
-    controls.set_control(db, "quiet", True, 30, now=T0)  # slide to 30 min
-    assert controls.state(db, T0 + timedelta(minutes=29))["quiet"]["until"] == "2026-10-03T21:30:00Z"
-    assert controls.quiet(db, T0 + timedelta(minutes=29))
-    assert not controls.quiet(db, T0 + timedelta(minutes=31))  # ran out
-    controls.set_control(db, "hide", False, now=T0)
-    assert controls.state(db, T0)["version"] == 3
+    await controls.set_control(db, "quiet", True, 30, now=T0)  # slide to 30 min
+    assert (await controls.state(db, T0 + timedelta(minutes=29)))["quiet"]["until"] == "2026-10-03T21:30:00Z"
+    assert await controls.quiet(db, T0 + timedelta(minutes=29))
+    assert not await controls.quiet(db, T0 + timedelta(minutes=31))  # ran out
+    await controls.set_control(db, "hide", False, now=T0)
+    assert (await controls.state(db, T0))["version"] == 3
     with pytest.raises(ValueError, match="unknown control"):
-        controls.set_control(db, "mute", True)
+        await controls.set_control(db, "mute", True)
 
 
-def test_the_desktop_counts_while_it_keeps_reporting(tmp_path):
+async def test_the_desktop_counts_while_it_keeps_reporting(tmp_path):
     db = str(tmp_path / "f.db")
-    assert controls.desktop(db, T0) is None
-    controls.report_desktop(db, {"presence": "hidden", "hushed": True, "mood": "sleepy", "animation": True, "x": 1}, T0)
-    seen = controls.desktop(db, T0 + timedelta(seconds=20))
+    assert await controls.desktop(db, T0) is None
+    await controls.report_desktop(
+        db, {"presence": "hidden", "hushed": True, "mood": "sleepy", "animation": True, "x": 1}, T0
+    )
+    seen = await controls.desktop(db, T0 + timedelta(seconds=20))
     assert seen is not None
     assert seen["presence"] == "hidden"
     assert seen["mood"] == "sleepy"
     assert "x" not in seen
-    assert controls.desktop(db, T0 + timedelta(minutes=2)) is None  # PC off / tray gone
+    assert await controls.desktop(db, T0 + timedelta(minutes=2)) is None  # PC off / tray gone
 
 
 def test_the_routes(tmp_path, monkeypatch):

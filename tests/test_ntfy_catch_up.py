@@ -6,11 +6,11 @@ from felt_core.core.ntfy_listener import LAST_ID, sent_at, stream_params
 from felt_core.db.settings import set_setting
 
 
-def test_first_run_is_live_only_then_it_catches_up_from_the_last_seen(tmp_path):
+async def test_first_run_is_live_only_then_it_catches_up_from_the_last_seen(tmp_path):
     db = str(tmp_path / "f.db")
-    assert stream_params(db) == {}
-    set_setting(db, LAST_ID, "abc123")
-    assert stream_params(db) == {"since": "abc123"}
+    assert await stream_params(db) == {}
+    await set_setting(db, LAST_ID, "abc123")
+    assert await stream_params(db) == {"since": "abc123"}
 
 
 def test_a_caught_up_alert_keeps_its_own_time():

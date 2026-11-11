@@ -335,7 +335,7 @@ async def chat(
         summary = await _summarize_mentioned_emails(config, session_id, message, mails)
         return ChatResult(reply=summary)
 
-    registry = features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
+    registry = await features.enabled_skills(config.db_path, load_plugins(config.plugins_dir))
     # Only the conversation itself (Mario 10-03): with a remark every couple
     # of minutes at the desk, her own screen chatter used to push the real
     # back-and-forth out of the 20 lines. Her recent unprompted lines come
@@ -365,7 +365,7 @@ async def chat(
     # any message from him, on any device, can start her day (diary.py)
     from felt_core.core.diary import he_is_here
 
-    he_is_here(config)
+    await he_is_here(config)
 
     from felt_core.core import appointment_hold
 

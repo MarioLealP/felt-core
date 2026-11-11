@@ -184,7 +184,7 @@ async def delete_event(config: FeltConfig, calendar_id: str, uid: str) -> None:
     await _ws_call(config, {"type": "calendar/event/delete", "entity_id": calendar_id, "uid": uid})
 
 
-def remember_created(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime) -> None:
+async def remember_created(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime) -> None:
     """Note the appointment just made, so a "where is it?" answer finds it."""
     last = {
         "calendar": calendar_id,
@@ -193,17 +193,17 @@ def remember_created(config: FeltConfig, calendar_id: str, summary: str, start: 
         "end": end.isoformat(),
         "at": datetime.now(TZ).isoformat(),
     }
-    set_setting(config.db_path, _LAST_KEY, json.dumps(last))
+    await set_setting(config.db_path, _LAST_KEY, json.dumps(last))
 
 
-def forget_created(config: FeltConfig) -> None:
+async def forget_created(config: FeltConfig) -> None:
     """No appointment counts as just made (the e2e run's cases are separate days)."""
-    set_setting(config.db_path, _LAST_KEY, "")
+    await set_setting(config.db_path, _LAST_KEY, "")
 
 
-def last_created(config: FeltConfig, now: datetime) -> dict | None:
+async def last_created(config: FeltConfig, now: datetime) -> dict | None:
     """The appointment create_calendar_event made in the last 2 h, if any."""
-    raw = get_setting(config.db_path, _LAST_KEY)
+    raw = await get_setting(config.db_path, _LAST_KEY)
     if not raw:
         return None
     last = json.loads(raw)

@@ -64,6 +64,6 @@ async def test_phone_down_still_says_it_at_the_desk(tmp_path, out, monkeypatch):
 
 async def test_switched_off_says_nothing(tmp_path, out):
     config = _config(tmp_path)
-    features.set_enabled(config.db_path, ha_tell.FEATURE, False)
+    await features.set_enabled(config.db_path, ha_tell.FEATURE, False)
     assert await ha_tell.tell(config, "x", "Felt", "ha") is None
     assert out == {"desk": [], "phone": []}

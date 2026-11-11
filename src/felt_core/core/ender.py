@@ -263,14 +263,14 @@ async def check(config: FeltConfig) -> str | None:
     cur = (await _states(config, ("state",))).get("state")
     if cur is None or cur in _GONE:
         return None  # offline is not a transition; resume from the last real state
-    prev = get_setting(config.db_path, _LAST_KEY)
+    prev = await get_setting(config.db_path, _LAST_KEY)
     if prev == cur:
         return None
-    set_setting(config.db_path, _LAST_KEY, cur)
+    await set_setting(config.db_path, _LAST_KEY, cur)
     event = event_for(prev, cur)
     if event == "paused" and await _filament(config) == "off":
         event = "runout"  # Klipper's runout sensor paused it (pause_on_runout)
-    if event is None or not features.enabled(config.db_path, "ender.print_done"):
+    if event is None or not await features.enabled(config.db_path, "ender.print_done"):
         return None
     with llm_gate.timely("print"):
         line = await phrase(config, event, await snapshot(config))

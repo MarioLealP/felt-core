@@ -159,7 +159,7 @@ async def react_event_endpoint(req: EventReactionRequest, session_id: str = "das
     if not config.voice_url:
         return JSONResponse(status_code=503, content={"detail": "voice_unavailable"})
 
-    if not features.enabled(config.db_path, "ambient.desktop_events"):
+    if not await features.enabled(config.db_path, "ambient.desktop_events"):
         return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "switched-off"})
     with llm_gate.ambient(f"event {req.event}"):
         result = await react_to_event(req.event, req.details, config, session_id=session_id, tone=req.tone)

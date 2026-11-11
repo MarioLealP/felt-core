@@ -34,7 +34,7 @@ async def tell(config: FeltConfig, text: str, title: str, tag: str) -> str | Non
 
     None when the feature is off.
     """
-    if not features.enabled(config.db_path, FEATURE):
+    if not await features.enabled(config.db_path, FEATURE):
         return None
     with llm_gate.timely("ha-tell"):
         line = await her_line(config, facts(text), text)

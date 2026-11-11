@@ -702,7 +702,7 @@ async def main() -> int:
     # greeting) in the background; its TTS + phone notify landed in whatever
     # case was running and failed it (2026-10-23)
     for name in ("brief.morning", "ambient.morning_greeting", "memory.diary"):
-        features.set_enabled(config.db_path, name, False)
+        await features.set_enabled(config.db_path, name, False)
     # the semantic router in shadow mode (cm-6b0): the image's model, or a
     # one-off copy for a run before it's deployed
     if not os.path.isdir(config.router_model_dir):
@@ -717,7 +717,7 @@ async def main() -> int:
     recorder.ha_host = httpx2.URL(config.ha_url or "http://-").host
     recorder.config = config
     _install(recorder)
-    ha_calendar._ws_call = recorder.ws_call  # type: ignore[method-assign]
+    ha_calendar._ws_call = recorder.ws_call  # ty: ignore[invalid-assignment]  # the recorder stands in for HA's websocket
     log = _SkillLog()
     logging.getLogger("felt_core").addHandler(log)
     logging.getLogger("felt_core").setLevel(logging.INFO)
@@ -754,7 +754,7 @@ async def main() -> int:
                 # no (further) answer: what she held goes in now, not in 30 s
                 await appointment_hold.add_unanswered(config)
                 # the next case is a new appointment, not this one again (cm-2hu guard)
-                ha_calendar.forget_created(config)
+                await ha_calendar.forget_created(config)
             except Exception as e:
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)

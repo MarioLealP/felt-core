@@ -1,22 +1,35 @@
 """The `settings` table: small key/value state."""
 
-from felt_core.db.session import _connect
+from typing import overload
+
+from sqlalchemy.dialects.sqlite import insert
+from sqlmodel import col, select
+
+from felt_core.db.session import session
+from felt_core.db.tables import Setting
 
 
-def get_setting(db_path: str, key: str, default: str | None = None) -> str | None:
+@overload
+async def get_setting(db_path: str, key: str, default: str) -> str: ...
+@overload
+async def get_setting(db_path: str, key: str, default: None = None) -> str | None: ...
+async def get_setting(db_path: str, key: str, default: str | None = None) -> str | None:
     """Return the stored value for a key, or the default when it is not set."""
-    conn = _connect(db_path)
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-    conn.close()
-    return row[0] if row else default
+    async with session(db_path) as s:
+        row = await s.get(Setting, key)
+    return row.value if row else default
 
 
-def set_setting(db_path: str, key: str, value: str) -> None:
+async def set_setting(db_path: str, key: str, value: str) -> None:
     """Store a setting value, replacing any previous one."""
-    conn = _connect(db_path)
-    with conn:
-        conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (key, value),
-        )
-    conn.close()
+    upsert = insert(Setting).values(key=key, value=value)
+    async with session(db_path) as s:
+        await s.exec(upsert.on_conflict_do_update(index_elements=["key"], set_={"value": upsert.excluded.value}))
+        await s.commit()
+
+
+async def settings_with_prefix(db_path: str, prefix: str) -> dict[str, str]:
+    """Every setting whose key starts with `prefix`, in one query."""
+    async with session(db_path) as s:
+        rows = await s.exec(select(Setting).where(col(Setting.key).startswith(prefix, autoescape=True)))
+        return {row.key: row.value for row in rows}

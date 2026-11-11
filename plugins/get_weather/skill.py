@@ -178,7 +178,7 @@ async def handle(params, ctx):
         return SkillResult(text="Weather isn't configured (no home location set).")
 
     day = str(get_single_param(params, "day", "when", "date") or "now").lower()
-    unit = get_setting(config.db_path, "temperature_unit", "celsius")
+    unit = await get_setting(config.db_path, "temperature_unit", "celsius")
 
     wants_current = day in _NOW_PHRASES
     data = await _fetch(

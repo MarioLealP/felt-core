@@ -71,7 +71,7 @@ async def test_list_and_incident_changes_become_notices(tmp_path):
     assert _parse(await anext(stream)) == ("systems", {})
     from felt_core.core import controls
 
-    controls.set_control(db, "quiet", True)
+    await controls.set_control(db, "quiet", True)
     rounds += 1
     assert _parse(await anext(stream)) == ("controls", {})
 
