@@ -3,6 +3,7 @@ which state changes she tells Mario about, and that a restart neither misses
 nor repeats one."""
 
 from datetime import UTC, datetime
+from typing import ClassVar
 
 import httpx2
 import pytest
@@ -23,8 +24,8 @@ def ha(monkeypatch):
     POSTs (the phone notification) are recorded."""
 
     class HA:
-        states: dict[str, str] = {}
-        posts: list[dict] = []
+        states: ClassVar[dict[str, str]] = {}
+        posts: ClassVar[list[dict]] = []
 
     def handler(request):
         if request.method == "POST":
@@ -53,7 +54,7 @@ def said(monkeypatch):
     """Desk lines; felt-llm down unless a test says otherwise (the plain lines)."""
 
     async def llm_down(*a, **kw):
-        raise local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailableError("down")
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     lines: list[str] = []
@@ -165,7 +166,7 @@ async def test_restart_resumes_from_the_db(tmp_path, ha, said):
 
 async def test_phone_down_still_says_it_at_the_desk(tmp_path, ha, said):
     config = _config(tmp_path)
-    config.phone = None  # phone.notify raises PhoneUnavailable
+    config.phone = None  # phone.notify raises PhoneUnavailableError
     set_setting(config.db_path, "ender_last_state", "printing")
     ha.states = {"state": "complete"}
     assert await ender.check(config) == "The Ender's print is done."
@@ -174,7 +175,7 @@ async def test_phone_down_still_says_it_at_the_desk(tmp_path, ha, said):
 
 async def test_ha_unconfigured(tmp_path):
     config = FeltConfig(db_path=str(tmp_path / "f.db"), ha_url=None)
-    with pytest.raises(ender.EnderUnavailable):
+    with pytest.raises(ender.EnderUnavailableError):
         await ender.snapshot(config)
 
 

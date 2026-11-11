@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 # A stable compile (fixed example sample) for the call sites that import the
 # constant (the email summary, background precompute). Live replies use
 # daily_persona(), whose examples rotate once a day.
-PERSONALITY_PROMPT = compile_persona(rng=random.Random(0))
+PERSONALITY_PROMPT = compile_persona(rng=random.Random(0))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
 
 
 def daily_persona() -> str:
@@ -39,7 +39,7 @@ def daily_persona() -> str:
     reaction); what changes per call goes in the user turn now
     (per_call_context).
     """
-    return compile_persona(rng=random.Random(date.today().toordinal()))
+    return compile_persona(rng=random.Random(date.today().toordinal()))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
 
 
 def per_call_context(

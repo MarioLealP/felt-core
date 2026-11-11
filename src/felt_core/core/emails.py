@@ -144,7 +144,7 @@ def _set_state(db_path: str, ids: list[int], state: str, mentioned: bool = False
     try:
         with conn:
             stamp = ", mentioned_at = datetime('now')" if mentioned else ""
-            conn.executemany(f"UPDATE emails SET state = ?{stamp} WHERE id = ?", [(state, i) for i in ids])
+            conn.executemany(f"UPDATE emails SET state = ?{stamp} WHERE id = ?", [(state, i) for i in ids])  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     finally:
         conn.close()
 
@@ -197,7 +197,7 @@ async def sort_new(config: FeltConfig) -> None:
     try:
         with conn:
             conn.execute(
-                "UPDATE emails SET state = 'stale'"
+                "UPDATE emails SET state = 'stale'"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 f" WHERE state IN ('new', 'waiting') AND received_at < datetime('now', '{STALE}')"
             )
         patterns = _noise(conn)
@@ -218,7 +218,7 @@ async def sort_new(config: FeltConfig) -> None:
         else:
             try:
                 keep = await _worth_mentioning(config, row[:5])
-            except local_llm.LocalLLMUnavailable:
+            except local_llm.LocalLLMUnavailableError:
                 return
             _set_state(config.db_path, [mail_id], "waiting" if keep else "skipped")
 
@@ -307,7 +307,7 @@ def just_mentioned(db_path: str) -> list[dict]:
     conn = _open(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, sender, subject, body FROM emails WHERE state = 'mentioned'"
+            "SELECT id, sender, subject, body FROM emails WHERE state = 'mentioned'"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             f" AND mentioned_at >= datetime('now', '{ANSWER_WINDOW}')"
             " AND mentioned_at = (SELECT MAX(mentioned_at) FROM emails)"
             " ORDER BY id"

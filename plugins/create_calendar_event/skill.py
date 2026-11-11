@@ -21,7 +21,7 @@ import httpx2
 
 from felt_core.clients.ha_calendar import (
     TZ,
-    CalendarUnavailable,
+    CalendarUnavailableError,
     connected,
     create_event,
     list_calendars,
@@ -118,7 +118,7 @@ async def handle(params, ctx):
     if all_day:
         try:
             await create_event(config, calendar["id"], str(title), start, end, location=place, all_day=True)
-        except CalendarUnavailable:
+        except CalendarUnavailableError:
             return SkillResult(text="I couldn't reach the calendar to add it.")
         day = f"{start.strftime('%A')} {start.day} {start.strftime('%B')}"
         return SkillResult(text=f"Added '{title}', {day}, all day, to {where}. Read it back to Mario as written.")
@@ -131,7 +131,7 @@ async def handle(params, ctx):
         )
     try:
         await create_event(config, calendar["id"], str(title), start, end, location=place)
-    except CalendarUnavailable:
+    except CalendarUnavailableError:
         return SkillResult(text="I couldn't reach the calendar to add it.")
     remember_created(config, calendar["id"], str(title), start, end)
     spot = f"at {place}" if place else "no place"

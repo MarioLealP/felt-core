@@ -69,7 +69,7 @@ def compile_persona(
     and the PERSONALITY_PROMPT constant).
     """
     p = persona if persona is not None else load_persona()
-    r = rng if rng is not None else random.Random()
+    r = rng if rng is not None else random.Random()  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
     examples = p.get("examples", [])
     sample = r.sample(examples, min(n_examples, len(examples)))
     examples_pt = p.get("examples_pt", [])

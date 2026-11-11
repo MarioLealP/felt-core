@@ -3,7 +3,7 @@
 """
 
 import asyncio
-from typing import Literal
+from typing import Annotated, Literal
 
 import httpx2
 from fastapi import APIRouter, Depends, HTTPException
@@ -57,12 +57,12 @@ async def _page(config: FeltConfig) -> dict:
 
 
 @router.get("/v1/app/controls")
-async def app_controls(_user: str = Depends(sso_user)) -> dict:
+async def app_controls(_user: Annotated[str, Depends(sso_user)]) -> dict:
     return await _page(load_config())
 
 
 @router.post("/v1/app/controls")
-async def app_set_control(req: SetControl, _user: str = Depends(sso_user)) -> dict:
+async def app_set_control(req: SetControl, _user: Annotated[str, Depends(sso_user)]) -> dict:
     if req.minutes is not None and req.minutes not in controls.TIMERS:
         raise HTTPException(status_code=422, detail=f"minutes must be one of {controls.TIMERS}")
     config = load_config()
@@ -75,13 +75,13 @@ class Settings(BaseModel):
 
 
 @router.get("/v1/app/settings")
-async def app_settings(_user: str = Depends(sso_user)) -> dict:
+async def app_settings(_user: Annotated[str, Depends(sso_user)]) -> dict:
     db = load_config().db_path
     return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
 
 
 @router.post("/v1/app/settings")
-async def app_set_settings(req: Settings, _user: str = Depends(sso_user)) -> dict:
+async def app_set_settings(req: Settings, _user: Annotated[str, Depends(sso_user)]) -> dict:
     """WP-58's kill switch: whether the server's Claude looks into alerts."""
     db = load_config().db_path
     await asyncio.to_thread(controls.set_claude_alerts, db, req.claude_alerts)
@@ -98,13 +98,13 @@ def _features(config: FeltConfig) -> list[dict]:
 
 
 @router.get("/v1/app/features")
-async def app_features(_user: str = Depends(sso_user)) -> list[dict]:
+async def app_features(_user: Annotated[str, Depends(sso_user)]) -> list[dict]:
     """Her feature switches (features.py), each with whether it's on."""
     return await asyncio.to_thread(_features, load_config())
 
 
 @router.post("/v1/app/features")
-async def app_set_feature(req: SetFeature, _user: str = Depends(sso_user)) -> list[dict]:
+async def app_set_feature(req: SetFeature, _user: Annotated[str, Depends(sso_user)]) -> list[dict]:
     config = load_config()
     is_skill = req.key.startswith(features.SKILL_PREFIX) and (
         req.key.removeprefix(features.SKILL_PREFIX) in load_plugins(config.plugins_dir)

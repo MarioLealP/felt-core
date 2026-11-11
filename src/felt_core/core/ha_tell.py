@@ -39,7 +39,7 @@ async def tell(config: FeltConfig, text: str, title: str, tag: str) -> str | Non
     enqueue_proactive(config, "ha", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, title, line, tag=f"felt-ha-{tag}")
-    except phone.PhoneUnavailable:
+    except phone.PhoneUnavailableError:
         logger.info("ha_tell: phone unreachable, desk only")
     logger.info("ha_tell: %r -> %r", text, line)
     return line

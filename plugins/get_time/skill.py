@@ -13,6 +13,6 @@ description = "Current local date and time."
 parameters_schema = {"type": "object", "properties": {}}
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     del ctx  # not needed for this skill
     return SkillResult(text=datetime.now().isoformat(timespec="seconds"))

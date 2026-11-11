@@ -40,7 +40,7 @@ _CREATE_EVENT = 1
 _URL = re.compile(r"https?://\S+")
 
 
-class CalendarUnavailable(Exception):
+class CalendarUnavailableError(Exception):
     """HA isn't configured, didn't answer, or refused."""
 
 
@@ -134,13 +134,13 @@ async def _ws_call(config: FeltConfig, message: dict) -> dict:
             await ws.recv()
             await ws.send(json.dumps({"type": "auth", "access_token": reveal(config.ha_token)}))
             if json.loads(await ws.recv()).get("type") != "auth_ok":
-                raise CalendarUnavailable("HA refused the token")
+                raise CalendarUnavailableError("HA refused the token")
             await ws.send(json.dumps({"id": 1, **message}))
             result = json.loads(await ws.recv())
     except (OSError, websockets.WebSocketException) as e:
-        raise CalendarUnavailable(str(e)) from e
+        raise CalendarUnavailableError(str(e)) from e
     if not result.get("success"):
-        raise CalendarUnavailable(str(result.get("error")))
+        raise CalendarUnavailableError(str(result.get("error")))
     return result
 
 
@@ -160,10 +160,7 @@ async def create_event(
     "FREQ=WEEKLY". `all_day`: dates only - `start`'s day up to (not
     including) `end`'s.
     """
-    if all_day:
-        span = (start.date().isoformat(), end.date().isoformat())
-    else:
-        span = (start.isoformat(), end.isoformat())
+    span = (start.date().isoformat(), end.date().isoformat()) if all_day else (start.isoformat(), end.isoformat())
     event: dict = {"summary": summary, "dtstart": span[0], "dtend": span[1]}
     if description:
         event["description"] = description

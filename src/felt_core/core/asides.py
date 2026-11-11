@@ -81,7 +81,7 @@ def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> 
     younger than MAX_AGE, oldest first.
     """
     return conn.execute(
-        "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"
+        "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
         " AND created_at >= datetime('now', ?) AND dismissed_at IS NULL AND " + _IS_REMARK_SQL + " ORDER BY id",
         (session_id, after_id, MAX_AGE),
     ).fetchall()
@@ -182,7 +182,7 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
             try:
                 with llm_gate.ambient("asides"):
                     await pick(config, session_id)
-            except local_llm.LocalLLMUnavailable as exc:
+            except local_llm.LocalLLMUnavailableError as exc:
                 logger.info("asides: felt-llm unavailable (%s)", exc)
             except Exception:
                 logger.exception("asides: pick failed")
@@ -218,7 +218,7 @@ def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> 
     conn = _connect(db_path)
     try:
         row = conn.execute(
-            "SELECT content, kind, source_ref FROM messages WHERE id = ? AND session_id = ?"
+            "SELECT content, kind, source_ref FROM messages WHERE id = ? AND session_id = ?"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             f" AND kind IN ({', '.join('?' * len(_ANSWERABLE))})",
             (remark_id, session_id, *_ANSWERABLE),
         ).fetchone()
@@ -258,7 +258,7 @@ def answered(db_path: str, user_message_ids: list[int]) -> dict[int, dict]:
         _ensure(conn)
         q = ",".join("?" * len(user_message_ids))
         rows = conn.execute(
-            "SELECT a.user_message_id, m.id, m.content, m.created_at FROM answered_remarks a"
+            "SELECT a.user_message_id, m.id, m.content, m.created_at FROM answered_remarks a"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             f" JOIN messages m ON m.id = a.remark_id WHERE a.user_message_id IN ({q})",
             user_message_ids,
         ).fetchall()

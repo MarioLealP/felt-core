@@ -74,7 +74,7 @@ def _apply_prompt(template: dict, prompt: str) -> dict:
     workflow = copy.deepcopy(template)
     text_template = workflow[_POSITIVE_PROMPT_NODE]["inputs"]["text"]
     workflow[_POSITIVE_PROMPT_NODE]["inputs"]["text"] = text_template.replace("{prompt}", prompt)
-    workflow["5"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
+    workflow["5"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
     return workflow
 
 

@@ -143,7 +143,7 @@ async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: Fel
                 tool_choice="required",
                 config=config,
             )
-    except local_llm.LocalLLMUnavailable as e:
+    except local_llm.LocalLLMUnavailableError as e:
         logger.warning("forced retry failed (%s) - keeping the plain reply", e)
         return None
     if not forced.tool_calls:

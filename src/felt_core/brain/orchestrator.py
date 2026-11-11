@@ -12,7 +12,7 @@ are background.py. felt_core.brain re-exports the public entry points so
 `from felt_core.brain import chat, ...` (api.py, __init__.py) is
 unchanged.
 
-When felt-llm is unreachable, `local_llm.LocalLLMUnavailable` propagates
+When felt-llm is unreachable, `local_llm.LocalLLMUnavailableError` propagates
 out of chat() and the API answers 503.
 """
 
@@ -79,7 +79,7 @@ async def _chat_local(
     every skill as a native tool. A plain reply comes back as text; a tool
     call goes through the guards, the weather fast path and run_skill,
     then a SECOND call on the same prefix (+ the tool_call and its result)
-    phrases the answer. Raises LocalLLMUnavailable if felt-llm is down at
+    phrases the answer. Raises LocalLLMUnavailableError if felt-llm is down at
     any point (the API answers 503).
     """
     prefix = local_turn_messages(message, history, config, tone)
@@ -179,13 +179,10 @@ async def _chat_local(
                 tool_message += "\n\n" + _CHAIN_NOTE
             if late and speaker is not None:
                 tool_message += "\n\n" + correction_note(speaker.said_text())
-            followup = followup + [
+            followup = [
+                *followup,
                 {"role": "assistant", "content": assistant_text, "tool_calls": [tool_call]},
-                {
-                    "role": "tool",
-                    "tool_call_id": str(tool_call.get("id") or ""),
-                    "content": tool_message,
-                },
+                {"role": "tool", "tool_call_id": str(tool_call.get("id") or ""), "content": tool_message},
             ]
             said_before = len(speaker.said) if speaker is not None else 0
             nxt = await _reply_turn(followup, config, speaker, tools=tools, guard=check)
@@ -281,23 +278,21 @@ async def chat(
     history = get_history(config.db_path, session_id, exclude_remarks=True)
     her_lines = get_her_recent_lines(config.db_path, session_id, limit=HER_LINES_N)
     if her_lines:
-        history = history + [{"role": "system", "content": her_lines_note(her_lines)}]
+        history = [*history, {"role": "system", "content": her_lines_note(her_lines)}]
 
     # WP-02: "what do you think of this?" needs something to refer to.
     # Only when fresh enough to still be "current" - a stale observation
     # would be a stale, misleading answer.
     current_screen = get_current_screen_description(config.db_path, session_id, max_age_seconds=120)
     if current_screen:
-        history = history + [{"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}]
+        history = [*history, {"role": "system", "content": f"Currently on Mario's screen: {current_screen}"}]
 
     # WP-42.2: he tapped one of her asides in the app to answer it; without
     # this, a reply like "a bit, yeah" lands with nothing to refer to.
     if answering:
-        history = history + [
-            {
-                "role": "system",
-                "content": f'Mario is answering this remark you made earlier: "{answering}"',
-            }
+        history = [
+            *history,
+            {"role": "system", "content": f'Mario is answering this remark you made earlier: "{answering}"'},
         ]
 
     save_message(config.db_path, session_id, "user", message)
@@ -329,7 +324,7 @@ async def chat_streamed(
     same one chat() would return, its `reply` being everything the chunks
     said. Same turn, same tools, guards
     and history (written once, at the end); only the felt-llm calls that can
-    be her answer stream. Raises LocalLLMUnavailable like chat(), possibly
+    be her answer stream. Raises LocalLLMUnavailableError like chat(), possibly
     after some chunks.
     """
     speaker = ReplySpeaker(config)

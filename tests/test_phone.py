@@ -2,7 +2,9 @@
 alarms, find-my-phone, battery - and the fallbacks when it can't be
 reached."""
 
+import asyncio
 import json
+from typing import ClassVar
 
 import httpx2
 import pytest
@@ -22,9 +24,9 @@ def ha(monkeypatch):
     """Fake HA: records each call; `ha.status` / `ha.states` steer it."""
 
     class HA:
-        calls: list[tuple[str, str, dict | None]] = []
+        calls: ClassVar[list[tuple[str, str, dict | None]]] = []
         status = 200
-        states = {
+        states: ClassVar[dict[str, str]] = {
             "sensor.pocox7_battery_level": "20",
             "sensor.pocox7_battery_state": "discharging",
             "sensor.pocox7_next_alarm": "2026-10-19T05:30:00+00:00",
@@ -77,12 +79,12 @@ async def test_start_timer_calls_the_companion_app(tmp_path, ha):
 
 async def test_ha_refusing_is_phone_unavailable(tmp_path, ha):
     ha.status = 400  # e.g. the app re-registered under a new name
-    with pytest.raises(phone.PhoneUnavailable):
+    with pytest.raises(phone.PhoneUnavailableError):
         await phone.ring(_config(tmp_path))
 
 
 async def test_unconfigured_is_phone_unavailable(tmp_path):
-    with pytest.raises(phone.PhoneUnavailable):
+    with pytest.raises(phone.PhoneUnavailableError):
         await phone.ring(FeltConfig(db_path=str(tmp_path / "f.db"), ha_url=None))
 
 
@@ -94,7 +96,7 @@ async def test_battery(tmp_path, ha):
 
 async def test_battery_while_the_phone_is_offline(tmp_path, ha):
     ha.states["sensor.pocox7_battery_level"] = "unavailable"
-    with pytest.raises(phone.PhoneUnavailable):
+    with pytest.raises(phone.PhoneUnavailableError):
         await phone.battery(_config(tmp_path))
 
 
@@ -115,11 +117,23 @@ async def test_timer_skill_sets_it_on_the_phone(tmp_path, ha):
 async def test_timer_skill_falls_back_to_a_push(tmp_path, ha, monkeypatch):
     skill = load_plugin_module("set_timer/skill.py")
     ha.status = 500
-    started = []
-    monkeypatch.setattr(skill.asyncio, "create_task", lambda coro: (started.append(1), coro.close()))
+    ring = asyncio.Event()
+    fired = []
+
+    async def fire_after(config, minutes, label):
+        await ring.wait()
+        fired.append(minutes)
+
+    monkeypatch.setattr(skill, "_fire_after", fire_after)
     result = await skill.handle({"minutes": 10}, _ctx(tmp_path))
-    assert started == [1]
     assert "ping you" in result.text
+    # held while it waits (the loop alone keeps only a weak reference), let go once it has rung
+    assert len(skill._pending) == 1
+    ring.set()
+    await asyncio.gather(*skill._pending)
+    await asyncio.sleep(0)  # done callbacks run on the next loop pass
+    assert fired == [10.0]
+    assert not skill._pending
 
 
 async def test_alarm_skill_sets_the_next_occurrence_on_the_phone(tmp_path, ha):

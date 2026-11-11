@@ -9,7 +9,7 @@ their prompts bounded and requests simply queue server-side.
 
 Every transport-level problem - no URL configured, connection refused,
 timeout, an HTTP error, or a body that isn't the expected shape - is one
-exception, `LocalLLMUnavailable`. There is no cloud or Ollama fallback
+exception, `LocalLLMUnavailableError`. There is no cloud or Ollama fallback
 (WP-36 D''): the API answers 503 "felt-llm offline" and the background
 loops log and skip.
 """
@@ -29,13 +29,13 @@ from felt_core.core import llm_gate
 logger = logging.getLogger(__name__)
 
 
-class LocalLLMUnavailable(Exception):
+class LocalLLMUnavailableError(Exception):
     """felt-llm couldn't produce a reply (down, timed out, 5xx, or a
     malformed response). The API maps it to a 503, background loops skip.
     """
 
 
-class AmbientSkipped(LocalLLMUnavailable):
+class AmbientSkippedError(LocalLLMUnavailableError):
     """An ambient call that gave way (llm_gate): Mario is talking, the
     ambient budget is spent, or it couldn't start in time.
     """
@@ -125,7 +125,7 @@ def _reply(
     json_schema: dict | None,
 ) -> LocalReply:
     if not isinstance(text, str) or not isinstance(tool_calls, list):
-        raise LocalLLMUnavailable("felt-llm returned an unexpected message shape")
+        raise LocalLLMUnavailableError("felt-llm returned an unexpected message shape")
     truncated = finish_reason == "length" and json_schema is None and not tool_calls and bool(text)
     if truncated:
         logger.warning("felt-llm hit max_tokens=%d; ending the reply at its last sentence", max_tokens)
@@ -143,8 +143,8 @@ async def _gated(call):
     """One felt-llm call through llm_gate (one at a time, chat first)."""
     try:
         return await llm_gate.run(call)
-    except llm_gate.Skipped as e:
-        raise AmbientSkipped(str(e)) from e
+    except llm_gate.SkippedError as e:
+        raise AmbientSkippedError(str(e)) from e
 
 
 async def chat(
@@ -161,7 +161,7 @@ async def chat(
     `response_format` so llama.cpp constrains the output to it.
     """
     if not config.local_llm_url:
-        raise LocalLLMUnavailable("local_llm_url is not configured")
+        raise LocalLLMUnavailableError("local_llm_url is not configured")
     payload = _payload(
         messages,
         max_tokens=max_tokens,
@@ -189,7 +189,7 @@ async def chat(
         tool_calls = message.get("tool_calls") or []
         timings = body.get("timings") or {}
     except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
-        raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
+        raise LocalLLMUnavailableError(f"felt-llm call failed: {e!r}") from e
 
     return _reply(text, tool_calls, finish_reason, timings, max_tokens=max_tokens, json_schema=json_schema)
 
@@ -228,7 +228,7 @@ async def chat_stream(
     off on felt-llm (`--reasoning off`), so there are no reasoning pieces.
     """
     if not config.local_llm_url:
-        raise LocalLLMUnavailable("local_llm_url is not configured")
+        raise LocalLLMUnavailableError("local_llm_url is not configured")
     payload = _payload(
         messages,
         max_tokens=max_tokens,
@@ -278,7 +278,7 @@ async def chat_stream(
     try:
         await _gated(call)
     except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
-        raise LocalLLMUnavailable(f"felt-llm call failed: {e!r}") from e
+        raise LocalLLMUnavailableError(f"felt-llm call failed: {e!r}") from e
 
     return _reply(
         "".join(parts),

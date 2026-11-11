@@ -27,7 +27,7 @@ AREAS = {
 STATUSES = ["needs-you", "looking", "watching", "fine"]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:  # ruff: ignore[unused-async]  # async by contract
     coordinator: FeltCoordinator = entry.runtime_data.coordinator
     async_add_entities(
         [AreaSensor(coordinator, entry, key, *meta) for key, meta in AREAS.items()]

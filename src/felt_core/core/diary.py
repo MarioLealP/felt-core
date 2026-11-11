@@ -99,7 +99,7 @@ def _parse_writer_json(raw: str) -> dict | None:
 
 
 async def _generate_json(config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int) -> str:
-    """One felt-llm call for the nightly writers. Raises LocalLLMUnavailable
+    """One felt-llm call for the nightly writers. Raises LocalLLMUnavailableError
     when it's down; callers log and skip.
     """
     reply = await local_llm.chat(
@@ -135,7 +135,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
 
     try:
         raw = await _generate_json(config, system, user_prompt, max_tokens=1200)
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         logger.info("diary: felt-llm unavailable, skipping the entry for %s", date_str)
         return False
 
@@ -210,7 +210,7 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
     system = compile_persona() + "\n\n" + _WEEKLY_INSTRUCTIONS
     try:
         raw = await _generate_json(config, system, material, max_tokens=600)
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         logger.info("diary: felt-llm unavailable, skipping weekly compression for %s", date_str)
         return
     parsed = _parse_writer_json(raw)

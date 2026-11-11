@@ -298,7 +298,7 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
         with conn:
             sets = ", ".join(f"{c} = ?" for c in _COLUMNS[kind])
             conn.execute(
-                f"UPDATE incidents SET {sets}, line_at = datetime('now') WHERE id = ?",
+                f"UPDATE incidents SET {sets}, line_at = datetime('now') WHERE id = ?",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 (*[text] * len(_COLUMNS[kind]), incident_id),
             )
     finally:
@@ -326,7 +326,7 @@ async def write_due(config: FeltConfig) -> int:
             continue
         try:
             text = await line_for(config, incident, kind)
-        except local_llm.LocalLLMUnavailable:
+        except local_llm.LocalLLMUnavailableError:
             if incident["tier"] not in ("urgent", "high"):
                 logger.info("alert lines: felt-llm unavailable, retrying next round")
                 continue

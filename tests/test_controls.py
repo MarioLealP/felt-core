@@ -31,7 +31,7 @@ def test_tap_is_on_until_turned_off_and_a_slide_is_a_timer(tmp_path):
     assert not controls.quiet(db, T0 + timedelta(minutes=31))  # ran out
     controls.set_control(db, "hide", False, now=T0)
     assert controls.state(db, T0)["version"] == 3
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown control"):
         controls.set_control(db, "mute", True)
 
 

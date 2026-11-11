@@ -28,7 +28,7 @@ Past tense too (2026-10-22 live): "I looked it up and couldn't find the
 exact launch time" - no search that turn, the line copied from an earlier
 answer in the history.
 
-Bonsai writes curly apostrophes ("I’ve", "can’t"); they're straightened
+Bonsai writes curly apostrophes (U+2019, as in I've); they're straightened
 before matching.
 """
 

@@ -100,7 +100,7 @@ def test_write_due_words_each_owed_line_and_stops_when_the_model_is_down(tmp_pat
     from felt_core.clients import local_llm
 
     async def down(config, incident, kind="line"):
-        raise local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailableError("down")
 
     _incident(db, "Trivy weekly: 1 critical", at=datetime.now(UTC))  # default level
     monkeypatch.setattr(alert_lines, "line_for", down)

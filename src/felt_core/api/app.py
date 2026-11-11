@@ -108,35 +108,30 @@ async def lifespan(app: FastAPI):
         prune_expired_proactive(config.db_path)
     except Exception:
         logger.exception("failed to prune expired proactive items")
-    yield
-    ntfy_task.cancel()
-    email_task.cancel()
-    poe_cache_task.cancel()
-    weather_task.cancel()
-    music_taste_task.cancel()
-    router_task.cancel()
-    warmup_task.cancel()
-    calendar_task.cancel()
-    incidents_task.cancel()
-    ender_task.cancel()
+    try:
+        yield
+    finally:  # also when the app stops on an exception
+        ntfy_task.cancel()
+        email_task.cancel()
+        poe_cache_task.cancel()
+        weather_task.cancel()
+        music_taste_task.cancel()
+        router_task.cancel()
+        warmup_task.cancel()
+        calendar_task.cancel()
+        incidents_task.cancel()
+        ender_task.cancel()
 
 
 app = FastAPI(title="felt-core", version="0.1.0", lifespan=lifespan)
 
 app.include_router(app_router, prefix="/v1/app")
-
 app.include_router(app_router, prefix="/v1/ha/app")
-
 app.include_router(incident_router)
-
 app.include_router(systems_router)
-
 app.include_router(notices_router)
-
 app.include_router(calendar_router)
-
 app.include_router(controls_router)
-
 app.include_router(ha_router)
 app.include_router(metrics_router)
 app.include_router(chat_router)
@@ -274,8 +269,8 @@ async def latency_middleware(request: Request, call_next):
     return response
 
 
-@app.exception_handler(local_llm.AmbientSkipped)
-async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkipped):
+@app.exception_handler(local_llm.AmbientSkippedError)
+async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkippedError):  # ruff: ignore[unused-async]  # async by contract
     """An ambient line that gave way (llm_gate) isn't an outage: the react
     endpoints' "no reaction" answer - empty body, the reason in a header.
     """
@@ -283,8 +278,8 @@ async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkippe
     return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "llm-gate"})
 
 
-@app.exception_handler(local_llm.LocalLLMUnavailable)
-async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnavailable):
+@app.exception_handler(local_llm.LocalLLMUnavailableError)
+async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnavailableError):  # ruff: ignore[unused-async]  # async by contract
     """felt-llm is the only model backend (WP-36 D''): when it's down every
     model-backed endpoint answers 503 and the client just skips the turn.
     """
@@ -292,8 +287,8 @@ async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnav
     return JSONResponse(status_code=503, content={"detail": "felt-llm offline"})
 
 
-@app.exception_handler(shopping.ShoppingUnavailable)
-async def shopping_unavailable_handler(_request: Request, _exc: Exception) -> JSONResponse:
+@app.exception_handler(shopping.ShoppingUnavailableError)
+async def shopping_unavailable_handler(_request: Request, _exc: Exception) -> JSONResponse:  # ruff: ignore[unused-async]  # async by contract
     return JSONResponse(status_code=503, content={"detail": "Home Assistant didn't answer"})
 
 

@@ -2,6 +2,7 @@
 calls Felt makes, the skill on top, and what happens when HA can't be reached."""
 
 import json
+from typing import ClassVar
 
 import httpx2
 import pytest
@@ -24,9 +25,9 @@ def ha(monkeypatch):
     """Fake HA: records each call; `ha.items` is the list, `ha.status` steers it."""
 
     class HA:
-        calls: list[tuple[str, str, dict | None]] = []
+        calls: ClassVar[list[tuple[str, str, dict | None]]] = []
         status = 200
-        items: list[dict] = []
+        items: ClassVar[list[dict]] = []
 
     def handler(request):
         body = None if request.method == "GET" else json.loads(request.content)
@@ -90,10 +91,10 @@ async def test_each_change_is_one_todo_service_call(tmp_path, ha):
 
 
 async def test_unreachable_or_unconfigured_ha_is_one_error(tmp_path, ha):
-    with pytest.raises(shopping.ShoppingUnavailable):
+    with pytest.raises(shopping.ShoppingUnavailableError):
         await shopping.items(FeltConfig(db_path=str(tmp_path / "felt.db")))
     ha.status = 500
-    with pytest.raises(shopping.ShoppingUnavailable):
+    with pytest.raises(shopping.ShoppingUnavailableError):
         await shopping.add(_config(tmp_path), "bread")
 
 

@@ -21,6 +21,6 @@ class ChatResult(BaseModel):
     ui_action: UIAction | None = None
     animation_tag: str | None = None
     # WP-07's screen_reaction JSON contract only - one of a fixed set
-    # (happy/excited/amused/sad/annoyed/surprised/thinking/sleepy/neutral),
+    # (happy/excited/amused/sad/annoyed/surprised/thinking/sleepy/neutral),  # ruff: ignore[commented-out-code]  # prose
     # None everywhere else.
     emotion: str | None = None

@@ -19,8 +19,8 @@ Ambient is the only class that gives way:
   finishes the read first (measured 2026-10-21: 53 s on a 2.5K prompt), which
   is why the quiet window matters more than the cancel.
 
-A skipped or cancelled ambient call raises Skipped here; local_llm turns it
-into its AmbientSkipped, a LocalLLMUnavailable - every ambient feature already
+A skipped or cancelled ambient call raises SkippedError here; local_llm turns it
+into its AmbientSkippedError, a LocalLLMUnavailableError - every ambient feature already
 treats that as "no line".
 Each run is logged with its class, label, wait and duration.
 """
@@ -44,7 +44,7 @@ AMBIENT_WINDOW_S = 60.0
 AMBIENT_LIFETIME_S = 60.0
 
 
-class Skipped(Exception):
+class SkippedError(Exception):
     """An ambient call that gave way to Mario (or ran out of budget/time)."""
 
 
@@ -120,7 +120,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
     name = f"{_NAMES[cls]} {label}" if label != "chat" else "chat"
     if cls == AMBIENT and (why := gate.why_not_ambient(time.monotonic())):
         logger.info("llm gate: %s skipped (%s)", name, why)
-        raise Skipped(f"ambient call skipped ({why})")
+        raise SkippedError(f"ambient call skipped ({why})")
     queued = time.monotonic()
     async with gate.cond:
         if cls == CHAT:
@@ -133,7 +133,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
             await asyncio.wait_for(gate.cond.wait_for(lambda: gate.my_turn(cls)), timeout)
         except TimeoutError:
             logger.info("llm gate: %s dropped (no turn within %.0f s)", name, lifetime_s)
-            raise Skipped("ambient call expired before its turn") from None
+            raise SkippedError("ambient call expired before its turn") from None
         except BaseException:
             if cls == CHAT:
                 gate.chat_active -= 1
@@ -143,7 +143,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
         if cls == AMBIENT and (why := gate.why_not_ambient(time.monotonic())):
             gate.cond.notify_all()
             logger.info("llm gate: %s skipped (%s)", name, why)
-            raise Skipped(f"ambient call skipped ({why})")
+            raise SkippedError(f"ambient call skipped ({why})")
         task = asyncio.ensure_future(call())
         gate.running = (cls, task)
     started = time.monotonic()
@@ -152,7 +152,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
     except asyncio.CancelledError:
         if task.cancelled() and cls == AMBIENT and not _cancelling():
             logger.info("llm gate: %s cancelled for a chat", name)
-            raise Skipped("ambient call cancelled for a chat") from None
+            raise SkippedError("ambient call cancelled for a chat") from None
         raise
     finally:
         ended = time.monotonic()

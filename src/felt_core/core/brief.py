@@ -137,7 +137,7 @@ async def word(config: FeltConfig, facts: str, greeting: str | None) -> str:
                 config,
                 include_facts=False,
             )
-    except local_llm.LocalLLMUnavailable:
+    except local_llm.LocalLLMUnavailableError:
         line = ""
     return line.strip(" \n\"'") or fallback(facts)
 
@@ -164,7 +164,7 @@ async def maybe_brief(config: FeltConfig, now: datetime | None = None) -> str | 
     enqueue_proactive(config, "brief", line, ttl_s=_TTL_S)
     try:
         await phone.notify(config, "Good morning", line, tag="felt-brief")
-    except phone.PhoneUnavailable:
+    except phone.PhoneUnavailableError:
         logger.info("brief: phone unreachable, desk only")
     logger.info("brief: said %r", line)
     return line

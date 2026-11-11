@@ -7,7 +7,7 @@ import json
 from datetime import date, timedelta
 
 import felt_core.core.diary as diary
-from felt_core.clients.local_llm import LocalLLMUnavailable
+from felt_core.clients.local_llm import LocalLLMUnavailableError
 from felt_core.config import FeltConfig
 from felt_core.db.diary import get_diary, get_latest_diary_week, insert_diary
 from felt_core.db.events import save_event
@@ -89,7 +89,7 @@ async def test_write_diary_for_date_skips_when_felt_llm_is_unavailable(tmp_path,
     config = _config(tmp_path)
     save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-22 12:00:00")
 
-    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
 
     written = await diary.write_diary_for_date(config, "2026-09-22")
 

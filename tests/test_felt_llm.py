@@ -92,7 +92,7 @@ async def test_chat_payload_shape_and_parsing(tmp_path, monkeypatch):
     assert seen["url"] == "http://llm:8080/v1/chat/completions"
     assert body["model"] == "felt"
     assert body["max_tokens"] == 50
-    assert body["temperature"] == 0.2
+    assert body["temperature"] == pytest.approx(0.2)
     assert body["tools"] == tools
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["schema"] == schema
@@ -123,7 +123,7 @@ async def test_chat_omits_optional_fields_and_raises_unavailable(tmp_path, monke
     assert "tools" not in bodies[0]
     assert "response_format" not in bodies[0]
 
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=config)
 
 
@@ -166,9 +166,9 @@ async def test_chat_connection_error_and_no_url_are_unavailable(tmp_path, monkey
         raise httpx2.ConnectError("refused")
 
     _mock_client(monkeypatch, handler)
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await local_llm.chat([{"role": "user", "content": "hi"}], max_tokens=8, config=_config(tmp_path))
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await local_llm.chat(
             [{"role": "user", "content": "hi"}],
             max_tokens=8,
@@ -287,9 +287,9 @@ async def test_chat_local_guard_drops_an_unwarranted_tool_call(tmp_path, monkeyp
 async def test_chat_raises_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
     monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {})
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
 
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await orchestrator.chat("hi", config, session_id="s3")
 
 
@@ -333,9 +333,9 @@ async def test_react_to_screen_local(tmp_path, fake_llm):
 
 
 async def test_react_to_screen_raises_when_felt_llm_is_down(tmp_path, fake_llm):
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
 
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await screen.react_to_screen(b"jpg", "game.exe", "My Game", _config(tmp_path), "wp36b")
 
 
@@ -361,7 +361,7 @@ async def test_diary_generation_uses_felt_llm(tmp_path, fake_llm):
 async def test_diary_writer_skips_quietly_when_felt_llm_is_down(tmp_path, fake_llm, caplog):
     config = _config(tmp_path)
     save_event(config.db_path, "game_start", json.dumps({"name": "endfield.exe"}), "2026-09-27 12:00:00")
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
 
     with caplog.at_level(logging.INFO, logger="felt_core.core.diary"):
         written = await diary.write_diary_for_date(config, "2026-09-27")
@@ -384,7 +384,7 @@ async def test_weather_precompute_phrases_with_felt_llm_and_skips_when_down(tmp_
     monkeypatch.setattr(background, "load_plugins", lambda d: {"get_weather": _skill("get_weather", handle)})
     monkeypatch.setattr(background, "_weather_precompute", None)
 
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
     await background.refresh_weather_precompute(config)
     assert background._weather_precompute is None  # skipped, nothing cached
 
@@ -461,7 +461,7 @@ async def test_warmup_loop_survives_failures_and_retries(tmp_path, monkeypatch):
     async def warm(cfg):
         attempts.append(1)
         if len(attempts) == 1:
-            raise local_llm.LocalLLMUnavailable("still loading")
+            raise local_llm.LocalLLMUnavailableError("still loading")
         if len(attempts) == 2:
             raise RuntimeError("boom")
 
@@ -539,7 +539,7 @@ def test_reaction_tag_rejects_empty_tags(tmp_path, monkeypatch, fake_llm):
 
 
 def test_reaction_tag_503_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm):
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
 
     with _client(tmp_path, monkeypatch) as client:
         response = client.post("/v1/reaction-tag", json={"text": "x", "tags": ["a"]})
@@ -552,7 +552,7 @@ def test_reaction_tag_503_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm)
 
 
 def test_model_endpoints_answer_503_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm):
-    fake_llm.default = local_llm.LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = local_llm.LocalLLMUnavailableError("down")  # type: ignore[assignment]
     monkeypatch.setenv("FELT_VOICE_URL", "http://voice.invalid")
     expected = {"detail": "felt-llm offline"}
 

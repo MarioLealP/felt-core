@@ -2,7 +2,7 @@
 
 import contextlib
 import logging
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 import httpx2
@@ -67,13 +67,13 @@ async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "
 
 @router.post("/v1/react/screen")
 async def react_screen_endpoint(
-    image: UploadFile | None = File(None),
-    app_name: str = Form(..., alias="app"),
-    title: str = Form(""),
-    trigger: str = Form("focus"),
+    app_name: Annotated[str, Form(alias="app")],
+    image: Annotated[UploadFile | None, File()] = None,
+    title: Annotated[str, Form()] = "",
+    trigger: Annotated[str, Form()] = "focus",
     session_id: str = "dashboard",
-    tone: str | None = Form(None),
-    seen: str | None = Form(None),
+    tone: Annotated[str | None, Form()] = None,
+    seen: Annotated[str | None, Form()] = None,
 ) -> Response:
     """WP-07: felt-tray's new per-window capture path - the JPEG has
     already cleared the blocklist client-side before this is ever called.

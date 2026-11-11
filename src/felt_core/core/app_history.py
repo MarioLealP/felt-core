@@ -29,7 +29,7 @@ def history_page(db_path: str, session_id: str, *, before_id: int | None = None,
     conn = _connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, role, content, created_at FROM messages "
+            "SELECT id, role, content, created_at FROM messages "  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             "WHERE session_id = ? AND content NOT LIKE '[System Observation%' "
             + before
             + CHAT_ONLY_SQL

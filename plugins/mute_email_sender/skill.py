@@ -22,7 +22,7 @@ parameters_schema = {
 }
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     who = params.get("sender") or ""
     pattern = emails.mute(ctx.config.db_path, who)
     if pattern is None:

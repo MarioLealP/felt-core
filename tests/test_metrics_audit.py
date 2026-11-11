@@ -3,6 +3,7 @@ aren't recorded, polling routes don't swamp `total`, and cloud screen
 reactions get their own `screen_reaction` stage (route `local`)."""
 
 import asyncio
+import contextlib
 
 from fastapi.testclient import TestClient
 
@@ -24,10 +25,8 @@ async def test_a_cancelled_stage_is_not_recorded(tmp_path):
     task = asyncio.create_task(privacy_like())
     await asyncio.sleep(0.01)
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
     assert get_latency_rows(db_path, since_hours=1) == []
 

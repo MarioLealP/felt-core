@@ -19,13 +19,13 @@ from felt_core.config import FeltConfig, reveal
 _EXTRA = "android.intent.extra.alarm."
 
 
-class PhoneUnavailable(Exception):
+class PhoneUnavailableError(Exception):
     """Not configured, HA unreachable, or HA said no."""
 
 
 def _headers(config: FeltConfig) -> dict[str, str]:
     if not (config.ha_url and config.ha_token and config.phone):
-        raise PhoneUnavailable("phone not configured")
+        raise PhoneUnavailableError("phone not configured")
     return {"Authorization": f"Bearer {reveal(config.ha_token)}"}
 
 
@@ -38,9 +38,9 @@ async def _notify(config: FeltConfig, message: str, data: dict | None = None) ->
         async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.post(f"{config.ha_url}/api/services/notify/mobile_app_{config.phone}", json=body)
     except httpx2.HTTPError as e:
-        raise PhoneUnavailable(repr(e)) from e
+        raise PhoneUnavailableError(repr(e)) from e
     if response.status_code != 200:
-        raise PhoneUnavailable(f"HA {response.status_code}")
+        raise PhoneUnavailableError(f"HA {response.status_code}")
 
 
 def _label(text: str) -> str:
@@ -107,9 +107,9 @@ async def next_alarm(config: FeltConfig) -> datetime | None:
         async with httpx2.AsyncClient(timeout=15, headers=headers) as client:
             response = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_next_alarm")
     except httpx2.HTTPError as e:
-        raise PhoneUnavailable(repr(e)) from e
+        raise PhoneUnavailableError(repr(e)) from e
     if response.status_code != 200:
-        raise PhoneUnavailable(f"HA {response.status_code}")
+        raise PhoneUnavailableError(f"HA {response.status_code}")
     try:
         return datetime.fromisoformat(response.json()["state"])
     except KeyError, ValueError:  # "unavailable": no alarm set
@@ -124,12 +124,12 @@ async def battery(config: FeltConfig) -> tuple[int, bool]:
             level = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_level")
             state = await client.get(f"{config.ha_url}/api/states/sensor.{config.phone}_battery_state")
     except httpx2.HTTPError as e:
-        raise PhoneUnavailable(repr(e)) from e
+        raise PhoneUnavailableError(repr(e)) from e
     if level.status_code != 200:
-        raise PhoneUnavailable(f"HA {level.status_code}")
+        raise PhoneUnavailableError(f"HA {level.status_code}")
     try:
         percent = int(float(level.json()["state"]))
     except (KeyError, ValueError) as e:  # "unavailable" while the phone is offline
-        raise PhoneUnavailable("no battery reading") from e
+        raise PhoneUnavailableError("no battery reading") from e
     charging = state.status_code == 200 and state.json().get("state") in ("charging", "full")
     return percent, charging

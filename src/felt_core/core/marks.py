@@ -105,7 +105,7 @@ def marks_for(db_path: str, message_ids: list[int]) -> dict[int, list[dict]]:
         _ensure(conn)
         q = ",".join("?" * len(message_ids))
         rows = conn.execute(
-            f"SELECT id, message_id, type, quote, note, seen_at FROM message_marks WHERE message_id IN ({q})",
+            f"SELECT id, message_id, type, quote, note, seen_at FROM message_marks WHERE message_id IN ({q})",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             message_ids,
         ).fetchall()
     finally:
@@ -128,7 +128,7 @@ def mark_seen(db_path: str, mark_ids: list[str]) -> int:
         q = ",".join("?" * len(mark_ids))
         with conn:
             cursor = conn.execute(
-                f"UPDATE message_marks SET seen_at = datetime('now') WHERE seen_at IS NULL AND id IN ({q})",
+                f"UPDATE message_marks SET seen_at = datetime('now') WHERE seen_at IS NULL AND id IN ({q})",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 mark_ids,
             )
     finally:
@@ -271,7 +271,7 @@ async def maybe_mark(config: FeltConfig, session_id: str) -> dict | None:
         return None  # this exchange already carries a mark
     try:
         mark = await decide(config, {k: text for k, (_, text) in exchange.items()}, since)
-    except local_llm.LocalLLMUnavailable as exc:
+    except local_llm.LocalLLMUnavailableError as exc:
         logger.info("marks: felt-llm unavailable (%s)", exc)
         return None
     if mark is None:

@@ -339,7 +339,7 @@ async def test_a_relinked_track_is_found_by_name(tmp_path, monkeypatch):
 
 async def test_a_sleeping_player_says_so(tmp_path, monkeypatch):
     player = _Player(queue_status=404)
-    with pytest.raises(sp.NoActivePlayer):
+    with pytest.raises(sp.NoActivePlayerError):
         await _start(monkeypatch, tmp_path, player)
     assert player.calls == [("POST", "/v1/me/player/queue")]  # never skips what he has on
 
@@ -349,7 +349,7 @@ async def test_dj_start_on_a_sleeping_player(tmp_path, monkeypatch):
         return [_p("u:a", False)]
 
     async def asleep(client, config, uri, name=None):
-        raise sp.NoActivePlayer
+        raise sp.NoActivePlayerError
 
     monkeypatch.setattr(picker, "pick", picks)
     monkeypatch.setattr(sp, "start_track", asleep)

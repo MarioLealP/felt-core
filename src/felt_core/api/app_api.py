@@ -17,7 +17,7 @@ SSO header - Caddy's felt-ha host strips those.
 """
 
 import asyncio
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -116,17 +116,17 @@ class SayResponse(BaseModel):
 
 
 @router.get("/me", response_model=Me)
-async def me(user: str = Depends(sso_user)) -> Me:
+async def me(user: Annotated[str, Depends(sso_user)]) -> Me:
     return Me(user=user)
 
 
 @router.get("/history", response_model=list[Message])
-async def history(before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)) -> list[dict]:
+async def history(_user: Annotated[str, Depends(sso_user)], before: int | None = None, limit: int = 50) -> list[dict]:
     return history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
 @router.get("/asides", response_model=Asides)
-async def asides(_user: str = Depends(sso_user)) -> dict:
+async def asides(_user: Annotated[str, Depends(sso_user)]) -> dict:
     return current_asides(load_config().db_path, SESSION)
 
 
@@ -164,17 +164,19 @@ class MarkResult(BaseModel):
 
 
 @router.get("/margins", response_model=list[MarginLine])
-async def margins_page(before: int | None = None, limit: int = 50, _user: str = Depends(sso_user)) -> list[dict]:
+async def margins_page(
+    _user: Annotated[str, Depends(sso_user)], before: int | None = None, limit: int = 50
+) -> list[dict]:
     return margins.page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
 @router.get("/margins/count", response_model=Unread)
-async def margins_count(_user: str = Depends(sso_user)) -> Unread:
+async def margins_count(_user: Annotated[str, Depends(sso_user)]) -> Unread:
     return Unread(unread=margins.unread(load_config().db_path, SESSION))
 
 
 @router.post("/margins/mark", response_model=MarkResult)
-async def margins_mark(req: MarkRequest, _user: str = Depends(sso_user)) -> MarkResult:
+async def margins_mark(req: MarkRequest, _user: Annotated[str, Depends(sso_user)]) -> MarkResult:
     db_path = load_config().db_path
     if req.all:
         return MarkResult(changed=margins.read_all(db_path, SESSION))
@@ -187,12 +189,12 @@ class SeenRequest(BaseModel):
 
 
 @router.post("/marks/seen", response_model=MarkResult)
-async def marks_seen(req: SeenRequest, _user: str = Depends(sso_user)) -> MarkResult:
+async def marks_seen(req: SeenRequest, _user: Annotated[str, Depends(sso_user)]) -> MarkResult:
     return MarkResult(changed=mark_seen(load_config().db_path, req.ids))
 
 
 @router.get("/stream")
-async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingResponse:
+async def stream(request: Request, _user: Annotated[str, Depends(sso_user)]) -> StreamingResponse:
     """Live notices for the open app (app_stream.py). An app window opening
     is a sign of him, so it can start her day (diary.py).
     """
@@ -211,7 +213,7 @@ async def stream(request: Request, _user: str = Depends(sso_user)) -> StreamingR
 
 
 @router.post("/chat", response_model=SayResponse)
-async def say(req: SayRequest, _user: str = Depends(sso_user)) -> SayResponse:
+async def say(req: SayRequest, _user: Annotated[str, Depends(sso_user)]) -> SayResponse:
     text = req.message.strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty message")

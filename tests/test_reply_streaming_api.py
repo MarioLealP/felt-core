@@ -345,7 +345,7 @@ async def test_v2_voice_down_still_returns_her_whole_text(env, streamed):
 async def test_v2_felt_llm_down_before_a_word_is_503(env, streamed):
     client, _, _ = env
     streamed.chunks = []
-    streamed.error = local_llm.LocalLLMUnavailable("down")
+    streamed.error = local_llm.LocalLLMUnavailableError("down")
     r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
     assert r.status_code == 503
 
@@ -353,7 +353,7 @@ async def test_v2_felt_llm_down_before_a_word_is_503(env, streamed):
 async def test_v2_felt_llm_gone_mid_reply_ends_the_stream(env, streamed):
     client, _, _ = env
     streamed.chunks = _CHUNKS[:2]
-    streamed.error = local_llm.LocalLLMUnavailable("down")
+    streamed.error = local_llm.LocalLLMUnavailableError("down")
     r = await client.post("/v1/text-chat", json={"message": "hi"}, headers=_V2)
     sid = r.headers["X-Reply-Stream"]
     assert (await client.get(f"/v1/reply/{sid}/chunk/1")).status_code == 200

@@ -91,7 +91,7 @@ def _patch(monkeypatch, fresh, line="dentist in ten, go"):
     async def fake_local_reply(messages, config, *, include_facts, tone=None):
         prompts.append(messages[-1]["content"])
         if line is None:
-            raise local_llm.LocalLLMUnavailable("down")
+            raise local_llm.LocalLLMUnavailableError("down")
         return line
 
     monkeypatch.setattr(ch.ha_calendar, "get_event", fake_get_event)

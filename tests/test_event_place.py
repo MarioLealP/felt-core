@@ -37,7 +37,7 @@ class FakeCalendar:
 
     async def create(self, config, calendar_id, summary, start, end, description=None, **kw):
         if self.down:
-            raise ha_calendar.CalendarUnavailable("down")
+            raise ha_calendar.CalendarUnavailableError("down")
         self._n += 1
         self.calls.append(f"create {kw.get('location')}")
         self.spans.append((start, end, kw.get("all_day", False)))
@@ -75,7 +75,7 @@ async def cal(monkeypatch):
     monkeypatch.setattr(appointment_hold, "enqueue_proactive", lambda c, k, t: fake.lines.append(t))
 
     async def llm_down(*a, **kw):  # the plain lines; test_her_words_for_the_no_place_add has hers
-        raise local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailableError("down")
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", llm_down)
     yield fake

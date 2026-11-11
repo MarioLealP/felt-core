@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 import felt_core.brain.screen_reactions as brain
 from felt_core.api.app import app
-from felt_core.clients.local_llm import LocalLLMUnavailable
+from felt_core.clients.local_llm import LocalLLMUnavailableError
 from felt_core.config import FeltConfig
 from felt_core.db.observations import get_recent_observations
 
@@ -113,14 +113,14 @@ async def test_lenient_extraction_of_json_block_from_extra_text(tmp_path, fake_l
     assert result.reply == "extracted fine"
 
 
-# -- LocalLLMUnavailable propagates (api.py maps it to a 503) ------------------
+# -- LocalLLMUnavailableError propagates (api.py maps it to a 503) ------------------
 
 
 async def test_felt_llm_unavailable_propagates_uncaught(tmp_path, fake_llm):
     config = _config(tmp_path)
-    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
 
-    with pytest.raises(LocalLLMUnavailable):
+    with pytest.raises(LocalLLMUnavailableError):
         await brain.react_to_screen(b"jpeg", "app.exe", "Title", config, session_id="wp07-unavailable")
 
 
@@ -129,7 +129,7 @@ async def test_felt_llm_unavailable_propagates_uncaught(tmp_path, fake_llm):
 
 def test_endpoint_maps_felt_llm_offline_to_503(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setenv("FELT_DB_PATH", str(tmp_path / "felt.db"))
-    fake_llm.default = LocalLLMUnavailable("down")  # type: ignore[assignment]
+    fake_llm.default = LocalLLMUnavailableError("down")  # type: ignore[assignment]
 
     with TestClient(app) as client:
         response = client.post(

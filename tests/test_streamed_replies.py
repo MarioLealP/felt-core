@@ -192,14 +192,14 @@ async def test_chat_stream_hitting_max_tokens_ends_at_last_sentence(tmp_path, mo
 
 async def test_chat_stream_errors_are_unavailable(tmp_path, monkeypatch):
     _mock_client(monkeypatch, lambda request: httpx2.Response(503, text="loading"))
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await local_llm.chat_stream(
             [{"role": "user", "content": "hi"}],
             on_text=lambda _: None,
             max_tokens=5,
             config=_config(tmp_path),
         )
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await local_llm.chat_stream(
             [], on_text=lambda _: None, max_tokens=5, config=_config(tmp_path, local_llm_url="")
         )
@@ -268,7 +268,8 @@ async def test_chat_streamed_yields_chunks_while_writing(tmp_path, monkeypatch, 
     assert chunks == speech_chunks(PROSE[0])
     assert result is not None
     assert result.reply == PROSE[0]
-    assert fake_llm.calls[0]["stream"] and not fake_llm.calls[0]["tools"]  # no skills here
+    assert fake_llm.calls[0]["stream"]
+    assert not fake_llm.calls[0]["tools"]
     assert _assistant_lines(config, "s") == [PROSE[0]]  # written once, at the end
 
 
@@ -378,8 +379,8 @@ async def test_non_streamed_paths_still_come_out_in_chunks(tmp_path, monkeypatch
 
 async def test_chat_streamed_raises_when_felt_llm_is_down(tmp_path, monkeypatch, fake_llm):
     monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {})
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
-    with pytest.raises(local_llm.LocalLLMUnavailable):
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
+    with pytest.raises(local_llm.LocalLLMUnavailableError):
         await _run(orchestrator.chat_streamed("hi", _config(tmp_path), "s"))
 
 

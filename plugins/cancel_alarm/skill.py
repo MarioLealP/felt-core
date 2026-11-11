@@ -23,7 +23,7 @@ def _format(alarm: dict) -> str:
     return f"{formatted}{suffix}"
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     pending = get_pending_alarms(ctx.config.db_path)
     if not pending:
         return SkillResult(text="No alarms are currently set.")

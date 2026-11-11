@@ -45,7 +45,7 @@ async def test_she_words_it_and_it_goes_to_desk_and_phone(tmp_path, out):
 
 async def test_llm_down_sends_the_text_as_is(tmp_path, out, monkeypatch):
     async def down(messages, config, include_facts=True):
-        raise local_llm.LocalLLMUnavailable("down")
+        raise local_llm.LocalLLMUnavailableError("down")
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", down)
     line = await ha_tell.tell(_config(tmp_path), "Dehumidifier tank full", "Felt", "ha")
@@ -55,7 +55,7 @@ async def test_llm_down_sends_the_text_as_is(tmp_path, out, monkeypatch):
 
 async def test_phone_down_still_says_it_at_the_desk(tmp_path, out, monkeypatch):
     async def unreachable(config, title, message, tag):
-        raise phone.PhoneUnavailable("down")
+        raise phone.PhoneUnavailableError("down")
 
     monkeypatch.setattr(phone, "notify", unreachable)
     assert await ha_tell.tell(_config(tmp_path), "x", "Felt", "ha") is not None

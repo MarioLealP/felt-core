@@ -2,7 +2,7 @@
 2026-10-18 - KDE Connect went with the Windows desktop agent).
 """
 
-from felt_core.clients.phone import PhoneUnavailable, battery
+from felt_core.clients.phone import PhoneUnavailableError, battery
 from felt_core.models.plugin import SkillResult
 
 name = "get_phone_battery"
@@ -13,7 +13,7 @@ parameters_schema = {"type": "object", "properties": {}}
 async def handle(params, ctx):
     try:
         percent, charging = await battery(ctx.config)
-    except PhoneUnavailable:
+    except PhoneUnavailableError:
         return SkillResult(text="Couldn't reach the phone right now.")
     state = "charging" if charging else "not charging"
     return SkillResult(text=f"Phone battery: {percent}% ({state})")

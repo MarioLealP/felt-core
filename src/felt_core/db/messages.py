@@ -48,7 +48,7 @@ def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks:
     # deleting anything.
     exclusion = CHAT_ONLY_SQL if exclude_remarks else ""
     rows = conn.execute(
-        "SELECT role, content FROM messages "
+        "SELECT role, content FROM messages "  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
         "WHERE session_id = ? AND content NOT LIKE '[System Observation%'" + exclusion + " "
         "ORDER BY id DESC LIMIT ?",
         (session_id, limit),
@@ -66,7 +66,7 @@ def get_her_recent_lines(db_path: str, session_id: str, limit: int = 8, max_age:
     kinds = ",".join(f"'{k}'" for k in ASIDE_KINDS)
     conn = _connect(db_path)
     rows = conn.execute(
-        "SELECT content, created_at FROM messages WHERE session_id = ? AND role = 'assistant'"
+        "SELECT content, created_at FROM messages WHERE session_id = ? AND role = 'assistant'"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
         f" AND kind IN ({kinds}) AND created_at >= datetime('now', ?)"
         " ORDER BY id DESC LIMIT ?",
         (session_id, max_age, limit),
@@ -83,7 +83,7 @@ def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> 
     """
     conn = _connect(db_path)
     rows = conn.execute(
-        "SELECT m.session_id, m.role, m.content FROM messages m "
+        "SELECT m.session_id, m.role, m.content FROM messages m "  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
         "WHERE m.created_at >= ? AND m.created_at < ? "
         "AND m.content NOT LIKE '[System Observation%' "
         f"AND m.kind = '{CHAT}' ORDER BY m.id ASC",

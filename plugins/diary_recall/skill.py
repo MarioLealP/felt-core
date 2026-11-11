@@ -36,7 +36,7 @@ def _wants_week(raw: str) -> bool:
     return "week" in raw.lower()
 
 
-async def handle(params, ctx):
+async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
     raw_range = str(get_single_param(params, "range") or ctx.original_message or "")
     config = ctx.config
 

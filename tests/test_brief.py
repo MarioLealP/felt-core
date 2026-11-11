@@ -2,6 +2,7 @@
 news + the overnight server, in her words, desk and phone."""
 
 from datetime import UTC, datetime
+from typing import ClassVar
 
 import pytest
 
@@ -35,12 +36,12 @@ def world(monkeypatch):
     """Her skills, the model and the phone, faked; `world.said` = desk lines."""
 
     class World:
-        calls: list = []
-        said: list = []
-        phone: list = []
-        prompts: list = []
+        calls: ClassVar[list] = []
+        said: ClassVar[list] = []
+        phone: ClassVar[list] = []
+        prompts: ClassVar[list] = []
         reply = "Morning! Dentist at 3, 18 and cloudy, and Porto's metro has news."
-        texts = {
+        texts: ClassVar[dict[str, str]] = {
             "list_calendar_events": "Dentist at 15:00.",
             "get_weather": "Cloudy, 18 degrees.",
             "news_digest": "Greater Porto:\n- Metro do Porto abre nova linha (JN)",
@@ -56,7 +57,7 @@ def world(monkeypatch):
     async def reply(messages, config, **kw):
         World.prompts.append(messages[-1]["content"])
         if World.reply is None:
-            raise local_llm.LocalLLMUnavailable("down")
+            raise local_llm.LocalLLMUnavailableError("down")
         return World.reply
 
     monkeypatch.setattr("felt_core.brain.replies.local_reply", reply)

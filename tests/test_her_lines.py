@@ -42,7 +42,7 @@ def test_a_push_is_a_line_even_if_it_expires_undelivered(tmp_path):
 async def test_new_mail_is_a_line_she_remembers(tmp_path, fake_llm):
     config = _config(tmp_path)
     mail_id = emails.add(config.db_path, "<1@x>", "Ana <ana@x.pt>", "Dinner", "hi", False)
-    fake_llm.script = [local_llm.LocalLLMUnavailable("down")]
+    fake_llm.script = [local_llm.LocalLLMUnavailableError("down")]
     await emails.tick(config)
     await emails.tick(config)  # same mail: not said twice
     assert _lines(config.db_path) == [

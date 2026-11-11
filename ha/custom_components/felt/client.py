@@ -89,11 +89,11 @@ class FeltClient:
         return reply["reply"]
 
     async def controls(self) -> dict:
-        """{quiet, hide, dj, desktop_online, mood}"""
+        """{quiet, hide, dj, desktop_online, mood}."""
         return await self._call("GET", "/v1/ha/controls")
 
     async def systems(self) -> dict:
-        """{areas: {name: {status, count}}, needs_you, latest: [...]}"""
+        """{areas: {name: {status, count}}, needs_you, latest: [...]}."""
         return await self._call("GET", "/v1/ha/systems")
 
     async def set_control(self, name: str, on: bool) -> dict:

@@ -86,7 +86,7 @@ def familiar(history: dict[str, dict], count: int, avoid: set[str]) -> list[dict
     picks: list[dict] = []
     while pool and len(picks) < count:
         weights = [t["plays"] - t["skips"] for _, t in pool]
-        i = random.choices(range(len(pool)), weights=weights)[0]
+        i = random.choices(range(len(pool)), weights=weights)[0]  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
         tid, t = pool.pop(i)
         picks.append(
             {
@@ -142,7 +142,7 @@ async def discoveries(
         if not tracks:
             logger.info("dj: no tracks for suggested artist %r", a["name"])
             continue
-        t = random.choice(tracks)
+        t = random.choice(tracks)  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
         avoid.add(t["uri"])
         picks.append(
             {
@@ -162,7 +162,7 @@ async def pick(client: httpx2.AsyncClient, config: FeltConfig, count: int, avoid
     """
     db = config.db_path
     share = learning.discovery_share(store.discovery_outcomes(db, 10))
-    want_new = sum(random.random() < share for _ in range(count))
+    want_new = sum(random.random() < share for _ in range(count))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
     avoid = avoid | store.recent_pick_uris(db, _RECENT_PICK_DAYS)
     history = store.history_tracks(db)
     picks = familiar(history, count - want_new, avoid)

@@ -3,7 +3,7 @@ the helpers every brain submodule shares for an actual model-generated
 line. This is the one module events.py imports from directly instead of
 reaching into orchestrator internals (`local_reply`/`music_taste_context`
 below are public on purpose). Every function here raises
-`local_llm.LocalLLMUnavailable` when felt-llm is down - there is no
+`local_llm.LocalLLMUnavailableError` when felt-llm is down - there is no
 fallback, callers let it propagate (the API maps it to a 503).
 """
 
@@ -95,7 +95,7 @@ def local_turn_messages(message: str, history: list[dict], config: FeltConfig, t
     if context:
         joined = "\n\n".join(context)
         user = f"[Background for this reply, not said by Mario]\n{joined}\n[End of background]\n\n{message}"
-    return [{"role": "system", "content": _daily_persona()}] + conversation + [{"role": "user", "content": user}]
+    return [{"role": "system", "content": _daily_persona()}, *conversation, {"role": "user", "content": user}]
 
 
 # WP-07's fixed emotion set: X-Emotion drives a small fixed set of
@@ -111,7 +111,7 @@ async def local_reply(
     opt-in per caller, since screen-reaction and event lines don't need
     them (WP-02: "Facts are not needed; don't include them"). Public: the
     orchestrator, the screen-reaction module and events.py all call this
-    directly (WP-40). Raises LocalLLMUnavailable when felt-llm is down.
+    directly (WP-40). Raises LocalLLMUnavailableError when felt-llm is down.
     """
     facts = _facts_context(config) if include_facts else []
     taste = music_taste_context(config) if include_facts else []
@@ -122,7 +122,7 @@ async def local_reply(
         # per call -> the user turn, so the persona above stays cached
         last = {**last, "content": with_context(context, context_text)}
         messages_tail = [*messages_tail[:-1], last]
-    messages = [{"role": "system", "content": daily_persona()}] + facts + taste + messages_tail
+    messages = [{"role": "system", "content": daily_persona()}, *facts, *taste, *messages_tail]
     reply = await local_llm.chat(messages, max_tokens=_REPLY_MAX_TOKENS, config=config)
     return reply.text
 
@@ -161,8 +161,8 @@ async def phrase_skill_result(
     fast path, or a model turn that produced no usable text.
     """
     return await local_reply(
-        history
-        + [
+        [
+            *history,
             {"role": "user", "content": message},
             {"role": "user", "content": _tool_result_instruction(tool_output)},
         ],

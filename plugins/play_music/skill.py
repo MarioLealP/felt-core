@@ -12,7 +12,7 @@ Mario 2026-10-18: "make it different things, add to queue or play").
 import httpx2
 
 from felt_core.clients.spotify_client import (
-    NoActivePlayer,
+    NoActivePlayerError,
     add_to_queue,
     format_track_name,
     search_track,
@@ -61,7 +61,7 @@ async def handle(params, ctx):
                 await add_to_queue(client, config, track["uri"])
             else:
                 await start_track(client, config, track["uri"], track.get("name"))
-        except NoActivePlayer:
+        except NoActivePlayerError:
             return SkillResult(text="Spotify's asleep on your desktop - hit play on anything once, then ask again.")
         except httpx2.HTTPError:
             return SkillResult(text="Spotify didn't take that right now.")

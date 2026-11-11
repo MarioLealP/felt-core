@@ -240,7 +240,7 @@ def promote_due(db_path: str, now: datetime | None = None) -> list[int]:
             ]
             if ids:
                 q = ",".join("?" * len(ids))
-                conn.execute(f"UPDATE incidents SET state = 'open' WHERE id IN ({q})", ids)
+                conn.execute(f"UPDATE incidents SET state = 'open' WHERE id IN ({q})", ids)  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     finally:
         conn.close()
     return ids
@@ -270,7 +270,7 @@ def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
         _ensure(conn)
         with conn:
             rows = conn.execute(
-                "SELECT id, title FROM incidents WHERE state = 'open' AND report IS NULL"
+                "SELECT id, title FROM incidents WHERE state = 'open' AND report IS NULL"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 " AND (handler = 'felt' OR missed_at IS NOT NULL)"
                 f" AND last_at <= ? AND type NOT IN ({q_types})",
                 (cutoff, *_ATTACK_TYPES),
@@ -279,7 +279,7 @@ def expire_unseen(db_path: str, now: datetime | None = None) -> list[int]:
             if ids:
                 q = ",".join("?" * len(ids))
                 conn.execute(
-                    f"UPDATE incidents SET state = 'expired', handled_at = ?, handled_by = 'expiry' WHERE id IN ({q})",
+                    f"UPDATE incidents SET state = 'expired', handled_at = ?, handled_by = 'expiry' WHERE id IN ({q})",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                     [_ts(at), *ids],
                 )
     finally:

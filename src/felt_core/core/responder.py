@@ -80,7 +80,7 @@ def waiting(db_path: str) -> int:
     conn = _connect(db_path)
     try:
         _ensure(conn)
-        return conn.execute(f"SELECT COUNT(*) FROM incidents WHERE {_WAITING}").fetchone()[0]
+        return conn.execute(f"SELECT COUNT(*) FROM incidents WHERE {_WAITING}").fetchone()[0]  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     finally:
         conn.close()
 
@@ -100,7 +100,7 @@ def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) 
             today = conn.execute("SELECT COUNT(*) FROM incidents WHERE handed_at >= ?", (day,)).fetchone()[0]
             if today >= cap:
                 return None
-            row = conn.execute(f"SELECT id FROM incidents WHERE {_WAITING} ORDER BY {_TIERS}, id LIMIT 1").fetchone()
+            row = conn.execute(f"SELECT id FROM incidents WHERE {_WAITING} ORDER BY {_TIERS}, id LIMIT 1").fetchone()  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
             if row is None:
                 return None
             conn.execute("UPDATE incidents SET handed_at = ? WHERE id = ?", (_ts(now), row[0]))
@@ -160,17 +160,17 @@ def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
         _ensure(conn)
         with conn:
             if switched_off:
-                off = [r[0] for r in conn.execute(f"SELECT id FROM incidents WHERE {_WAITING}")]
+                off = [r[0] for r in conn.execute(f"SELECT id FROM incidents WHERE {_WAITING}")]  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                 if off:
                     q = ",".join("?" * len(off))
                     conn.execute(
-                        f"UPDATE incidents SET missed_at = ?, missed_why = 'off' WHERE id IN ({q})",
+                        f"UPDATE incidents SET missed_at = ?, missed_why = 'off' WHERE id IN ({q})",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                         [stamp, *off],
                     )
             ids = [
                 r[0]
                 for r in conn.execute(
-                    f"SELECT id FROM incidents WHERE ({_WAITING}"
+                    f"SELECT id FROM incidents WHERE ({_WAITING}"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                     f" AND {_age('COALESCE(due_at, first_at)')} >= {_minutes(CLAIM_WITHIN)})"
                     " OR (handed_at IS NOT NULL AND report IS NULL AND missed_at IS NULL"
                     f" AND {_age('handed_at')} >= CASE WHEN investigator = 'felt'"
@@ -181,7 +181,7 @@ def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
             if ids:
                 q = ",".join("?" * len(ids))
                 conn.execute(
-                    f"UPDATE incidents SET missed_at = ?, missed_why = 'late' WHERE id IN ({q})",
+                    f"UPDATE incidents SET missed_at = ?, missed_why = 'late' WHERE id IN ({q})",  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
                     [stamp, *ids],
                 )
     finally:

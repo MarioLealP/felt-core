@@ -10,7 +10,7 @@ model calls are the same thing):
   felt-tray, makes ONE multimodal felt-llm call for a schema-constrained
   JSON {seen, line, emotion} triple.
 
-Both raise `local_llm.LocalLLMUnavailable` when felt-llm is down (the API
+Both raise `local_llm.LocalLLMUnavailableError` when felt-llm is down (the API
 answers 503) - there is no cloud fallback (WP-36 D'').
 
 Merged here (WP-40): the shared "are we on cooldown" check
@@ -142,9 +142,11 @@ async def process_screen_context(
         history_tail = get_history(config.db_path, session_id, exclude_remarks=True)[-4:]
         async with metrics.timed("screen_reaction", route="local", model=config.local_llm_model):
             reply = await local_reply(
-                [{"role": "system", "content": observations_block}]
-                + history_tail
-                + [{"role": "user", "content": instruction}],
+                [
+                    {"role": "system", "content": observations_block},
+                    *history_tail,
+                    {"role": "user", "content": instruction},
+                ],
                 config,
                 include_facts=False,
                 tone=tone,
@@ -222,7 +224,7 @@ async def _react_to_screen_local(
 ) -> dict | None:
     """felt-llm with the JPEG as an image part and the schema-constrained
     JSON reply. One retry on a parse failure; None after two unparseable
-    replies. LocalLLMUnavailable propagates (the API answers 503).
+    replies. LocalLLMUnavailableError propagates (the API answers 503).
 
     `seen` is a description felt-tray already got from the desktop's own
     felt-vision (cm-qplv) - then nobody here looks at an image.
@@ -280,7 +282,7 @@ async def react_to_screen(
 ) -> ChatResult:
     """WP-07's per-window, image-based screen reaction path: ONE felt-llm
     multimodal call (schema-constrained JSON, route "local"). Raises
-    LocalLLMUnavailable when felt-llm is down (api.py maps it to a 503,
+    LocalLLMUnavailableError when felt-llm is down (api.py maps it to a 503,
     and felt-tray just skips the reaction). Two unparseable replies give
     no reaction.
 

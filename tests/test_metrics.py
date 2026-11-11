@@ -1,5 +1,6 @@
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 import felt_core.core.metrics as metrics
@@ -63,8 +64,8 @@ def test_compute_stats_percentiles_and_max():
     stats = metrics.compute_stats(rows)
 
     assert stats["router"]["n"] == 10
-    assert stats["router"]["p50"] == 55.0
-    assert stats["router"]["p95"] == 95.5
+    assert stats["router"]["p50"] == pytest.approx(55.0)
+    assert stats["router"]["p95"] == pytest.approx(95.5)
     assert stats["router"]["max"] == 100
 
 

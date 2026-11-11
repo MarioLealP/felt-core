@@ -122,7 +122,7 @@ async def add(config: FeltConfig, held: dict, place: str | None) -> bool:
         await ha_calendar.create_event(
             config, held["calendar"], held["summary"], held["start"], held["end"], location=place
         )
-    except ha_calendar.CalendarUnavailable:
+    except ha_calendar.CalendarUnavailableError:
         logger.warning("appointment hold: couldn't add %r", held["summary"])
         return False
     ha_calendar.remember_created(config, held["calendar"], held["summary"], held["start"], held["end"])
@@ -159,7 +159,7 @@ async def change_place(config: FeltConfig, last: dict, place: str) -> str:
             return "I couldn't confirm the change in the calendar."
         for event in old:
             await ha_calendar.delete_event(config, calendar_id, event["uid"])
-    except ha_calendar.CalendarUnavailable, httpx2.HTTPError:
+    except ha_calendar.CalendarUnavailableError, httpx2.HTTPError:
         return "I couldn't reach the calendar to add the place."
     ha_calendar.remember_created(config, calendar_id, summary, start, end)
     return f"'{summary}', {when(start)}, is now at {place}. Read it back to Mario as written."
