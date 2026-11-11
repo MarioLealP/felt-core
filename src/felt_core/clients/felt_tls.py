@@ -1,5 +1,7 @@
-"""Felt service certs on felt-core's outbound links (WP-62 M2b B5: felt-voice D4,
-drive-rag D10.2; D5).
+"""Felt service certs on felt-core's outbound links.
+
+Felt service certs on felt-core's outbound links (WP-62 M2b B5: felt-voice D4, drive-rag D10.2; D5).
+
 
 felt-core's 2-hour Felt client cert is renewed hourly by the server-side
 helper into FELT_IDENTITY_DIR (mounted read-only from
@@ -21,6 +23,7 @@ import httpx2
 
 
 def felt_client_context(identity_dir: str) -> ssl.SSLContext:
+    """A TLS 1.3 client context with her Felt cert, trusting only the Felt CA."""
     d = Path(identity_dir)
     ctx = ssl.create_default_context(cafile=str(d / "felt-ca.pem"))
     ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN  # the anchor is an intermediate
@@ -30,7 +33,9 @@ def felt_client_context(identity_dir: str) -> ssl.SSLContext:
 
 
 def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
-    """A client for one of Caddy's machine hosts (B5.3, e.g. poe2-api): Caddy
+    """A client for one of Caddy's machine hosts.
+
+    A client for one of Caddy's machine hosts (B5.3, e.g. poe2-api): Caddy
     shows its normal public certificate (verified against the public CAs, as
     httpx2 does by default), and she presents her Felt cert. Plain otherwise.
     """
@@ -44,7 +49,9 @@ def machine_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncC
 
 
 def felt_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
-    """A client for a Felt peer at ``url``: mTLS with her Felt cert when the URL
+    """A client for a Felt peer at ``url``.
+
+    A client for a Felt peer at ``url``: mTLS with her Felt cert when the URL
     is https:// and FELT_IDENTITY_DIR is set; plain otherwise (as before).
     """
     identity_dir = getattr(config, "identity_dir", None)

@@ -1,4 +1,6 @@
-"""Felt's eyes: felt-vision (Qwen3-VL-2B, its own llama.cpp server) describes a
+"""Felt's eyes: felt-vision describes a screenshot in text.
+
+Felt's eyes: felt-vision (Qwen3-VL-2B, its own llama.cpp server) describes a
 screenshot in text, and felt-llm reacts to the description instead of reading
 the image itself (vision spike 2026-10-21, workspace runbooks/felt-vision-spike.md):
 the same reaction quality in a blind review, ~14 s instead of ~35 s, and

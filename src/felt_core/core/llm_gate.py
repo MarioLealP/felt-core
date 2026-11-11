@@ -1,8 +1,8 @@
-"""One way onto felt-llm (Mario 2026-10-21: "go for it" on GPT's broker
-review). felt-llm runs one request at a time; a cache probe that day had
-unprompted background lines holding it ~80 % of the time, so a chat reply
-waited 20-40 s behind a song remark. Every local_llm call now goes through
-here, one at a time, by class:
+"""One way onto felt-llm (Mario 2026-10-21: "go for it" on GPT's broker review).
+
+felt-llm runs one request at a time; a cache probe that day had unprompted background
+lines holding it ~80 % of the time, so a chat reply waited 20-40 s behind a song remark.
+Every local_llm call now goes through here, one at a time, by class:
 
 - CHAT (default - anything not marked): Mario talking, the skills in his turn.
 - TIMELY: alarms, calendar heads-ups, alert lines, print done - wait behind chat.
@@ -11,13 +11,13 @@ here, one at a time, by class:
 
 Ambient is the only class that gives way:
 - not started during a chat or for QUIET_AFTER_CHAT_S after his last turn
-  (he's likely to say something next),
+(he's likely to say something next),
 - not started past AMBIENT_BUDGET_S of model time in the last minute,
 - dropped if it can't start within its lifetime (the song has changed),
 - cancelled when a chat arrives while it runs. That frees the slot at once
-  while felt-llm is writing; while it is still reading the prompt, felt-llm
-  finishes the read first (measured 2026-10-21: 53 s on a 2.5K prompt), which
-  is why the quiet window matters more than the cancel.
+while felt-llm is writing; while it is still reading the prompt, felt-llm
+finishes the read first (measured 2026-10-21: 53 s on a 2.5K prompt), which
+is why the quiet window matters more than the cancel.
 
 A skipped or cancelled ambient call raises SkippedError here; local_llm turns it
 into its AmbientSkippedError, a LocalLLMUnavailableError - every ambient feature already
@@ -63,14 +63,17 @@ def _marked(cls: int, label: str, lifetime_s: float = 0.0) -> Generator[None]:
 
 
 def ambient(label: str, lifetime_s: float = AMBIENT_LIFETIME_S):
+    """Mark a call as ambient: a line nobody asked for, which gives way and expires after `lifetime_s`."""
     return _marked(AMBIENT, label, lifetime_s)
 
 
 def timely(label: str):
+    """Mark a call as timely (alarms, heads-ups, alert lines): it waits only behind chat."""
     return _marked(TIMELY, label)
 
 
 def maintenance(label: str):
+    """Mark a call as maintenance (the nightly diary, the warm-up)."""
     return _marked(MAINTENANCE, label)
 
 

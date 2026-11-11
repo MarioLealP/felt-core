@@ -1,4 +1,6 @@
-"""The shopping list lives in Home Assistant (felt-ha-hub step 3, 2026-10-18):
+"""The shopping list, kept in Home Assistant.
+
+The shopping list lives in Home Assistant (felt-ha-hub step 3, 2026-10-18):
 its `todo.shopping_list`, the one the HA app's Home dashboard shows. Before
 this Felt kept her own table, so there were two lists. Now the skill, the
 Felt app's Lists page and the old /shopping-list phone page all read and
@@ -47,24 +49,30 @@ async def items(config: FeltConfig) -> list[dict]:
 
 
 async def add(config: FeltConfig, text: str) -> None:
+    """Add an item to the list."""
     await _call(config, "add_item", {"item": text})
 
 
 async def set_checked(config: FeltConfig, item_id: str, checked: bool) -> None:
+    """Check or uncheck one item."""
     status = "completed" if checked else "needs_action"
     await _call(config, "update_item", {"item": item_id, "status": status})
 
 
 async def remove(config: FeltConfig, item_id: str) -> None:
+    """Remove one item."""
     await _call(config, "remove_item", {"item": item_id})
 
 
 async def clear_checked(config: FeltConfig) -> None:
+    """Remove every checked item."""
     await _call(config, "remove_completed_items")
 
 
 async def version(config: FeltConfig) -> str:
-    """Changes when the list does (the entity's state is the unchecked count),
+    """A value that changes when the list does.
+
+    Changes when the list does (the entity's state is the unchecked count),
     for the app's live "lists changed" notice. Empty when HA can't be asked.
     """
     if not (config.ha_url and config.ha_token and config.ha_shopping_list):

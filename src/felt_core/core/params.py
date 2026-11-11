@@ -1,4 +1,6 @@
-"""Shared helper for a repeated router finding (2026-09-11, hit twice
+"""A forgiving param lookup for the router's inexact key names.
+
+Shared helper for a repeated router finding (2026-09-11, hit twice
 independently — poe_price_check got 'item' instead of 'item_name',
 set_timer got 'duration' instead of 'minutes'): the router reliably
 decides a tool is needed and reliably extracts *a* value, but doesn't
@@ -14,6 +16,7 @@ from typing import Any
 
 
 def get_single_param(params: dict[str, Any], *expected_keys: str, ignore_keys: tuple[str, ...] = ()) -> Any | None:
+    """The value under the first expected key, else the single value the router gave under another key."""
     for key in expected_keys:
         if key in params and params[key] is not None:
             return params[key]

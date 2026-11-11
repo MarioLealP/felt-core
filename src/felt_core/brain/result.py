@@ -1,4 +1,6 @@
-"""The shared result shape every brain entry point returns - its own leaf
+"""The result shape every brain entry point returns.
+
+The shared result shape every brain entry point returns - its own leaf
 module (no other brain internals imported) so every submodule (chat
 orchestration, screen reactions, ...) can depend on it with no risk of a
 circular import.

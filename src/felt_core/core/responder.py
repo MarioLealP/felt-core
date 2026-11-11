@@ -1,4 +1,6 @@
-"""WP-58: the handoff between her incidents and the felt-responder, the
+"""The handoff between her incidents and the felt-responder (WP-58).
+
+WP-58: the handoff between her incidents and the felt-responder, the
 headless Claude on the server that investigates read-only.
 
 The chain (Mario 10-03): she tells him "Claude's on it" (alert_lines, her
@@ -62,7 +64,9 @@ def _age(column: str) -> str:
 
 
 def wake(db_path: str) -> bool:
-    """Rings the responder's doorbell if anything waits for Claude: rewrites
+    """Rings the responder's doorbell if anything waits for Claude.
+
+    Rings the responder's doorbell if anything waits for Claude: rewrites
     a marker file next to the database, which the host's path unit watches.
     """
     if not waiting(db_path):
@@ -72,8 +76,9 @@ def wake(db_path: str) -> bool:
 
 
 def waiting(db_path: str) -> int:
-    """How many incidents are waiting for Claude - so the runner only checks
-    the usage limits when there's work. None while he's switched off.
+    """How many incidents are waiting for Claude - so the runner only checks the usage limits when there's work.
+
+    None while he's switched off.
     """
     if not claude_alerts(db_path):
         return 0
@@ -86,7 +91,9 @@ def waiting(db_path: str) -> int:
 
 
 def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) -> dict | None:
-    """The next incident for Claude (most urgent, then oldest), marked as
+    """The next incident for Claude, marked as handed over.
+
+    The next incident for Claude (most urgent, then oldest), marked as
     handed over; None when there's none or today's cap is spent.
     """
     if not claude_alerts(db_path):
@@ -110,7 +117,9 @@ def claim_next(db_path: str, now: datetime | None = None, cap: int = DAILY_CAP) 
 
 
 def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -> bool:
-    """Stores Claude's report on a claimed incident; False if it wasn't his
+    """Stores Claude's report on a claimed incident.
+
+    Stores Claude's report on a claimed incident; False if it wasn't his
     (unknown, never handed over, or already reported).
     """
     verdict = report.get("verdict")
@@ -130,8 +139,9 @@ def save_report(db_path: str, incident_id: int, report: dict, session_id: str) -
 
 
 def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> bool:
-    """The responder hands a claimed incident to her own model: her report deadline
-    starts now. False if it isn't a claimed one still waiting for its report.
+    """The responder hands a claimed incident to her own model: her report deadline starts now.
+
+    False if it isn't a claimed one still waiting for its report.
     """
     conn = _connect(db_path)
     try:
@@ -148,7 +158,9 @@ def take_local(db_path: str, incident_id: int, now: datetime | None = None) -> b
 
 
 def mark_missed(db_path: str, now: datetime | None = None) -> list[int]:
-    """Incidents Claude didn't get to in time, by tier: never claimed within
+    """Incidents Claude didn't get to in time, by tier.
+
+    Incidents Claude didn't get to in time, by tier: never claimed within
     CLAIM_WITHIN of opening, or claimed with no report within REPORT_WITHIN.
     While he's switched off, every waiting one is missed at once ("off").
     """

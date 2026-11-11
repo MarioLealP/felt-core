@@ -1,7 +1,8 @@
-"""Mario's calendars, through Home Assistant (felt-ha-hub, 2026-10-19: Mario,
-"we can do full move"). HA's Google integration holds the one Google login;
-Felt reads and writes with her non-admin HA user. Before this she had her own
-Google OAuth client (google_calendar.py, 2026-09-14), now gone.
+"""Mario's calendars, through Home Assistant (felt-ha-hub, 2026-10-19: Mario, "we can do full move").
+
+HA's Google integration holds the one Google login; Felt reads and writes with
+her non-admin HA user. Before this she had her own Google OAuth client
+(google_calendar.py, 2026-09-14), now gone.
 
 Every calendar HA has counts (Mario: "All of them") - all-day ones like
 holidays and birthdays never get heads-ups anyway. Reminders (set_reminder)
@@ -45,6 +46,7 @@ class CalendarUnavailableError(Exception):
 
 
 def connected(config: FeltConfig) -> bool:
+    """Whether Home Assistant is configured, so the calendar can be reached."""
     return bool(config.ha_url and config.ha_token)
 
 
@@ -58,7 +60,9 @@ def _event(raw: dict) -> dict:
 
 
 async def list_calendars(client: httpx2.AsyncClient, config: FeltConfig) -> list[dict]:
-    """Every calendar HA has, as {"id": entity_id, "summary": name}; the
+    """Every calendar HA has, with the default one marked "primary".
+
+    Every calendar HA has, as {"id": entity_id, "summary": name}; the
     default one (`ha_calendar_default`) is marked "primary".
     """
     response = await client.get(f"{config.ha_url}/api/calendars", headers=_headers(config))
@@ -80,6 +84,7 @@ async def list_events(
     time_min: datetime,
     time_max: datetime,
 ) -> list[dict]:
+    """The events on one calendar between `time_min` and `time_max`."""
     response = await client.get(
         f"{config.ha_url}/api/calendars/{calendar_id}",
         headers=_headers(config),
@@ -106,7 +111,9 @@ async def get_event(
     event_id: str,
     around: datetime,
 ) -> dict | None:
-    """The event as Google has it now (refreshed), looked up within a day of
+    """The event as Google has it now, or None if it's gone.
+
+    The event as Google has it now (refreshed), looked up within a day of
     `around` (its start when last seen), or None if it's gone - or moved
     further than that, which the next poll picks up anyway.
     """
@@ -156,9 +163,10 @@ async def create_event(
     location: str | None = None,
     all_day: bool = False,
 ) -> None:
-    """`rrule`: an iCal repeat rule without the "RRULE:" prefix, e.g.
-    "FREQ=WEEKLY". `all_day`: dates only - `start`'s day up to (not
-    including) `end`'s.
+    """`rrule`: an iCal repeat rule without the "RRULE:" prefix, e.g. "FREQ=WEEKLY".
+
+    `all_day`: dates only - `start`'s day up to (not including)
+    `end`'s.
     """
     span = (start.date().isoformat(), end.date().isoformat()) if all_day else (start.isoformat(), end.isoformat())
     event: dict = {"summary": summary, "dtstart": span[0], "dtend": span[1]}
@@ -172,6 +180,7 @@ async def create_event(
 
 
 async def delete_event(config: FeltConfig, calendar_id: str, uid: str) -> None:
+    """Delete one event by its uid."""
     await _ws_call(config, {"type": "calendar/event/delete", "entity_id": calendar_id, "uid": uid})
 
 
@@ -210,9 +219,7 @@ def event_start(event: dict) -> datetime | None:
 
 
 def link(event: dict) -> str | None:
-    """Pure: the first web link in the event's place or description (HA
-    doesn't pass on Google's Meet link field).
-    """
+    """Pure: the first web link in the event's place or description (HA doesn't pass on Google's Meet link field)."""
     for text in (event.get("location"), event.get("description")):
         m = _URL.search(text or "")
         if m:
@@ -227,10 +234,12 @@ def day_bounds(day: date) -> tuple[datetime, datetime]:
 
 
 def resolve_calendar(calendars: list[dict], name: str | None) -> dict | None:
-    """Pure. No name -> the primary calendar. A name -> substring match
-    against each calendar's display name (same convention as every
-    other name-matching skill in this project), preferring an exact
-    match over a partial one.
+    """Pure.
+
+    No name -> the primary calendar. A name -> substring match against
+    each calendar's display name (same convention as every other
+    name-matching skill in this project), preferring an exact match
+    over a partial one.
     """
     if not name:
         return next((c for c in calendars if c.get("primary")), None)
@@ -244,7 +253,9 @@ def resolve_calendar(calendars: list[dict], name: str | None) -> dict | None:
 
 
 def format_event_line(event: dict) -> str:
-    """Pure: one human-readable line for an event — a timed event shows
+    """Pure: one human-readable line for an event.
+
+    Pure: one human-readable line for an event — a timed event shows
     its local start time, an all-day event (a "date" instead of a
     "dateTime" - how the holiday calendar reports its entries) is
     marked as such instead.
@@ -258,7 +269,9 @@ def format_event_line(event: dict) -> str:
 
 
 def summarize_events(events_by_calendar: list[tuple[str, list[dict]]]) -> str:
-    """Pure: every (calendar_name, events) pair flattened into one
+    """Pure: every calendar's events flattened into one speech-friendly summary.
+
+    Pure: every (calendar_name, events) pair flattened into one
     speech-friendly summary, dropping calendars with nothing to show
     rather than saying "X has 0 events" for each one.
     """

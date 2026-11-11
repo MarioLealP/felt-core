@@ -4,6 +4,7 @@ from felt_core.db.session import _connect, _require_lastrowid
 
 
 def insert_proactive(db_path: str, kind: str, text: str, payload_json: str, expires_at: str | None) -> int:
+    """Queue one proactive item; returns its id."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -27,7 +28,9 @@ def _row_to_proactive_dict(row: tuple) -> dict:
 
 
 def claim_next_proactive(db_path: str) -> dict | None:
-    """Atomically returns and marks-delivered the oldest undelivered,
+    """Hands out the oldest undelivered, unexpired proactive item, or None.
+
+    Atomically returns and marks-delivered the oldest undelivered,
     unexpired proactive item (WP-25's long-poll endpoint calls this on
     every poll tick), or None if there's nothing to hand out right now.
     Select-then-update in one `with conn:` transaction so two concurrent
@@ -51,6 +54,7 @@ def claim_next_proactive(db_path: str) -> dict | None:
 
 
 def get_proactive_item(db_path: str, item_id: int) -> dict | None:
+    """One proactive item by id, or None."""
     conn = _connect(db_path)
     row = conn.execute(
         "SELECT id, kind, text, payload_json, created_at, expires_at FROM proactive WHERE id = ?",
@@ -61,7 +65,9 @@ def get_proactive_item(db_path: str, item_id: int) -> dict | None:
 
 
 def requeue_proactive(db_path: str, item_id: int) -> bool:
-    """Clears `delivered_at` so the item is handed out again on the next
+    """Puts a delivered item back in the queue, unless it's gone or expired.
+
+    Clears `delivered_at` so the item is handed out again on the next
     poll - felt-tray's path for "Felt was hidden/away and this wasn't
     urgent, don't lose it." Only takes effect if the item still exists and
     hasn't since expired (an expired item must never come back around,
@@ -80,7 +86,9 @@ def requeue_proactive(db_path: str, item_id: int) -> bool:
 
 
 def prune_expired_proactive(db_path: str) -> None:
-    """Startup sweep (same convention as delete_old_latency_rows) - an
+    """Startup sweep: deletes expired proactive items.
+
+    Startup sweep (same convention as delete_old_latency_rows) - an
     expired item is already unreachable via claim_next_proactive, this
     just stops the table growing forever.
     """

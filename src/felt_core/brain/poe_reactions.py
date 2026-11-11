@@ -75,6 +75,7 @@ _PRICED_LINE_PROMPT = (
 
 
 def is_poe(app: str) -> bool:
+    """Whether the foreground app is Path of Exile."""
     return app.strip().lower().startswith("pathofexile")
 
 

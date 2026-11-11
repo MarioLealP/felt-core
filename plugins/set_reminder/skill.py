@@ -1,11 +1,11 @@
-"""Reminders (WP-46): "remind me Friday at 3 to call the dentist", "every
-Monday at 9 remind me to take the bins out". Each one is an event in
-the "Felt reminders" calendar, through Home Assistant (Mario 2026-10-18:
-linked to the phone, not a Felt-only list) - that calendar's own 0-minute
-notification makes the phone's Calendar app ring right on time, recurring
-ones repeat there, and the main calendar's time isn't filled. Being in that
-calendar is what makes calendar_headsup speak it at the desk on time too,
-instead of the 30/10-minute heads-ups.
+"""Reminders (WP-46): "remind me Friday at 3 to call the dentist", "every Monday at 9 remind me to take the bins out".
+
+Each one is an event in the "Felt reminders" calendar, through Home
+Assistant (Mario 2026-10-18: linked to the phone, not a Felt-only list) -
+that calendar's own 0-minute notification makes the phone's Calendar app
+ring right on time, recurring ones repeat there, and the main calendar's
+time isn't filled. Being in that calendar is what makes calendar_headsup
+speak it at the desk on time too, instead of the 30/10-minute heads-ups.
 """
 
 import re
@@ -65,9 +65,11 @@ _DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
 
 
 def split_every(when: str, repeat: str) -> tuple[str, str]:
-    """Pure: 'every monday at 9' -> ('monday at 9', 'weekly'). felt-llm
-    sometimes leaves the repeat in the time text (e2e 2026-10-18); the date
-    parser can't read 'every', and an unset repeat is taken from it.
+    """Pure: 'every monday at 9' -> ('monday at 9', 'weekly').
+
+    felt-llm sometimes leaves the repeat in the time text (e2e 2026-10-18);
+    the date parser can't read 'every', and an unset repeat is taken from
+    it.
     """
     m = _EVERY_WHEN.match(when)
     if m is None:
@@ -91,10 +93,10 @@ def split_every(when: str, repeat: str) -> tuple[str, str]:
 
 
 def describe(start: datetime, repeat: str, now: datetime | None = None) -> str:
-    """Pure: 'today 3:00 PM' / 'tomorrow 9:00 AM' / 'Wednesday 4 November
-    10:00 PM' / 'every Monday at 9:00 AM'. The date, not the weekday alone:
-    "2pm PST" with the date left out became tonight, and "Thursday" (today)
-    hid it (cm-p6a e2e).
+    """Pure: 'today 3:00 PM' / 'tomorrow 9:00 AM' / 'Wednesday 4 November 10:00 PM' / 'every Monday at 9:00 AM'.
+
+    The date, not the weekday alone: "2pm PST" with the date left out
+    became tonight, and "Thursday" (today) hid it (cm-p6a e2e).
     """
     clock = start.strftime("%I:%M %p").lstrip("0")
     if repeat in _EVERY:
@@ -122,6 +124,7 @@ def _ordinal(n: int) -> str:
 
 
 async def handle(params, ctx):
+    """Put a reminder on HA's reminders calendar from Mario's words."""
     config = ctx.config
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")

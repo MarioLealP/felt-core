@@ -26,14 +26,14 @@ async def waiting() -> dict:
 
 @router.post("/handoff")
 async def handoff() -> dict:
-    """Claims the next incident for Claude; {"incident": null} when there's
-    nothing to do (or today's cap is spent).
-    """
+    """Claims the next incident for Claude; {"incident": null} when there's nothing to do (or today's cap is spent)."""
     incident = await asyncio.to_thread(responder.claim_next, load_config().db_path)
     return {"incident": incident}
 
 
 class Report(BaseModel):
+    """The felt-responder's findings on one incident."""
+
     verdict: Literal["expected", "fixed-itself", "needs-mario", "unknown"]
     summary: str = Field(max_length=4000)
     evidence: list[str] = Field(default_factory=list, max_length=50)
@@ -49,6 +49,8 @@ class Report(BaseModel):
 
 
 class ReportIn(BaseModel):
+    """A report as the responder posts it, with its session id."""
+
     report: Report
     session_id: str = Field(max_length=100)
 
@@ -63,6 +65,7 @@ async def local(incident_id: int) -> dict:
 
 @router.post("/{incident_id}/report")
 async def report(incident_id: int, body: ReportIn) -> dict:
+    """Store the responder's report on an incident (409 if not handed over, or already reported)."""
     saved = await asyncio.to_thread(
         responder.save_report,
         load_config().db_path,

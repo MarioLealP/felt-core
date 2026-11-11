@@ -1,4 +1,6 @@
-"""DJ mode on/off, and what happens on each Spotify poll while it's on (the
+"""DJ mode on/off, and what happens on each Spotify poll while it's on.
+
+DJ mode on/off, and what happens on each Spotify poll while it's on (the
 listening-history loop's poll - no second one). She keeps AHEAD picks queued
 in Spotify, says a line as each of her picks comes on, records how each went,
 and steps back when Mario takes over (plays something that isn't hers) or
@@ -39,12 +41,15 @@ _tasks: set[asyncio.Task] = set()
 
 
 def is_on() -> bool:
+    """Whether DJ mode is on."""
     return SESSION.on
 
 
 def same_track(pick: dict, snapshot: dict | None) -> bool:
-    """Pure: is `snapshot` (a currently-playing poll) her `pick`? By uri, or
-    by title + artist (Spotify can relink a track to another uri).
+    """Pure: is `snapshot` (a currently-playing poll) her `pick`?
+
+    By uri, or by title + artist (Spotify can relink a track to another
+    uri).
     """
     track = (snapshot or {}).get("track") or {}
     if track.get("uri") == pick["uri"]:
@@ -60,6 +65,7 @@ def _uri(snapshot: dict | None) -> str | None:
 
 
 async def start(config: FeltConfig) -> str:
+    """Turn DJ mode on: start her first pick and queue the next ones; returns what to say."""
     async with httpx2.AsyncClient(timeout=20) as client:
         picks = await picker.pick(client, config, AHEAD + 1, avoid=set())
         if not picks:
@@ -84,6 +90,7 @@ async def start(config: FeltConfig) -> str:
 
 
 def stop(reason: str) -> None:
+    """Turn DJ mode off, logging why."""
     if SESSION.on:
         logger.info("dj: off (%s)", reason)
     SESSION.on, SESSION.current, SESSION.ahead, SESSION.paused_since = False, None, [], None
@@ -134,9 +141,7 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
 
 
 async def feedback(config: FeltConfig, liked: bool) -> str:
-    """ "more like this" / "not this": remembered for her next picks; "not
-    this" also skips it.
-    """
+    """Mario's "more like this" / "not this", remembered for her next picks; "not this" also skips it."""
     async with httpx2.AsyncClient(timeout=20) as client:
         now = await sp.get_currently_playing(client, config)
         if now is None:

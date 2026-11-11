@@ -1,4 +1,6 @@
-"""WP-48: plain music commands go straight to the Spotify skills (home ones
+"""Plain music commands skip the model and go straight to the skills (WP-48).
+
+WP-48: plain music commands go straight to the Spotify skills (home ones
 go to Home Assistant's matcher, ha_assist.py) - felt-llm's tool pick isn't
 reliable for one-word commands ("skip"), and a wrong pick here would be a
 surprise in Mario's ears. Only

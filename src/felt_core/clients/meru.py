@@ -39,7 +39,9 @@ def meru_client_context(tls_dir: str) -> ssl.SSLContext:
 
 
 def meru_client(config: Any, url: str | None, **kwargs: Any) -> httpx2.AsyncClient:
-    """A client for an in-cluster peer that checks certificates (drive-rag): her Meru certificate
+    """A client for an in-cluster peer that checks certificates.
+
+    A client for an in-cluster peer that checks certificates (drive-rag): her Meru certificate
     when FELT_MERU_TLS_DIR is set and the URL is https://, else felt_tls's Felt-cert client
     (compose).
     """
