@@ -49,7 +49,7 @@ from felt_core.brain import (
 )
 from felt_core.clients import local_llm, shopping
 from felt_core.clients.poe_trade_cache import watch as poe_trade_cache_watch
-from felt_core.config import load_config, reveal
+from felt_core.config import FeltConfig, load_config, reveal
 from felt_core.core import incidents, metrics
 from felt_core.core.alarms import reschedule_pending_alarms
 from felt_core.core.calendar_headsup import calendar_headsup_loop
@@ -175,74 +175,101 @@ def _is_untimed(path: str) -> bool:
     return any(path.startswith(p) for p in _UNTIMED_PATHS)
 
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    """WP-55: the bearer-token check on every route but the exempt ones.
+def _ha_refusal(request: Request, config: FeltConfig) -> JSONResponse | None:
+    """Home Assistant's route takes only its Authentik token (felt-ha-hub D3)."""
+    why = ha_auth.check(config, request.headers.get("authorization", ""))
+    if why:
+        logger.warning("ha agent refused on %s %s: %s", request.method, request.url.path, why)
+        return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+    request.state.ha_agent = True
+    return None
 
-    With FELT_API_TOKEN set, every other route needs
-    `Authorization: Bearer <token>` (constant-time compare) or gets 401.
+
+def _machine_refusal(request: Request, config: FeltConfig, identity: str) -> JSONResponse | None:
+    """A Felt machine identity: allowed per identity per route, denied by default (WP-62 M2b B5.4, D3)."""
+    path = request.url.path
+    why = machine_auth.authorize(
+        identity,
+        request.headers.get("x-felt-serial", ""),
+        request.method,
+        path,
+        config.machine_deny_serials,
+    )
+    if why:
+        logger.warning("machine caller %s refused on %s %s: %s", identity, request.method, path, why)
+        return JSONResponse(status_code=403, content={"detail": why})
+    return None
+
+
+def _sso_refusal(request: Request, config: FeltConfig) -> JSONResponse | None:
+    """Caddy's SSO-gated routes: forward-auth did the authentication, felt-core only stops cross-origin CSRF.
+
+    They carry no token, so a sibling-subdomain page could otherwise call them (WP-62 phase 4).
     """
-    config = load_config()
+    if not _origin_ok(request, (config.app_origin, config.app_desktop_origin)):
+        return JSONResponse(status_code=403, content={"detail": "bad origin"})
+    return None
+
+
+def _identity_mode_refusal(request: Request, config: FeltConfig) -> JSONResponse | None:
+    """B5.4: the shared tokens are retired - no Bearer path at all.
+
+    Exempt routes and Caddy's SSO-gated ones as before; anything else needed a
+    machine identity, so it's refused here.
+    """
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _AUTH_EXEMPT:
+        return None
+    if _sso_gated(request.method, path):
+        return _sso_refusal(request, config)
+    return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+
+
+def _token_refusal(request: Request, config: FeltConfig) -> JSONResponse | None:
+    """The bearer token (constant-time compare), or the responder's own token on its routes."""
     token = reveal(config.api_token)
     path = request.url.path
-    # felt-ha-hub D3: Home Assistant's route takes only its Authentik token -
-    # decided first, so no proxy identity header or other path can open it
-    if ha_auth.is_ha_route(request.method, path):
-        why = ha_auth.check(config, request.headers.get("authorization", ""))
-        if why:
-            logger.warning("ha agent refused on %s %s: %s", request.method, path, why)
-            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
-        request.state.ha_agent = True
-        return await call_next(request)
-    # WP-62 M2b B5.4 (D3): a Felt machine identity, set only by Caddy's
-    # machine host (every other site strips it): per identity per route,
-    # deny by default - checked before anything else, token or not.
-    identity = request.headers.get("x-felt-identity") if config.machine_identity else None
-    if identity:
-        why = machine_auth.authorize(
-            identity,
-            request.headers.get("x-felt-serial", ""),
-            request.method,
-            path,
-            config.machine_deny_serials,
-        )
-        if why:
-            logger.warning("machine caller %s refused on %s %s: %s", identity, request.method, path, why)
-            return JSONResponse(status_code=403, content={"detail": why})
-        return await call_next(request)
-    if config.auth_mode == "identity":
-        # B5.4: the shared tokens are retired - no Bearer path at all. Exempt
-        # routes and Caddy's SSO-gated ones as before; anything else needed a
-        # machine identity above, so it's refused here.
-        if request.method == "OPTIONS" or path in _AUTH_EXEMPT:
-            return await call_next(request)
-        if _sso_gated(request.method, path):
-            if not _origin_ok(request, (config.app_origin, config.app_desktop_origin)):
-                return JSONResponse(status_code=403, content={"detail": "bad origin"})
-            return await call_next(request)
-        return JSONResponse(status_code=401, content={"detail": "unauthorized"})
     if not token or request.method == "OPTIONS" or path in _AUTH_EXEMPT:
-        return await call_next(request)
+        return None
     if _sso_gated(request.method, path):
-        # Caddy forward-auth is the authentication on these routes; felt-core
-        # only has to stop a cross-origin (sibling-subdomain) CSRF here, since
-        # they carry no token (WP-62 phase 4).
-        if not _origin_ok(request, (config.app_origin, config.app_desktop_origin)):
-            return JSONResponse(status_code=403, content={"detail": "bad origin"})
-        return await call_next(request)
+        return _sso_refusal(request, config)
     given = request.headers.get("authorization", "")
     given = given[7:] if given.startswith("Bearer ") else ""
     if _token_ok(given, token):
-        return await call_next(request)
+        return None
     if any(request.method == m and rx.fullmatch(path) for m, rx in _RESPONDER_ROUTES) and _token_ok(
         given, reveal(config.responder_token)
     ):
-        return await call_next(request)
+        return None
     return JSONResponse(
         status_code=401,
         content={"detail": "unauthorized"},
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _refusal(request: Request, config: FeltConfig) -> JSONResponse | None:
+    """The response that refuses this request, or None to let it through - first matching regime decides."""
+    # felt-ha-hub D3: decided first, so no proxy identity header or other path can open it
+    if ha_auth.is_ha_route(request.method, request.url.path):
+        return _ha_refusal(request, config)
+    # WP-62 M2b B5.4: set only by Caddy's machine host (every other site strips it),
+    # checked before anything else, token or not
+    identity = request.headers.get("x-felt-identity") if config.machine_identity else None
+    if identity:
+        return _machine_refusal(request, config, identity)
+    if config.auth_mode == "identity":
+        return _identity_mode_refusal(request, config)
+    return _token_refusal(request, config)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """WP-55: the auth check on every route but the exempt ones (rules in _refusal)."""
+    refused = _refusal(request, load_config())
+    if refused is not None:
+        return refused
+    return await call_next(request)
 
 
 @app.middleware("http")

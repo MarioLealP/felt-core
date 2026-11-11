@@ -223,6 +223,17 @@ def _add_tool_call_delta(calls: list[dict], delta: dict) -> None:
         call["function"]["arguments"] += function["arguments"]
 
 
+def _apply_delta(delta: dict, parts: list[str], tool_calls: list[dict], on_text: Callable[[str], None]) -> None:
+    """One streamed delta: tool-call pieces collected whole, text kept and spoken until a tool call has started."""
+    for piece in delta.get("tool_calls") or []:
+        _add_tool_call_delta(tool_calls, piece)
+    text = delta.get("content")
+    if text:
+        parts.append(text)
+        if not tool_calls:
+            on_text(text)
+
+
 async def chat_stream(
     messages: list[dict],
     *,
@@ -280,14 +291,7 @@ async def chat_stream(
                     continue
                 choice = event["choices"][0]
                 finish_reason = choice.get("finish_reason") or finish_reason
-                delta = choice.get("delta") or {}
-                for piece in delta.get("tool_calls") or []:
-                    _add_tool_call_delta(tool_calls, piece)
-                text = delta.get("content")
-                if text:
-                    parts.append(text)
-                    if not tool_calls:
-                        on_text(text)
+                _apply_delta(choice.get("delta") or {}, parts, tool_calls, on_text)
 
     try:
         await _gated(call)

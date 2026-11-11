@@ -123,6 +123,51 @@ def _ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
+def _minutes_before(params) -> int:
+    """How long before the thing itself the reminder goes off, in minutes (0 if not said or unreadable)."""
+    # cm-p6a: "an hour before the launch" - she did that sum in `when` and got
+    # it wrong 2 times in 5 (zone dropped, or converted and still called PST)
+    try:
+        return max(0, int(params.get("minutes_before") or 0))
+    except TypeError, ValueError:
+        return 0
+
+
+def _reminder_time(when_text: str, repeat: str, before: int, now: datetime) -> tuple[datetime, str, bool] | None:
+    """(when it goes off in his time, the source time as said, whether it was another zone); None if unreadable."""
+    start = resolve_datetime(when_text, now)
+    if start is None:
+        return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=TZ)
+    # cm-p6a: "2pm PST" (a launch time from the web) is said back in his
+    # time, so a wrong pick shows (e2e: she set 11am PST - 19:00 here - and
+    # told him "2pm")
+    start -= timedelta(minutes=before)
+    there = start.strftime("%I:%M %p %Z").lstrip("0").strip()
+    elsewhere = start.utcoffset() != start.astimezone(TZ).utcoffset()
+    start = start.astimezone(TZ)
+    if repeat != "none" and start <= now:
+        start += timedelta(days=1)  # "every day at 9am" said at 10am: from tomorrow
+    return start, there, elsewhere
+
+
+def _confirmation(what, start: datetime, repeat: str, now: datetime, before: int, there: str, elsewhere: bool) -> str:
+    """What she reads back to Mario once it's set."""
+    # the reminder's own time named as such, both zones, and the thing's
+    # time too - else she says "launch is 10pm, ping at 9" (e2e, 3 of 5)
+    # live 2026-10-22: given "10 PM your time (2 PM PST there)" she said
+    # "2 p.m. PST" - his time is the one to say, the other only a side note
+    mine = " in Mario's time (Portugal)" if elsewhere else ""
+    said = f"Reminder set: it goes off {describe(start, repeat, now)}{mine}"
+    if before:
+        at = (start + timedelta(minutes=before)).strftime("%I:%M %p").lstrip("0")
+        said += f", {_ahead(before)} before the thing itself at {at}{mine}"
+    if elsewhere:
+        said += f". Tell him his time, not the other zone's ({there} at the source)"
+    return f"{said}. Reminder text: {what}."
+
+
 async def handle(params, ctx):
     """Put a reminder on HA's reminders calendar from Mario's words."""
     config = ctx.config
@@ -137,32 +182,17 @@ async def handle(params, ctx):
     repeat = str(params.get("repeat") or "none").lower()
     if repeat not in _RRULE:
         repeat = "none"
-    # cm-p6a: "an hour before the launch" - she did that sum in `when` and got
-    # it wrong 2 times in 5 (zone dropped, or converted and still called PST)
-    try:
-        before = max(0, int(params.get("minutes_before") or 0))
-    except TypeError, ValueError:
-        before = 0
+    before = _minutes_before(params)
 
     when_text, repeat = split_every(str(when_text), repeat)
     if not has_clock(when_text):
         # "for the 21st" - a day, no time: morning, not midnight (2026-10-18)
         when_text = f"{when_text} at 9:00"
     now = datetime.now(tz=TZ)
-    start = resolve_datetime(when_text, now)
-    if start is None:
+    timing = _reminder_time(when_text, repeat, before, now)
+    if timing is None:
         return SkillResult(text=f"I couldn't figure out what time '{when_text}' means.")
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=TZ)
-    # cm-p6a: "2pm PST" (a launch time from the web) is said back in his
-    # time, so a wrong pick shows (e2e: she set 11am PST - 19:00 here - and
-    # told him "2pm")
-    start -= timedelta(minutes=before)
-    there = start.strftime("%I:%M %p %Z").lstrip("0").strip()
-    elsewhere = start.utcoffset() != start.astimezone(TZ).utcoffset()
-    start = start.astimezone(TZ)
-    if repeat != "none" and start <= now:
-        start += timedelta(days=1)  # "every day at 9am" said at 10am: from tomorrow
+    start, there, elsewhere = timing
     if start <= now and repeat == "none":
         return SkillResult(text=f"'{when_text}' is already past.")
 
@@ -178,15 +208,4 @@ async def handle(params, ctx):
         )
     except CalendarUnavailableError:
         return SkillResult(text="I couldn't reach the calendar to set that reminder.")
-    # the reminder's own time named as such, both zones, and the thing's
-    # time too - else she says "launch is 10pm, ping at 9" (e2e, 3 of 5)
-    # live 2026-10-22: given "10 PM your time (2 PM PST there)" she said
-    # "2 p.m. PST" - his time is the one to say, the other only a side note
-    mine = " in Mario's time (Portugal)" if elsewhere else ""
-    said = f"Reminder set: it goes off {describe(start, repeat, now)}{mine}"
-    if before:
-        at = (start + timedelta(minutes=before)).strftime("%I:%M %p").lstrip("0")
-        said += f", {_ahead(before)} before the thing itself at {at}{mine}"
-    if elsewhere:
-        said += f". Tell him his time, not the other zone's ({there} at the source)"
-    return SkillResult(text=f"{said}. Reminder text: {what}.")
+    return SkillResult(text=_confirmation(what, start, repeat, now, before, there, elsewhere))

@@ -116,15 +116,10 @@ def _current() -> _Gate:
     return _gate
 
 
-async def run[T](call: Callable[[], Awaitable[T]]) -> T:
-    """Run one felt-llm call when it's this caller's turn (see the module doc)."""
-    cls, label, lifetime_s = _class.get()
-    gate = _current()
-    name = f"{_NAMES[cls]} {label}" if label != "chat" else "chat"
-    if cls == AMBIENT and (why := gate.why_not_ambient(time.monotonic())):
-        logger.info("llm gate: %s skipped (%s)", name, why)
-        raise SkippedError(f"ambient call skipped ({why})")
-    queued = time.monotonic()
+async def _take_turn[T](
+    gate: _Gate, cls: int, name: str, lifetime_s: float, call: Callable[[], Awaitable[T]]
+) -> asyncio.Future[T]:
+    """Wait for this class's turn under the gate's lock, then start the call (SkippedError: ambient dropped)."""
     async with gate.cond:
         if cls == CHAT:
             gate.chat_active += 1
@@ -149,6 +144,33 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
             raise SkippedError(f"ambient call skipped ({why})")
         task = asyncio.ensure_future(call())
         gate.running = (cls, task)
+        return task
+
+
+async def _finish(gate: _Gate, cls: int, started: float) -> float:
+    """Free the gate after a call and note it (chat time, ambient budget); returns when it ended."""
+    ended = time.monotonic()
+    async with gate.cond:
+        gate.running = None
+        if cls == CHAT:
+            gate.chat_active -= 1
+            gate.last_chat = ended
+        elif cls == AMBIENT:
+            gate.ambient_runs.append((ended, ended - started))
+        gate.cond.notify_all()
+    return ended
+
+
+async def run[T](call: Callable[[], Awaitable[T]]) -> T:
+    """Run one felt-llm call when it's this caller's turn (see the module doc)."""
+    cls, label, lifetime_s = _class.get()
+    gate = _current()
+    name = f"{_NAMES[cls]} {label}" if label != "chat" else "chat"
+    if cls == AMBIENT and (why := gate.why_not_ambient(time.monotonic())):
+        logger.info("llm gate: %s skipped (%s)", name, why)
+        raise SkippedError(f"ambient call skipped ({why})")
+    queued = time.monotonic()
+    task = await _take_turn(gate, cls, name, lifetime_s, call)
     started = time.monotonic()
     try:
         return await task
@@ -158,15 +180,7 @@ async def run[T](call: Callable[[], Awaitable[T]]) -> T:
             raise SkippedError("ambient call cancelled for a chat") from None
         raise
     finally:
-        ended = time.monotonic()
-        async with gate.cond:
-            gate.running = None
-            if cls == CHAT:
-                gate.chat_active -= 1
-                gate.last_chat = ended
-            elif cls == AMBIENT:
-                gate.ambient_runs.append((ended, ended - started))
-            gate.cond.notify_all()
+        ended = await _finish(gate, cls, started)
         logger.info("llm gate: %s ran %.1f s (waited %.1f s)", name, ended - started, started - queued)
 
 

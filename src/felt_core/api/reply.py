@@ -219,6 +219,60 @@ async def _fill_open_stream(
                 on_result(result)
 
 
+async def _first_chunk(items: AsyncIterator[str | ReplyMeta | ChatResult]) -> tuple[str | ChatResult | None, ReplyMeta]:
+    """Read until chunk 0's text (or the finished result): it, and the skill's hush / reaction seen on the way."""
+    meta = ReplyMeta()
+    async for item in items:
+        if isinstance(item, ReplyMeta):
+            meta = item  # the skill's hush / reaction: with chunk 0, not at the end
+            continue
+        if isinstance(item, ChatResult) or strip_for_tts(item):
+            return item, meta
+    return None, meta
+
+
+async def _whole_reply(
+    first: str | ChatResult | None,
+    items: AsyncIterator[str | ReplyMeta | ChatResult],
+    config: Any,
+    client: _TTSClient,
+    extra_headers: dict[str, str] | None,
+    on_result: Callable[[ChatResult], None] | None,
+) -> Response:
+    """The whole reply in one response, the WP-54 way."""
+    result = first if isinstance(first, ChatResult) else None
+    async for item in items:
+        if isinstance(item, ChatResult):
+            result = item
+    assert result is not None
+    if on_result is not None:
+        on_result(result)
+    return await _synthesize_reply(
+        result.reply,
+        result.ui_action.model_dump() if result.ui_action else None,
+        result.animation_tag,
+        config,
+        client,
+        extra_headers,
+    )
+
+
+def _open_stream_headers(first: str, stream_id: str, meta: ReplyMeta, extra_headers: dict[str, str] | None) -> dict:
+    """The v2 headers: chunk 0's text, the open stream, and the skill's UI action / tag if any."""
+    headers = {
+        "X-Reply-Text": quote(first),
+        "X-Reply-Stream": stream_id,
+        "X-Reply-Chunks": "open",
+        "X-Reply-Stream-Version": "2",
+        **(extra_headers or {}),
+    }
+    if meta.ui_action is not None:
+        headers["X-UI-Action"] = quote(json.dumps(meta.ui_action.model_dump()))
+    if meta.animation_tag is not None:
+        headers["X-Animation-Tag"] = quote(meta.animation_tag)
+    return headers
+
+
 async def _reply_v2(
     message: str,
     session_id: str,
@@ -236,15 +290,7 @@ async def _reply_v2(
     to the whole-reply response.
     """
     items = chat_streamed(message, config, session_id, tone)
-    first: str | ChatResult | None = None
-    meta = ReplyMeta()
-    async for item in items:
-        if isinstance(item, ReplyMeta):
-            meta = item  # the skill's hush / reaction: with chunk 0, not at the end
-            continue
-        if isinstance(item, ChatResult) or strip_for_tts(item):
-            first = item
-            break
+    first, meta = await _first_chunk(items)
     wav: bytes | None = None
     if isinstance(first, str):
         try:
@@ -252,36 +298,12 @@ async def _reply_v2(
         except httpx2.HTTPError:
             logger.warning("felt-voice unavailable - replying without audio", exc_info=True)
     if not isinstance(first, str) or wav is None:
-        # the whole reply, the WP-54 way
-        result = first if isinstance(first, ChatResult) else None
-        async for item in items:
-            if isinstance(item, ChatResult):
-                result = item
-        assert result is not None
-        if on_result is not None:
-            on_result(result)
-        return await _synthesize_reply(
-            result.reply,
-            result.ui_action.model_dump() if result.ui_action else None,
-            result.animation_tag,
-            config,
-            client,
-            extra_headers,
-        )
+        return await _whole_reply(first, items, config, client, extra_headers, on_result)
     live = reply_stream.open_stream(first, wav)
     live.task = asyncio.create_task(_fill_open_stream(live, items, config, on_result))
-    headers = {
-        "X-Reply-Text": quote(first),
-        "X-Reply-Stream": live.id,
-        "X-Reply-Chunks": "open",
-        "X-Reply-Stream-Version": "2",
-        **(extra_headers or {}),
-    }
-    if meta.ui_action is not None:
-        headers["X-UI-Action"] = quote(json.dumps(meta.ui_action.model_dump()))
-    if meta.animation_tag is not None:
-        headers["X-Animation-Tag"] = quote(meta.animation_tag)
-    return Response(content=wav, media_type="audio/wav", headers=headers)
+    return Response(
+        content=wav, media_type="audio/wav", headers=_open_stream_headers(first, live.id, meta, extra_headers)
+    )
 
 
 @router.post("/v1/voice-chat")

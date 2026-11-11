@@ -112,6 +112,46 @@ async def _generate_json(config: FeltConfig, system: str, user_prompt: str, *, m
     return reply.text
 
 
+def _save_entry(config: FeltConfig, date_str: str, parsed: dict) -> bool:
+    """Store the entry with its callbacks and mood; False when the writer gave no entry."""
+    entry = str(parsed.get("entry") or "").strip()
+    if not entry:
+        logger.warning("diary: writer returned an empty entry for %s - skipping", date_str)
+        return False
+
+    callbacks = [
+        {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
+    ]
+    mood_word = str(parsed.get("mood_word") or "").strip()
+    insert_diary(config.db_path, date_str, entry, json.dumps(callbacks), mood_word)
+    logger.info("diary: wrote entry for %s (%d chars, mood=%r)", date_str, len(entry), mood_word)
+    return True
+
+
+def _save_self_updates(config: FeltConfig, date_str: str, parsed: dict) -> None:
+    """Keep up to _MAX_SELF_UPDATES of the new self-memories the writer gave."""
+    for update in (parsed.get("self_updates") or [])[:_MAX_SELF_UPDATES]:
+        if not isinstance(update, dict):
+            continue
+        kind = str(update.get("kind") or "").strip()
+        text = str(update.get("text") or "").strip()
+        keywords = [str(k).strip() for k in (update.get("keywords") or []) if str(k).strip()]
+        if kind and text:
+            add_self_memory(config, kind, text, keywords, date_str)
+
+
+def _hand_over_greeting(config: FeltConfig, parsed: dict) -> None:
+    """Her morning greeting: the brief opens with it, or it's queued on its own."""
+    greeting = str(parsed.get("greeting") or "").strip()
+    if greeting and features.enabled(config.db_path, "ambient.morning_greeting"):
+        from felt_core.core import brief
+
+        if brief.will_open_with(config):  # the brief opens with it (brief.py)
+            set_setting(config.db_path, brief.GREETING_KEY, greeting)
+        else:
+            enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
+
+
 async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     """The nightly writer for one date - ONE felt-llm call.
 
@@ -147,36 +187,10 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
         logger.warning("diary: writer JSON parse failed for %s - skipping", date_str)
         return False
 
-    entry = str(parsed.get("entry") or "").strip()
-    if not entry:
-        logger.warning("diary: writer returned an empty entry for %s - skipping", date_str)
+    if not _save_entry(config, date_str, parsed):
         return False
-
-    callbacks = [
-        {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
-    ]
-    mood_word = str(parsed.get("mood_word") or "").strip()
-    insert_diary(config.db_path, date_str, entry, json.dumps(callbacks), mood_word)
-    logger.info("diary: wrote entry for %s (%d chars, mood=%r)", date_str, len(entry), mood_word)
-
-    for update in (parsed.get("self_updates") or [])[:_MAX_SELF_UPDATES]:
-        if not isinstance(update, dict):
-            continue
-        kind = str(update.get("kind") or "").strip()
-        text = str(update.get("text") or "").strip()
-        keywords = [str(k).strip() for k in (update.get("keywords") or []) if str(k).strip()]
-        if kind and text:
-            add_self_memory(config, kind, text, keywords, date_str)
-
-    greeting = str(parsed.get("greeting") or "").strip()
-    if greeting and features.enabled(config.db_path, "ambient.morning_greeting"):
-        from felt_core.core import brief
-
-        if brief.will_open_with(config):  # the brief opens with it (brief.py)
-            set_setting(config.db_path, brief.GREETING_KEY, greeting)
-        else:
-            enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
-
+    _save_self_updates(config, date_str, parsed)
+    _hand_over_greeting(config, parsed)
     await _maybe_compress_week(config, date_str)
     return True
 

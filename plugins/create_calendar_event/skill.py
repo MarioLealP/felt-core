@@ -53,37 +53,23 @@ parameters_schema = {
 }
 
 
-async def handle(params, ctx):
-    """Create the event on Mario's calendar, holding for a place if he didn't say where."""
-    config = ctx.config
-    if not connected(config):
-        return SkillResult(text="The calendar isn't connected yet.")
-
-    title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar", "place"))
-    when_text = get_single_param(params, "when", ignore_keys=("title", "duration_minutes", "calendar", "place"))
-    if not title or not when_text:
-        return SkillResult(text="I need both a title and a time to create a calendar event.")
-
-    duration_minutes = params.get("duration_minutes") or 60
-    calendar_name = params.get("calendar")
-    said = str(params.get("place") or "").strip()
-    place = None if not said or appointment_hold.no_place(said) else said
-
-    now = datetime.now(tz=TZ)
-    start = resolve_datetime(str(when_text), now)
+def _times(when_text: str, message: str, duration_minutes: int) -> tuple[datetime, datetime, bool] | None:
+    """(start, end, all_day) for what he said, or None if the time can't be read."""
+    start = resolve_datetime(when_text, datetime.now(tz=TZ))
     if start is None:
-        return SkillResult(text=f"I couldn't figure out what time '{when_text}' means.")
+        return None
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
     # a day with no time ("4th November is the WoW release"): an all-day event,
     # not an hour at midnight, and no place to ask for (cm-0vl)
-    all_day = day_only(str(when_text), ctx.original_message or "")
-    if all_day:
+    if day_only(when_text, message):
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + timedelta(days=1)
-    else:
-        end = start + timedelta(minutes=duration_minutes)
+        return start, start + timedelta(days=1), True
+    return start, start + timedelta(minutes=duration_minutes), False
 
+
+async def _place_answer(config, title: str, start: datetime, place: str | None) -> SkillResult | None:
+    """His answer about the place of an appointment already in hand; None when this is a new one."""
     # called again for the appointment that's waiting for its place: his answer
     # (e2e 2026-10-19: after "none" felt-llm re-called it without any place)
     waiting = appointment_hold.claim_same(start)
@@ -95,46 +81,83 @@ async def handle(params, ctx):
         return SkillResult(text=f"{added}, {where}. Read it back to Mario as written.")
     # ...or for the one just added (it went in at once, or the 30 s ran out first):
     # his answer again, never a second event (cm-2hu, e2e 2026-10-23)
-    just = appointment_hold.just_added(config, str(title), start)
-    if just is not None:
-        if place is None:
-            return SkillResult(
-                text=f"'{just['summary']}', {appointment_hold.when(start)}, is already in the "
-                "calendar, no place. Read it back to Mario as written."
-            )
-        return SkillResult(text=await appointment_hold.change_place(config, just, place))
+    just = appointment_hold.just_added(config, title, start)
+    if just is None:
+        return None
+    if place is None:
+        return SkillResult(
+            text=f"'{just['summary']}', {appointment_hold.when(start)}, is already in the "
+            "calendar, no place. Read it back to Mario as written."
+        )
+    return SkillResult(text=await appointment_hold.change_place(config, just, place))
 
+
+async def _target_calendar(config, calendar_name: str | None) -> tuple[dict | None, SkillResult | None]:
+    """The calendar to write to, or why there isn't one."""
     async with httpx2.AsyncClient(timeout=20) as client:
         calendars = await list_calendars(client, config)
         calendar = resolve_calendar(calendars, calendar_name)
         if calendar is None:
             target = f"'{calendar_name}'" if calendar_name else "your primary calendar"
-            return SkillResult(text=f"Couldn't find {target} to add the event to.")
+            return None, SkillResult(text=f"Couldn't find {target} to add the event to.")
         if not await writable(client, config, calendar["id"]):
-            return SkillResult(
+            return None, SkillResult(
                 text=f"'{calendar.get('summary', calendar['id'])}' is read-only — I can't add events to it."
             )
+    return calendar, None
 
+
+async def _add(
+    config, calendar: dict, title: str, times: tuple[datetime, datetime, bool], place: str | None, said: str
+):
+    """Add the event, or hold it for its place when he didn't say one."""
+    start, end, all_day = times
     at = appointment_hold.when(start)
     where = calendar.get("summary", "your calendar")
     if all_day:
         try:
-            await create_event(config, calendar["id"], str(title), start, end, location=place, all_day=True)
+            await create_event(config, calendar["id"], title, start, end, location=place, all_day=True)
         except CalendarUnavailableError:
             return SkillResult(text="I couldn't reach the calendar to add it.")
         day = f"{start.strftime('%A')} {start.day} {start.strftime('%B')}"
         return SkillResult(text=f"Added '{title}', {day}, all day, to {where}. Read it back to Mario as written.")
     if not said:
-        appointment_hold.hold(config, calendar["id"], str(title), start, end)
+        appointment_hold.hold(config, calendar["id"], title, start, end)
         return SkillResult(
             text=f"Not added yet: '{title}', {at}, for {where}. Ask Mario where it is - don't "
             f"say it's added. If he doesn't answer within {appointment_hold.PLACE_WAIT_S} "
             "seconds it's added without a place."
         )
     try:
-        await create_event(config, calendar["id"], str(title), start, end, location=place)
+        await create_event(config, calendar["id"], title, start, end, location=place)
     except CalendarUnavailableError:
         return SkillResult(text="I couldn't reach the calendar to add it.")
-    remember_created(config, calendar["id"], str(title), start, end)
+    remember_created(config, calendar["id"], title, start, end)
     spot = f"at {place}" if place else "no place"
     return SkillResult(text=f"Added '{title}', {at}, {spot}, to {where}. Read it back to Mario as written.")
+
+
+async def handle(params, ctx):
+    """Create the event on Mario's calendar, holding for a place if he didn't say where."""
+    config = ctx.config
+    if not connected(config):
+        return SkillResult(text="The calendar isn't connected yet.")
+
+    title = get_single_param(params, "title", ignore_keys=("when", "duration_minutes", "calendar", "place"))
+    when_text = get_single_param(params, "when", ignore_keys=("title", "duration_minutes", "calendar", "place"))
+    if not title or not when_text:
+        return SkillResult(text="I need both a title and a time to create a calendar event.")
+
+    said = str(params.get("place") or "").strip()
+    place = None if not said or appointment_hold.no_place(said) else said
+    times = _times(str(when_text), ctx.original_message or "", params.get("duration_minutes") or 60)
+    if times is None:
+        return SkillResult(text=f"I couldn't figure out what time '{when_text}' means.")
+
+    answer = await _place_answer(config, str(title), times[0], place)
+    if answer is not None:
+        return answer
+    calendar, refused = await _target_calendar(config, params.get("calendar"))
+    if calendar is None:
+        return refused
+    return await _add(config, calendar, str(title), times, place, said)

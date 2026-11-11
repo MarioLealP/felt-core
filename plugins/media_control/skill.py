@@ -86,6 +86,57 @@ def _percent(level) -> int | None:
     return round(value * 100) if 0 < value <= 1 and "." in str(level) else round(value)
 
 
+async def _track_op(client, config, op: str, item: dict) -> SkillResult | None:
+    """Save, skip, restart or go back; None when `op` is none of those."""
+    if op == "save":
+        if not item.get("uri"):
+            return SkillResult(text="Nothing's playing to save.")
+        await save_to_library(client, config, item["uri"])
+        return SkillResult(text=f"Saved {format_track_name(item)} to your library.")
+    if op == "next":
+        await next_track(client, config)
+        now = await get_currently_playing(client, config)
+        name = format_track_name(now["track"]) if now else "the next song"
+        return SkillResult(text=f"Skipped. Now playing {name}.")
+    if op == "restart":
+        await restart_track(client, config)
+        return SkillResult(text="From the top.")
+    if op == "previous":
+        await previous_track(client, config)
+        return SkillResult(text="Back to the previous song.")
+    return None
+
+
+async def _volume_op(client, config, op: str, params, volume: int | None) -> SkillResult:
+    """Louder, quieter, or to the level asked for, kept within 0-100."""
+    if op == "volume":
+        target = _percent(get_single_param(params, "level", "volume", ignore_keys=("action",)))
+        if target is None:
+            return SkillResult(text=f"Volume is at {volume}%. To what?")
+    else:
+        if volume is None:
+            return SkillResult(text="That player doesn't take volume changes.")
+        target = volume + (_STEP if op == "louder" else -_STEP)
+    target = max(0, min(100, target))
+    await set_volume(client, config, target)
+    return SkillResult(text=f"Volume {target}%.")
+
+
+async def _play_pause_op(client, config, op: str, playing: bool) -> SkillResult:
+    """Pause, resume, or toggle between them."""
+    if op == "play_pause":
+        op = "pause" if playing else "resume"
+    if op == "pause":
+        if not playing:
+            return SkillResult(text="It's already paused.")
+        await pause(client, config)
+        return SkillResult(text="Paused.")
+    if playing:
+        return SkillResult(text="It's already playing.")
+    await resume(client, config)
+    return SkillResult(text="Playing again.")
+
+
 async def handle(params, ctx):
     """Apply the requested transport action to the music already playing on Spotify."""
     config = ctx.config
@@ -99,48 +150,13 @@ async def handle(params, ctx):
             player = await get_player(client, config)
             if player is None:
                 return SkillResult(text="Nothing's playing on Spotify right now.")
-            item = player.get("item") or {}
-            if op == "save":
-                if not item.get("uri"):
-                    return SkillResult(text="Nothing's playing to save.")
-                await save_to_library(client, config, item["uri"])
-                return SkillResult(text=f"Saved {format_track_name(item)} to your library.")
-            if op == "next":
-                await next_track(client, config)
-                now = await get_currently_playing(client, config)
-                name = format_track_name(now["track"]) if now else "the next song"
-                return SkillResult(text=f"Skipped. Now playing {name}.")
-            if op == "restart":
-                await restart_track(client, config)
-                return SkillResult(text="From the top.")
-            if op == "previous":
-                await previous_track(client, config)
-                return SkillResult(text="Back to the previous song.")
-            volume = (player.get("device") or {}).get("volume_percent")
+            done = await _track_op(client, config, op, player.get("item") or {})
+            if done is not None:
+                return done
             if op in ("louder", "quieter", "volume"):
-                if op == "volume":
-                    target = _percent(get_single_param(params, "level", "volume", ignore_keys=("action",)))
-                    if target is None:
-                        return SkillResult(text=f"Volume is at {volume}%. To what?")
-                else:
-                    if volume is None:
-                        return SkillResult(text="That player doesn't take volume changes.")
-                    target = volume + (_STEP if op == "louder" else -_STEP)
-                target = max(0, min(100, target))
-                await set_volume(client, config, target)
-                return SkillResult(text=f"Volume {target}%.")
-            playing = bool(player.get("is_playing"))
-            if op == "play_pause":
-                op = "pause" if playing else "resume"
-            if op == "pause":
-                if not playing:
-                    return SkillResult(text="It's already paused.")
-                await pause(client, config)
-                return SkillResult(text="Paused.")
-            if playing:
-                return SkillResult(text="It's already playing.")
-            await resume(client, config)
-            return SkillResult(text="Playing again.")
+                volume = (player.get("device") or {}).get("volume_percent")
+                return await _volume_op(client, config, op, params, volume)
+            return await _play_pause_op(client, config, op, bool(player.get("is_playing")))
         except httpx2.HTTPStatusError as e:
             if e.response.status_code == 403:
                 return SkillResult(text="Spotify refused that (it needs Premium, or the player is restricted).")

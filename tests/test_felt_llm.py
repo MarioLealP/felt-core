@@ -236,6 +236,23 @@ async def test_chat_local_reply_without_tool(tmp_path, monkeypatch, fake_llm):
     assert [m["content"] for m in get_history(config.db_path, "s1")][-1] == "hello there"
 
 
+async def test_chat_local_home_command_is_done_by_ha_and_phrased(tmp_path, monkeypatch, fake_llm):
+    config = _config(tmp_path)
+    monkeypatch.setattr(orchestrator, "load_plugins", lambda d: {})
+
+    async def ha_handles(config, message):
+        return "Turned on the shelf light"
+
+    monkeypatch.setattr(orchestrator.ha_assist, "handle", ha_handles)
+    fake_llm.script = ["done, it's on"]
+
+    result = await orchestrator.chat("turn the shelf light on", config, session_id="s1")
+
+    assert result.reply == "done, it's on"
+    assert len(fake_llm.calls) == 1  # only the phrasing - no tool-picking turn
+    assert "Home Assistant did it. It says: Turned on the shelf light" in json.dumps(fake_llm.calls[0]["messages"])
+
+
 async def test_chat_local_tool_call_runs_skill_then_phrases(tmp_path, monkeypatch, fake_llm):
     config = _config(tmp_path)
     handled = []
