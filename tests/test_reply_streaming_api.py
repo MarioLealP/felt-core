@@ -1,5 +1,5 @@
 """WP-54: streamed chat replies + the chunk long-poll endpoint + emotion
-reaching felt-voice. felt-voice is faked by replacing `api.httpx2.AsyncClient`
+reaching felt-voice. felt-voice is faked by replacing `reply_api.httpx2.AsyncClient`
 (after the test's own ASGI client exists)."""
 
 import asyncio
@@ -11,6 +11,9 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 import felt_core.api.app as api
+import felt_core.api.chat as chat_api
+import felt_core.api.react as react_api
+import felt_core.api.reply as reply_api
 from felt_core.brain.result import ChatResult
 from felt_core.brain.streaming import ReplyMeta
 from felt_core.clients import local_llm
@@ -89,9 +92,11 @@ async def env(tmp_path, monkeypatch):
     async def fake_chat(*a, **k):
         return ChatResult(reply=reply["text"])
 
-    monkeypatch.setattr(api, "chat", fake_chat)
+    monkeypatch.setattr(chat_api, "chat", fake_chat)
+
+    monkeypatch.setattr(reply_api, "chat", fake_chat)
     async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=api.app), base_url="http://t") as client:
-        monkeypatch.setattr(api.httpx2, "AsyncClient", voice.client_class())
+        monkeypatch.setattr(reply_api.httpx2, "AsyncClient", voice.client_class())
         yield client, voice, reply
     reply_stream.clear()
 
@@ -105,7 +110,7 @@ async def test_multi_sentence_text_chat_returns_chunk_zero_and_stream_headers(en
     assert n >= 2
     stream_id = r.headers["X-Reply-Stream"]
     assert len(stream_id) == 32
-    first_text = api.speech_chunks(api.strip_for_tts(_LONG_REPLY))[0]
+    first_text = reply_api.speech_chunks(reply_api.strip_for_tts(_LONG_REPLY))[0]
     assert r.content == b"WAV:" + first_text.encode()
     assert voice.bodies[0] == {"text": first_text}  # chat replies carry no emotion
 
@@ -125,14 +130,14 @@ async def test_streaming_disabled_by_config(env, monkeypatch):
     monkeypatch.setenv("FELT_REPLY_STREAMING", "false")
     r = await client.post("/v1/text-chat", json={"message": "hi"})
     assert "X-Reply-Stream" not in r.headers
-    assert r.content == b"WAV:" + api.strip_for_tts(_LONG_REPLY).encode()
+    assert r.content == b"WAV:" + reply_api.strip_for_tts(_LONG_REPLY).encode()
 
 
 async def test_chunk_endpoint_serves_the_rest_then_204_then_404(env):
     client, _, _ = env
     r = await client.post("/v1/text-chat", json={"message": "hi"})
     sid, n = r.headers["X-Reply-Stream"], int(r.headers["X-Reply-Chunks"])
-    texts = api.speech_chunks(api.strip_for_tts(_LONG_REPLY))
+    texts = reply_api.speech_chunks(reply_api.strip_for_tts(_LONG_REPLY))
     for i in range(1, n):
         c = await client.get(f"/v1/reply/{sid}/chunk/{i}")
         assert c.status_code == 200
@@ -157,7 +162,7 @@ async def test_chunk_endpoint_408_when_not_ready_by_timeout(env):
 
 async def test_chunk_endpoint_502_when_that_chunk_failed(env):
     client, voice, _ = env
-    texts = api.speech_chunks(api.strip_for_tts(_LONG_REPLY))
+    texts = reply_api.speech_chunks(reply_api.strip_for_tts(_LONG_REPLY))
     voice.fail_on = {texts[1]}
     r = await client.post("/v1/text-chat", json={"message": "hi"})
     sid = r.headers["X-Reply-Stream"]
@@ -184,7 +189,7 @@ async def test_emotion_reaches_the_felt_voice_body_for_screen_reactions(env, mon
     async def fake_react(*a, **k):
         return ChatResult(reply="Wow, look at that go.", emotion="excited")
 
-    monkeypatch.setattr(api, "react_to_screen", fake_react)
+    monkeypatch.setattr(react_api, "react_to_screen", fake_react)
     r = await client.post(
         "/v1/react/screen",
         files={"image": ("s.jpg", b"jpg", "image/jpeg")},
@@ -207,7 +212,7 @@ async def test_stream_headers_reach_same_origin_clients_without_cors(env):
 async def test_voice_down_still_returns_her_text(env):
     """felt-voice off (the laptop): 200 with her reply text and no audio, not a 500."""
     client, voice, _ = env
-    first_text = api.speech_chunks(api.strip_for_tts(_LONG_REPLY))[0]
+    first_text = reply_api.speech_chunks(reply_api.strip_for_tts(_LONG_REPLY))[0]
     voice.fail_on.add(first_text)
     r = await client.post("/v1/text-chat", json={"message": "hi"})
     assert r.status_code == 200
@@ -259,7 +264,7 @@ def streamed(env, monkeypatch):
             raise script.error
         yield script.result
 
-    monkeypatch.setattr(api, "chat_streamed", fake)
+    monkeypatch.setattr(reply_api, "chat_streamed", fake)
     return script
 
 
@@ -292,7 +297,7 @@ async def test_v2_answers_with_chunk_zero_then_the_rest_as_it_comes(env, streame
     c1 = await client.get(f"/v1/reply/{sid}/chunk/1")
     assert c1.status_code == 200
     assert unquote(c1.headers["X-Chunk-Text"]) == _CHUNKS[1]
-    assert voice.bodies[1] == {"text": api.strip_for_tts(_CHUNKS[1])}  # stripped for TTS
+    assert voice.bodies[1] == {"text": reply_api.strip_for_tts(_CHUNKS[1])}  # stripped for TTS
     assert (await client.get(f"/v1/reply/{sid}/chunk/2")).content == b"WAV:" + _CHUNKS[2].encode()
     assert (await client.get(f"/v1/reply/{sid}/chunk/3")).status_code == 204
     assert (await client.get(f"/v1/reply/{sid}")).json() == {

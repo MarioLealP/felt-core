@@ -4,6 +4,7 @@ import time
 import felt_core.brain.background as background
 import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
+import felt_core.brain.skill_turns as skill_turns
 from felt_core.config import FeltConfig
 from felt_core.core.plugin_loader import LoadedSkill
 from felt_core.db.facts import save_fact
@@ -68,7 +69,7 @@ async def test_voice_line_preferred_over_text_for_phrasing(tmp_path, monkeypatch
         return SkillResult(text="the long full text form", voice_line="short spoken form")
 
     monkeypatch.setattr(orchestrator, "load_plugins", lambda plugins_dir: fake_registry)
-    monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
+    monkeypatch.setattr(skill_turns, "run_skill", fake_run_skill)
     fake_llm.script = [
         {"text": "", "tool_calls": [_tool_call("dummy_skill", {})]},
         "phrased reply",
@@ -93,7 +94,7 @@ async def test_weather_fast_path_makes_no_skill_or_phrasing_calls(tmp_path, monk
     async def explode(*args, **kwargs):
         raise AssertionError("must not be called on the weather fast path")
 
-    monkeypatch.setattr(orchestrator, "run_skill", explode)
+    monkeypatch.setattr(skill_turns, "run_skill", explode)
     fake_llm.script = [{"text": "", "tool_calls": [_tool_call("get_weather", {"day": "now"})]}]
 
     background._weather_precompute = {
@@ -120,7 +121,7 @@ async def test_stale_precompute_does_not_take_the_fast_path(tmp_path, monkeypatc
         called.append(name)
         return SkillResult(text="fresh weather text")
 
-    monkeypatch.setattr(orchestrator, "run_skill", fake_run_skill)
+    monkeypatch.setattr(skill_turns, "run_skill", fake_run_skill)
     fake_llm.script = [
         {"text": "", "tool_calls": [_tool_call("get_weather", {"day": "now"})]},
         "fresh phrased reply",
