@@ -1,10 +1,10 @@
-"""The SQLite connection: opens felt.db and makes sure the schema exists first."""
+"""The SQLite connection: opens felt.db and brings its schema up to date first (db/migrate.py)."""
 
 import sqlite3
 import threading
 from pathlib import Path
 
-from felt_core.db.schema import _create_schema
+from felt_core.db.migrate import migrate
 
 
 def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
@@ -22,7 +22,7 @@ def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
     return cursor.lastrowid
 
 
-# The schema is created / migrated once per database per process, not on every
+# The schema is migrated once per database per process, not on every
 # connection: concurrent first connections (the lifespan's background tasks
 # plus a request, on a fresh DB) all ran the migration's writes at once and
 # one lost with "database is locked" - flaky tests, and a red CI blocks a
@@ -38,6 +38,6 @@ def _connect(db_path: str) -> sqlite3.Connection:
     if db_path not in _schema_ready:
         with _schema_lock:
             if db_path not in _schema_ready:
-                _create_schema(conn)
+                migrate(db_path)
                 _schema_ready.add(db_path)
     return conn
