@@ -85,6 +85,30 @@ def _event(name: str, data: dict) -> str:
     return f"event: {name}\ndata: {json.dumps(data)}\n\n"
 
 
+async def _round_events(
+    db_path: str, session_id: str, before: tuple, now: tuple, lists: str, now_lists: str
+) -> tuple[list[str], bool]:
+    """What changed since the last round, as events (new lines, asides, marks, lists, systems, controls).
+
+    Also whether the round counts as sent for the keepalive: a newer line id does, even with no line to show.
+    """
+    newest, picks, marks, incidents, ctl = before
+    events: list[str] = []
+    if now[0] > newest:
+        events += [_event("line", line) for line in await asyncio.to_thread(_new_lines, db_path, session_id, newest)]
+    if now[1] != picks:
+        events.append(_event("asides", {}))
+    if now[2] != marks:
+        events.append(_event("marks", {}))
+    if now_lists and now_lists != lists and lists:
+        events.append(_event("lists", {}))
+    if now[3] != incidents:
+        events.append(_event("systems", {}))
+    if now[4] != ctl:
+        events.append(_event("controls", {}))
+    return events, bool(events) or now[0] > newest
+
+
 async def notices(
     db_path: str,
     session_id: str,
@@ -108,28 +132,13 @@ async def notices(
         await asyncio.sleep(poll_s)
         now = await asyncio.to_thread(_state, db_path, session_id)
         now_lists = await lists_version() if lists_version else ""
-        sent = False
-        if now[0] > newest:
-            for line in await asyncio.to_thread(_new_lines, db_path, session_id, newest):
-                yield _event("line", line)
-            sent = True
-        if now[1] != picks:
-            yield _event("asides", {})
-            sent = True
-        if now[2] != marks:
-            yield _event("marks", {})
-            sent = True
-        if now_lists and now_lists != lists:
-            if lists:
-                yield _event("lists", {})
-                sent = True
+        events, sent = await _round_events(
+            db_path, session_id, (newest, picks, marks, incidents, ctl), now, lists, now_lists
+        )
+        for event in events:
+            yield event
+        if now_lists:
             lists = now_lists
-        if now[3] != incidents:
-            yield _event("systems", {})
-            sent = True
-        if now[4] != ctl:
-            yield _event("controls", {})
-            sent = True
         newest, picks, marks, incidents, ctl = now
         quiet = 0.0 if sent else quiet + poll_s
         if quiet >= keepalive_s:

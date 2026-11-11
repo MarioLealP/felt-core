@@ -96,19 +96,15 @@ def stop(reason: str) -> None:
     SESSION.on, SESSION.current, SESSION.ahead, SESSION.paused_since = False, None, [], None
 
 
-def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:
-    """Each Spotify poll (brain/background.py music_taste_loop)."""
-    if not SESSION.on:
-        return
-    now = time.monotonic()
-    if current is None or not current.get("is_playing"):
-        SESSION.paused_since = SESSION.paused_since or now
-        if now - SESSION.paused_since > PAUSE_ENDS_S:
-            stop("paused for a while")
-        return
-    SESSION.paused_since = None
-    if _uri(previous) == _uri(current):
-        return
+def _paused(now: float) -> None:
+    """Nothing playing: the set ends once it has been paused for PAUSE_ENDS_S."""
+    SESSION.paused_since = SESSION.paused_since or now
+    if now - SESSION.paused_since > PAUSE_ENDS_S:
+        stop("paused for a while")
+
+
+def _record_previous(config: FeltConfig, previous: dict | None) -> None:
+    """How her pick that just ended went, unless she skipped it herself."""
     cur = SESSION.current
     if cur is not None and previous is not None and same_track(cur, previous) and not sp.felt_skipped(_uri(previous)):
         store.set_outcome(
@@ -116,21 +112,24 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
             cur["uri"],
             learning.outcome(previous.get("progress_ms", 0), previous.get("duration_ms", 0)),
         )
-    if cur is not None and same_track(cur, current):
+
+
+def _not_hers(config: FeltConfig, current: dict) -> None:
+    """A song that isn't one of her queued picks came on."""
+    if sp.felt_started(_uri(current)):
+        # a song he asked her for mid-set: an interlude, the set goes on
+        SESSION.current = None
         return
-    at = next((i for i, p in enumerate(SESSION.ahead) if same_track(p, current)), None)
-    if at is None:
-        if sp.felt_started(_uri(current)):
-            # a song he asked her for mid-set: an interlude, the set goes on
-            SESSION.current = None
-            return
-        if _uri(current) in store.recent_pick_uris(config.db_path, 1):
-            # Spotify's queue can't be cleared: a pick left over from an
-            # earlier set came up - skip past it rather than stepping back
-            _spawn(_skip_leftover(config))
-            return
-        stop("Mario played something else")
+    if _uri(current) in store.recent_pick_uris(config.db_path, 1):
+        # Spotify's queue can't be cleared: a pick left over from an
+        # earlier set came up - skip past it rather than stepping back
+        _spawn(_skip_leftover(config))
         return
+    stop("Mario played something else")
+
+
+def _advance(config: FeltConfig, at: int) -> None:
+    """Her pick at `at` in the queue came on: the ones before it were skipped; say a line, top up."""
     for passed in SESSION.ahead[:at]:  # skipped through within one poll
         if not sp.felt_skipped(passed["uri"]):
             store.set_outcome(config.db_path, passed["uri"], "skipped")
@@ -138,6 +137,26 @@ def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> 
     _spawn(_say(config, SESSION.current))
     if len(SESSION.ahead) < AHEAD:
         _spawn(_refill(config))
+
+
+def on_poll(config: FeltConfig, previous: dict | None, current: dict | None) -> None:
+    """Each Spotify poll (brain/background.py music_taste_loop)."""
+    if not SESSION.on:
+        return
+    if current is None or not current.get("is_playing"):
+        _paused(time.monotonic())
+        return
+    SESSION.paused_since = None
+    if _uri(previous) == _uri(current):
+        return
+    _record_previous(config, previous)
+    if SESSION.current is not None and same_track(SESSION.current, current):
+        return
+    at = next((i for i, p in enumerate(SESSION.ahead) if same_track(p, current)), None)
+    if at is None:
+        _not_hers(config, current)
+    else:
+        _advance(config, at)
 
 
 async def feedback(config: FeltConfig, liked: bool) -> str:

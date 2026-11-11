@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 _MAX_FIELD_CHARS = 120
 
 _EVENT_INSTRUCTION = (
@@ -89,6 +91,76 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
     )
 
 
+def _music_prompt(details: dict, lyric: str | None) -> str | None:
+    title, artist, album = (
+        _text(details, "title"),
+        _text(details, "artist"),
+        _text(details, "album"),
+    )
+    if not title:
+        return None
+    song = f'"{title}"' + (f" by {artist}" if artist else "") + (f" (from {album})" if album else "")
+    lyric_part = f' A line from it: "{lyric}". You may quote it if it fits.' if lyric else ""
+    return f"Mario just started playing {song}.{lyric_part} {_EVENT_INSTRUCTION}"
+
+
+def _dj_prompt(details: dict) -> str | None:
+    title, artist = _text(details, "title"), _text(details, "artist")
+    if not title:
+        return None
+    song = f'"{title}"' + (f" by {artist}" if artist else "")
+    because = _text(details, "because")
+    why = (
+        "It's an artist new to him - you're putting him onto it, so sell it a little"
+        + (f" (you picked it because: {because})." if because else ".")
+        if details.get("new") is True
+        else "It's one he already likes."
+    )
+    return (
+        f"You're DJ-ing Mario's music. Your pick is coming on now: {song}. {why} "
+        f"Introduce it like a radio DJ, in character. {_EVENT_INSTRUCTION}"
+    )
+
+
+def _game_start_prompt(details: dict) -> str:
+    name = _game_name(details)
+    what = f"the game {name}" if name else "a game"
+    return f"Mario just launched {what}. Get comfy with him. {_EVENT_INSTRUCTION}"
+
+
+def _game_stop_prompt(details: dict) -> str:
+    name = _game_name(details)
+    what = f"{name}" if name else "his game"
+    duration = _number(details, "duration_s")
+    took = f" after {_spoken_duration(duration)}" if duration else ""
+    return f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
+
+
+def _afk_end_prompt(details: dict) -> str:
+    duration = _number(details, "duration_s") or 0
+    hobbies = _hobbies_phrase(details)
+    pastime = (
+        f" While he was gone you spent the time {hobbies}; you can mention it in passing "
+        "with a small opinion (like 'finished two chapters, it was mid'), only if it fits."
+        if hobbies
+        else ""
+    )
+    return (
+        f"Mario just came back to his desk after being away for {_spoken_duration(duration)}. "
+        f"Greet him.{pastime} {_EVENT_INSTRUCTION}"
+    )
+
+
+def _gpu_hot_prompt(details: dict) -> str:
+    temp = _number(details, "temp_c")
+    heat = f" - the GPU is at {round(temp)} degrees" if temp else ""
+    return f"Mario's PC is running hot{heat}. You grab your water bottle to cool off. {_EVENT_INSTRUCTION}"
+
+
+def _call_join_prompt(_details: dict) -> str:
+    return f"Someone seems to have just joined Mario's voice call. A small, quiet hello. {_EVENT_INSTRUCTION}"
+
+
 def build_prompt(event: str, details: dict, lyric: str | None = None, previous: str | None = None) -> str | None:
     """Pure: the user-turn text for an event, from whitelisted fields only.
 
@@ -98,64 +170,9 @@ def build_prompt(event: str, details: dict, lyric: str | None = None, previous: 
     if event == "unhushed":
         return _unhushed_prompt(details, previous)
     if event == "music_new_track":
-        title, artist, album = (
-            _text(details, "title"),
-            _text(details, "artist"),
-            _text(details, "album"),
-        )
-        if not title:
-            return None
-        song = f'"{title}"' + (f" by {artist}" if artist else "") + (f" (from {album})" if album else "")
-        lyric_part = f' A line from it: "{lyric}". You may quote it if it fits.' if lyric else ""
-        return f"Mario just started playing {song}.{lyric_part} {_EVENT_INSTRUCTION}"
-    if event == "dj_track":
-        title, artist = _text(details, "title"), _text(details, "artist")
-        if not title:
-            return None
-        song = f'"{title}"' + (f" by {artist}" if artist else "")
-        because = _text(details, "because")
-        why = (
-            "It's an artist new to him - you're putting him onto it, so sell it a little"
-            + (f" (you picked it because: {because})." if because else ".")
-            if details.get("new") is True
-            else "It's one he already likes."
-        )
-        return (
-            f"You're DJ-ing Mario's music. Your pick is coming on now: {song}. {why} "
-            f"Introduce it like a radio DJ, in character. {_EVENT_INSTRUCTION}"
-        )
-    if event == "game_start":
-        name = _game_name(details)
-        what = f"the game {name}" if name else "a game"
-        return f"Mario just launched {what}. Get comfy with him. {_EVENT_INSTRUCTION}"
-    if event == "game_stop":
-        name = _game_name(details)
-        what = f"{name}" if name else "his game"
-        duration = _number(details, "duration_s")
-        took = f" after {_spoken_duration(duration)}" if duration else ""
-        return f"Mario just closed {what}{took}. Something like 'finally done?'. {_EVENT_INSTRUCTION}"
-    if event == "afk_end":
-        duration = _number(details, "duration_s") or 0
-        hobbies = _hobbies_phrase(details)
-        pastime = (
-            f" While he was gone you spent the time {hobbies}; you can mention it in passing "
-            "with a small opinion (like 'finished two chapters, it was mid'), only if it fits."
-            if hobbies
-            else ""
-        )
-        return (
-            f"Mario just came back to his desk after being away for {_spoken_duration(duration)}. "
-            f"Greet him.{pastime} {_EVENT_INSTRUCTION}"
-        )
-    if event == "gpu_hot":
-        temp = _number(details, "temp_c")
-        heat = f" - the GPU is at {round(temp)} degrees" if temp else ""
-        return f"Mario's PC is running hot{heat}. You grab your water bottle to cool off. {_EVENT_INSTRUCTION}"
-    if event == "call_join_guess":
-        return f"Someone seems to have just joined Mario's voice call. A small, quiet hello. {_EVENT_INSTRUCTION}"
-    if event == "poe_item":
-        return _poe_item_prompt(details)
-    return None
+        return _music_prompt(details, lyric)
+    prompt = _PROMPTS.get(event)
+    return prompt(details) if prompt else None
 
 
 def _poe_item_prompt(details: dict) -> str | None:
@@ -179,3 +196,14 @@ def _poe_item_prompt(details: dict) -> str | None:
             "exalts'). Big value: loot-goblin hype. Worthless: tease him. No lists, no markdown."
         )
     return None  # no price: she stays quiet (react_to_event skips "unpriced" first)
+
+
+_PROMPTS: dict[str, Callable[[dict], str | None]] = {
+    "dj_track": _dj_prompt,
+    "game_start": _game_start_prompt,
+    "game_stop": _game_stop_prompt,
+    "afk_end": _afk_end_prompt,
+    "gpu_hot": _gpu_hot_prompt,
+    "call_join_guess": _call_join_prompt,
+    "poe_item": _poe_item_prompt,
+}

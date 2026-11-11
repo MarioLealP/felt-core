@@ -233,6 +233,30 @@ async def _colour(client, config, params, states, matches, label) -> SkillResult
     return SkillResult(text=f"{len(able)} lights set to {colour}{rest}.")
 
 
+def _status(states: dict, matches: list[str], label: str) -> SkillResult:
+    """Which of the matched devices are on."""
+    on = [states[eid]["friendly_name"] for eid in matches if states[eid]["state"] == "on"]
+    if len(matches) == 1:
+        return SkillResult(text=f"{label} is currently {'on' if on else 'off'}.")
+    if not on:
+        return SkillResult(text=f"All {len(matches)} are off.")
+    if len(on) == len(matches):
+        return SkillResult(text=f"All {len(matches)} are on.")
+    return SkillResult(text=f"{len(on)} of {len(matches)} are on: {', '.join(on)}.")
+
+
+async def _switch(client, config, matches: list[str], label: str, service: str) -> SkillResult:
+    """Turn the matched devices on or off."""
+    # one call per domain (a group is always one domain; HA takes a list of entities)
+    domain = matches[0].split(".")[0]
+    try:
+        response = await client.post(f"{config.ha_url}/api/services/{domain}/{service}", json={"entity_id": matches})
+        response.raise_for_status()
+    except httpx2.HTTPError:
+        return SkillResult(text=f"Couldn't reach Home Assistant to control {label}.")
+    return SkillResult(text=f"{label} turned {'on' if service == 'turn_on' else 'off'}.")
+
+
 async def handle(params, ctx):
     """Turn, dim or colour the matched devices, or report their status."""
     config = ctx.config
@@ -267,27 +291,7 @@ async def handle(params, ctx):
         if action == "dim" or params.get("brightness") is not None:
             return await _dim(client, config, params, states, matches, label)
         if "on" in action and "off" not in action:
-            service = "turn_on"
-        elif "off" in action:
-            service = "turn_off"
-        else:
-            on = [states[eid]["friendly_name"] for eid in matches if states[eid]["state"] == "on"]
-            if len(matches) == 1:
-                return SkillResult(text=f"{label} is currently {'on' if on else 'off'}.")
-            if not on:
-                return SkillResult(text=f"All {len(matches)} are off.")
-            if len(on) == len(matches):
-                return SkillResult(text=f"All {len(matches)} are on.")
-            return SkillResult(text=f"{len(on)} of {len(matches)} are on: {', '.join(on)}.")
-
-        # one call per domain (a group is always one domain; HA takes a list of entities)
-        domain = matches[0].split(".")[0]
-        try:
-            response = await client.post(
-                f"{config.ha_url}/api/services/{domain}/{service}", json={"entity_id": matches}
-            )
-            response.raise_for_status()
-        except httpx2.HTTPError:
-            return SkillResult(text=f"Couldn't reach Home Assistant to control {label}.")
-
-    return SkillResult(text=f"{label} turned {'on' if service == 'turn_on' else 'off'}.")
+            return await _switch(client, config, matches, label, "turn_on")
+        if "off" in action:
+            return await _switch(client, config, matches, label, "turn_off")
+        return _status(states, matches, label)

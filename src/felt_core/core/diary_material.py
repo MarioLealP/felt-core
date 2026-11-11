@@ -6,6 +6,7 @@ What she saw, what happened on the desktop, what they said.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -79,63 +80,92 @@ def _num(data: dict, key: str) -> float | None:
         return None
 
 
+def _game_start(data: dict) -> str | None:
+    name = _text(data, "name")
+    return f'started playing "{name}"' if name else None
+
+
+def _game_stop(data: dict) -> str | None:
+    name = _text(data, "name")
+    if not name:
+        return None
+    dur = _num(data, "duration_s")
+    suffix = f" (about {round(dur / 60)} min)" if dur else ""
+    return f'stopped playing "{name}"{suffix}'
+
+
+def _afk_end(data: dict) -> str:
+    dur = _num(data, "duration_s")
+    return f"back after about {round(dur / 60)} min away" if dur else "back at the desk"
+
+
+def _music_track(data: dict) -> str | None:
+    title, artist = _text(data, "title"), _text(data, "artist")
+    if not title:
+        return None
+    return f'played "{title}"' + (f" by {artist}" if artist else "")
+
+
+def _mood(data: dict) -> str | None:
+    axes = data.get("axes")
+    if isinstance(axes, dict) and axes:
+        top = max(axes.items(), key=lambda kv: abs(_as_float(kv[1])), default=None)
+        if top:
+            return f"mood leaned {top[0]}"
+    return None
+
+
+def _window_fall(data: dict) -> str:
+    cause = _text(data, "cause")
+    return f"took a tumble ({cause})" if cause else "took a tumble"
+
+
+def _prop_used(data: dict) -> str | None:
+    item = _text(data, "item")
+    return f"played with the {item}" if item else None
+
+
+def _hush(data: dict) -> str:
+    minutes = _num(data, "minutes")
+    return f"got hushed for {round(minutes)} min" if minutes else "got hushed"
+
+
+def _hobby(data: dict) -> str | None:
+    from felt_core.core.event_prompt import HOBBY_PHRASES
+
+    hobby = _text(data, "hobby")
+    if hobby not in HOBBY_PHRASES:
+        return None
+    minutes = _num(data, "minutes")
+    spent = f"spent about {round(minutes)} min " if minutes else "spent some time "
+    # The event prompt talks TO her ("your handheld"); the diary is hers.
+    return spent + HOBBY_PHRASES[hobby].replace("your", "my") + " while Mario was away"
+
+
+# day_start is missing on purpose: a trigger marker, not something worth narrating
+_EVENT_LINES: dict[str, Callable[[dict], str | None]] = {
+    "game_start": _game_start,
+    "game_stop": _game_stop,
+    "afk_start": lambda _data: "stepped away from the desk",
+    "afk_end": _afk_end,
+    "music_track": _music_track,
+    "mood": _mood,
+    "window_fall": _window_fall,
+    "prop_used": _prop_used,
+    "hush": _hush,
+    "ledge_sit": lambda _data: "sat on a ledge for a while",
+    "hobby": _hobby,
+}
+
+
 def _event_line(kind: str, data: dict) -> str | None:
     """Pure: one compact, cloud-safe line for a logged event, or None for a kind with nothing worth saying.
 
     Whitelisted fields only - same discipline as events.py's
     build_prompt, never dumps `data` wholesale.
     """
-    if kind == "game_start":
-        name = _text(data, "name")
-        return f'started playing "{name}"' if name else None
-    if kind == "game_stop":
-        name = _text(data, "name")
-        if not name:
-            return None
-        dur = _num(data, "duration_s")
-        suffix = f" (about {round(dur / 60)} min)" if dur else ""
-        return f'stopped playing "{name}"{suffix}'
-    if kind == "afk_start":
-        return "stepped away from the desk"
-    if kind == "afk_end":
-        dur = _num(data, "duration_s")
-        return f"back after about {round(dur / 60)} min away" if dur else "back at the desk"
-    if kind == "day_start":
-        return None  # a trigger marker, not something worth narrating
-    if kind == "music_track":
-        title, artist = _text(data, "title"), _text(data, "artist")
-        if not title:
-            return None
-        return f'played "{title}"' + (f" by {artist}" if artist else "")
-    if kind == "mood":
-        axes = data.get("axes")
-        if isinstance(axes, dict) and axes:
-            top = max(axes.items(), key=lambda kv: abs(_as_float(kv[1])), default=None)
-            if top:
-                return f"mood leaned {top[0]}"
-        return None
-    if kind == "window_fall":
-        cause = _text(data, "cause")
-        return f"took a tumble ({cause})" if cause else "took a tumble"
-    if kind == "prop_used":
-        item = _text(data, "item")
-        return f"played with the {item}" if item else None
-    if kind == "hush":
-        minutes = _num(data, "minutes")
-        return f"got hushed for {round(minutes)} min" if minutes else "got hushed"
-    if kind == "ledge_sit":
-        return "sat on a ledge for a while"
-    if kind == "hobby":
-        from felt_core.core.event_prompt import HOBBY_PHRASES
-
-        hobby = _text(data, "hobby")
-        if hobby not in HOBBY_PHRASES:
-            return None
-        minutes = _num(data, "minutes")
-        spent = f"spent about {round(minutes)} min " if minutes else "spent some time "
-        # The event prompt talks TO her ("your handheld"); the diary is hers.
-        return spent + HOBBY_PHRASES[hobby].replace("your", "my") + " while Mario was away"
-    return None
+    line = _EVENT_LINES.get(kind)
+    return line(data) if line else None
 
 
 def _as_float(v: Any) -> float:

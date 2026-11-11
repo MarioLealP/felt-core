@@ -408,9 +408,15 @@ class Recorder:
         Recorded as
         'POST /phone/SET_TIMER' etc., never reaching the real phone.
         """
-        calendar = self._calendar(request, path)
-        if calendar is not None:
-            return calendar
+        for part in (self._calendar, self._ha_assist, self._ha_home, self._ha_ender, self._ha_phone, self._ha_todo):
+            response = part(request, path)
+            if response is not None:
+                return response
+        self.calls.append(f"{request.method} /ha{path}")
+        return httpx2.Response(503)
+
+    def _ha_assist(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
+        """HA's Assist matcher (conversation/process)."""
         if path == "/api/conversation/process":
             # HA's matcher: a match is done there - recorded, never reaching HA
             text = json.loads(request.content or b"{}").get("text", "")
@@ -421,6 +427,10 @@ class Recorder:
             self.calls.append(f"{'POST' if kind == 'action_done' else 'GET'} /ha-assist {text}")
             speech = {"plain": {"speech": "Done" if kind == "action_done" else "Yes"}}
             return httpx2.Response(200, json={"response": {"response_type": kind, "speech": speech}})
+        return None
+
+    def _ha_home(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
+        """The allowed devices' states and their light / switch / fan services."""
         if path.startswith("/api/states/") and path.removeprefix("/api/states/") in HA_DEVICES:
             entity = path.removeprefix("/api/states/")
             attrs: dict = {"friendly_name": HA_DEVICES[entity]}
@@ -436,12 +446,20 @@ class Recorder:
             colour = f" colour={colour}" if colour else ""
             self.calls.append(f"POST /home/{m[2]} {body.get('entity_id')}{dim}{colour}")
             return httpx2.Response(200, json=[])
+        return None
+
+    def _ha_ender(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
+        """The Ender's sensors."""
         if path.startswith("/api/states/sensor.ender_"):
             field = path.removeprefix("/api/states/sensor.ender_")
             if field not in ENDER:
                 return httpx2.Response(404)
             self.calls.append(f"GET /ender/{field}")
             return httpx2.Response(200, json={"state": ENDER[field]})
+        return None
+
+    def _ha_phone(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
+        """The phone: notify actions, battery, next alarm."""
         if path.startswith("/api/services/notify/mobile_app_"):
             body = json.loads(request.content or b"{}")
             action = (body.get("data") or {}).get("intent_action", "")
@@ -456,6 +474,10 @@ class Recorder:
             return httpx2.Response(200, json={"state": "2026-10-19T05:30:00+00:00"})
         if path.endswith("_battery_state"):
             return httpx2.Response(200, json={"state": "charging"})
+        return None
+
+    def _ha_todo(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
+        """The shopping list (todo services)."""
         if path.startswith("/api/services/todo/"):
             service = path.rsplit("/", 1)[1]
             if service == "get_items":
@@ -470,8 +492,7 @@ class Recorder:
             item = json.loads(request.content or b"{}").get("item", "")
             self.calls.append(f"POST /todo/{service}?{item}")
             return httpx2.Response(200, json=[])
-        self.calls.append(f"{request.method} /ha{path}")
-        return httpx2.Response(503)
+        return None
 
     def _calendar(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
         """HA's calendars: Mario's primary and the reminders one.
@@ -524,7 +545,6 @@ class Recorder:
         """Record the call and answer it with a fake response."""
         host = request.url.host
         path = request.url.path
-        query = parse_qs(request.url.query.decode())
         if host == "accounts.spotify.com":
             return httpx2.Response(200, json={"access_token": "fake", "expires_in": 3600})
         if host == self.ha_host:
@@ -537,8 +557,10 @@ class Recorder:
         if host != "api.spotify.com":
             self.calls.append(f"{request.method} {host}{path}")
             return httpx2.Response(503)
-        path = path.removeprefix("/v1")
-        self.calls.append(f"{request.method} {path}")
+        return self._spotify(request, path)
+
+    def _transport(self, path: str) -> None:
+        """Pause, play and next change what the fake player is doing."""
         if path == "/me/player/pause":
             self.playing = False
         elif path in ("/me/player/play", "/me/player/next"):
@@ -546,6 +568,13 @@ class Recorder:
             if path == "/me/player/next" and self.queue:
                 uri = self.queue.pop(0)
                 self.now = self.known.get(uri, {**self.now, "uri": uri, "name": uri})
+
+    def _spotify(self, request: httpx2.Request, path: str) -> httpx2.Response:
+        """The Spotify Web API: search, queue, player state, library; writes recorded."""
+        query = parse_qs(request.url.query.decode())
+        path = path.removeprefix("/v1")
+        self.calls.append(f"{request.method} {path}")
+        self._transport(path)
         if path == "/search":
             q = query.get("q", [""])[0]
             m = re.match(r'artist:"(.+)"', q)
@@ -636,6 +665,28 @@ async def _streamed(message: str, config, session_id: str, timing: dict) -> Chat
     return result
 
 
+def _case_ok(case: Case, writes: list[str], route: list[str], recorder: Recorder, reply: str) -> bool:
+    """Whether a case passed: the right skills and writes, the appointment as asked, and no pretending."""
+    ok = _verdict(case, writes, route) and not reply.startswith("CRASH")
+    if case.place is not None:
+        # one appointment at the end, with or without its place
+        ok = ok and [bool(e["location"]) for e in recorder.events] == [case.place]
+    if case.summary_has:
+        ok = ok and all(w in (e["summary"] or "").lower() for e in recorder.events for w in case.summary_has)
+    if case.skills and ok and any(" /" not in c for c in recorder.calls):
+        # a service she called was down (all faked): she has to say
+        # so, not answer anyway
+        ok = bool(
+            re.search(
+                r"couldn'?t|can'?t|unable|down|trouble|hard time"
+                r"|not (?:able|working|responding|getting|seeing)",
+                reply,
+                re.I,
+            )
+        )
+    return ok
+
+
 async def main() -> int:
     """Run the selected cases and return 1 if any of them fails."""
     ap = argparse.ArgumentParser()
@@ -707,23 +758,7 @@ async def main() -> int:
             except Exception as e:
                 reply = f"CRASH {type(e).__name__}: {e}"
             writes = _writes(recorder.calls)
-            ok = _verdict(case, writes, log.lines) and not reply.startswith("CRASH")
-            if case.place is not None:
-                # one appointment at the end, with or without its place
-                ok = ok and [bool(e["location"]) for e in recorder.events] == [case.place]
-            if case.summary_has:
-                ok = ok and all(w in (e["summary"] or "").lower() for e in recorder.events for w in case.summary_has)
-            if case.skills and ok and any(" /" not in c for c in recorder.calls):
-                # a service she called was down (all faked): she has to say
-                # so, not answer anyway
-                ok = bool(
-                    re.search(
-                        r"couldn'?t|can'?t|unable|down|trouble|hard time"
-                        r"|not (?:able|working|responding|getting|seeing)",
-                        reply,
-                        re.I,
-                    )
-                )
+            ok = _case_ok(case, writes, log.lines, recorder, reply)
             failed += not ok
             print(
                 json.dumps(

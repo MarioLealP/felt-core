@@ -166,6 +166,21 @@ def _temp(actual: str, target: str) -> str:
     return f"{a}/{round(t)}°C" if t else a
 
 
+def _active_parts(s: Snapshot) -> list[str]:
+    """Pure: how far a running print is - progress, layer, time left."""
+    parts = []
+    if s.progress is not None:
+        parts.append(f"{s.progress:.0f}% done")
+    if s.layer:
+        parts.append(f"layer {s.layer}")
+    if s.time_left_s is not None:
+        left = f"~{duration(s.time_left_s)} left"
+        if s.done_at:
+            left += f" (done ~{s.done_at.astimezone(LISBON):%H:%M})"
+        parts.append(left)
+    return parts
+
+
 def describe(s: Snapshot) -> str:
     """Pure: the printer_status answer."""
     if s.state in _GONE:
@@ -174,15 +189,7 @@ def describe(s: Snapshot) -> str:
     if s.file and (s.state in _ACTIVE or s.state in _ENDED):
         parts[0] += f" ({job_name(s.file)})"
     if s.state in _ACTIVE:
-        if s.progress is not None:
-            parts.append(f"{s.progress:.0f}% done")
-        if s.layer:
-            parts.append(f"layer {s.layer}")
-        if s.time_left_s is not None:
-            left = f"~{duration(s.time_left_s)} left"
-            if s.done_at:
-                left += f" (done ~{s.done_at.astimezone(LISBON):%H:%M})"
-            parts.append(left)
+        parts += _active_parts(s)
     if s.nozzle:
         parts.append(f"nozzle {_temp(s.nozzle, s.nozzle_target)}")
     if s.bed:

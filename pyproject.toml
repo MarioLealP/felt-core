@@ -72,25 +72,6 @@ convention = "google"
 "tests/**" = ["D", "S", "unused-async"]
 # Home Assistant runs an integration's setup from its __init__.py.
 "ha/custom_components/*/__init__.py" = ["non-empty-init-module"]
-# Baseline 2026-11-10 (Meru standard pass): what failed when the rules were adopted. Remove a line as its file
-# is fixed; never add one for new code.
-"plugins/create_calendar_event/skill.py" = ["complex-structure"]
-"plugins/media_control/skill.py" = ["complex-structure"]
-"plugins/set_reminder/skill.py" = ["complex-structure"]
-"plugins/smart_home_control/skill.py" = ["complex-structure"]
-"src/felt_core/api/app.py" = ["complex-structure"]
-"src/felt_core/api/reply.py" = ["complex-structure"]
-"src/felt_core/api/app_stream.py" = ["complex-structure"]
-"src/felt_core/brain/orchestrator.py" = ["complex-structure"]
-"src/felt_core/core/diary.py" = ["complex-structure"]
-"src/felt_core/core/diary_material.py" = ["complex-structure"]
-"src/felt_core/dj/control.py" = ["complex-structure"]
-"src/felt_core/core/ender.py" = ["complex-structure"]
-"src/felt_core/core/events.py" = ["complex-structure"]
-"src/felt_core/core/event_prompt.py" = ["complex-structure"]
-"src/felt_core/core/llm_gate.py" = ["complex-structure"]
-"src/felt_core/clients/local_llm.py" = ["complex-structure"]
-"tools/e2e_chat.py" = ["complex-structure"]
 
 [tool.ty.environment]
 python-version = "3.14"

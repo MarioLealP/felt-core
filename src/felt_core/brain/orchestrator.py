@@ -49,6 +49,7 @@ from felt_core.core import emails, features, metrics
 from felt_core.core.plugin_loader import LoadedSkill, load_plugins
 from felt_core.db.messages import get_her_recent_lines, get_history, save_message
 from felt_core.db.observations import get_current_screen_description
+from felt_core.models.plugin import SkillResult
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,152 @@ _CHAIN_NOTE = (
     "thing, e.g. to find something and then set a reminder), call that tool now instead "
     "of answering. Never say something is done unless its tool result is above."
 )
+
+
+async def _ha_assist_reply(
+    message: str,
+    config: FeltConfig,
+    session_id: str,
+    tone: str | None,
+    history: list[dict],
+    speaker: ReplySpeaker | None,
+    pick_task: asyncio.Task[router.Pick] | None,
+) -> ChatResult | None:
+    """A plain home or list command done by Home Assistant's own matcher, phrased by her; None if HA didn't take it.
+
+    ha_assist.py replaced the home_fast_path regex, 2026-10-19.
+    """
+    done = await ha_assist.handle(config, message)
+    if done is None:
+        return None
+    router.record_pick(config, pick_task, message, router.HA_ASSIST, fast=True)
+    async with metrics.timed("reply", route="local", model=config.local_llm_model):
+        reply = await phrase_skill_result(message, f"Home Assistant did it. It says: {done}", history, config, tone)
+    return ChatResult(reply=_said(config, session_id, reply, speaker))
+
+
+async def _first_turn(
+    prefix: list[dict],
+    tools: list[dict],
+    config: FeltConfig,
+    speaker: ReplySpeaker | None,
+    registry: dict[str, LoadedSkill],
+    pick_task: asyncio.Task[router.Pick] | None,
+) -> tuple[local_llm.LocalReply, bool]:
+    """Her first model turn, and whether it had to be retried because she claimed a tool use without one."""
+    first: local_llm.LocalReply | None = None
+    claimed = False
+    sure = await router.sure_skill(config, pick_task)
+    if sure is not None and sure.skill in registry:
+        # cm-6b0 act mode: it's clearly a request for a skill, so her
+        # first turn must call a tool - never a plain "sure, added!"
+        logger.info(
+            "router: sure of %s (%.2f, %s) - tool call required",
+            sure.skill,
+            sure.score,
+            sure.via,
+        )
+        first = await _forced_tool_turn(prefix, tools, config)
+    if first is None:
+        first = await _reply_turn(prefix, config, speaker, tools=tools, guard=claims_a_tool_use)
+    if not first.tool_calls and claims_a_tool_use(first.text):
+        claimed = True
+        # FELT-108: she said she'd look it up ("pulling up the wiki...")
+        # or do it ("turning the shelf light off") but called nothing.
+        # Ask again with a tool call required, so the claim is true or
+        # the answer honest.
+        logger.warning("reply claimed a lookup or action without a tool call - retrying with a tool required")
+        forced = await _forced_tool_turn(prefix, tools, config)
+        if forced is not None:
+            first = forced
+    return first, claimed
+
+
+async def _tool_chain(
+    message: str,
+    config: FeltConfig,
+    speaker: ReplySpeaker | None,
+    registry: dict[str, LoadedSkill],
+    tools: list[dict],
+    prefix: list[dict],
+    first: local_llm.LocalReply,
+    claimed: bool,
+    steps: list[tuple[tuple[str, dict], str]],
+    result: SkillResult | None,
+) -> tuple[str, SkillResult | None, str, str]:
+    """The follow-up turns after a tool call: she answers, or calls the next tool, up to _MAX_TOOL_STEPS.
+
+    `steps` holds the first call and its output (`result`: its skill result); later ones are appended. Returns
+    (reply, the last skill result, the last skill's name, the last tool output); the reply
+    is empty when the chain was cut short.
+    """
+    (skill_name, _), tool_output = steps[-1]
+    tool_call = first.tool_calls[0]
+    # the guard caught the claim only after part of it was said
+    late = claimed and speaker is not None and bool(speaker.said)
+    followup = prefix
+    assistant_text = first.text
+    while True:
+        more = len(steps) < _MAX_TOOL_STEPS
+        only_looked = all(done[0] in _LOOKUP_SKILLS for done, _ in steps)
+        check = claims_an_action if more and only_looked else None
+        tool_message = _tool_result_instruction(tool_output)
+        if more:
+            tool_message += "\n\n" + _CHAIN_NOTE
+        if late and speaker is not None:
+            tool_message += "\n\n" + correction_note(speaker.said_text())
+        followup = [
+            *followup,
+            {"role": "assistant", "content": assistant_text, "tool_calls": [tool_call]},
+            {"role": "tool", "tool_call_id": str(tool_call.get("id") or ""), "content": tool_message},
+        ]
+        said_before = len(speaker.said) if speaker is not None else 0
+        nxt = await _reply_turn(followup, config, speaker, tools=tools, guard=check)
+        late = False
+        if check is not None and not nxt.tool_calls and check(nxt.text):
+            # cm-p6a: "I've got it set for you" with no set_reminder call
+            logger.warning("follow-up claimed an action without a tool call - retrying with a tool required")
+            forced = await _forced_tool_turn(followup, tools, config)
+            if forced is not None:
+                nxt = forced
+                late = speaker is not None and len(speaker.said) > said_before
+        next_call = None
+        if more and nxt.tool_calls:
+            name, params = local_llm.parse_tool_arguments(nxt.tool_calls[0])
+            next_call = _apply_call_guards((name, params) if name else None, None, message)
+        if next_call is None:
+            return ("" if nxt.tool_calls else nxt.text.strip()), result, skill_name, tool_output
+        if any(next_call == done for done, _ in steps):
+            logger.warning(
+                "she repeated %s with the same arguments - answering with what she has",
+                next_call[0],
+            )
+            return "", result, skill_name, tool_output
+        tool_call, assistant_text = nxt.tool_calls[0], nxt.text
+        skill_name = next_call[0]
+        result, tool_output = await _run_skill_call(next_call, registry, config, message)
+        steps.append((next_call, tool_output))
+
+
+async def _phrase_steps(
+    message: str,
+    steps: list[tuple[tuple[str, dict], str]],
+    tool_output: str,
+    history: list[dict],
+    config: FeltConfig,
+    tone: str | None,
+) -> str:
+    """The shared plain phrasing step, told everything that was really done.
+
+    For the presence fast path (no model turn yet), an empty phrasing call, or a tool chain cut short.
+    """
+    if len(steps) > 1:
+        tool_output = (
+            "\n".join(f"{done[0]}: {output}" for done, output in steps)
+            + "\nOnly these steps were done - don't say anything else was."
+        )
+    async with metrics.timed("reply", route="local", model=config.local_llm_model):
+        return await phrase_skill_result(message, tool_output, history, config, tone)
 
 
 async def _chat_local(
@@ -92,48 +239,16 @@ async def _chat_local(
     # must never wait on, or be second-guessed by, a model round trip.
     # WP-48: so does a plain music command ("skip").
     fast_call = _presence_fast_path(message) or music_fast_path(message)
-    if fast_call is None:
-        # a plain home or list command: Home Assistant's own matcher does it
-        # (ha_assist.py; replaced the home_fast_path regex, 2026-10-19)
-        done = await ha_assist.handle(config, message)
-        if done is not None:
-            router.record_pick(config, pick_task, message, router.HA_ASSIST, fast=True)
-            async with metrics.timed("reply", route="local", model=config.local_llm_model):
-                reply = await phrase_skill_result(
-                    message, f"Home Assistant did it. It says: {done}", history, config, tone
-                )
-            return ChatResult(reply=_said(config, session_id, reply, speaker))
     call = fast_call
     first: local_llm.LocalReply | None = None
-    tool_call: dict | None = None
     claimed = False
     if fast_call is None:
-        sure = await router.sure_skill(config, pick_task)
-        if sure is not None and sure.skill in registry:
-            # cm-6b0 act mode: it's clearly a request for a skill, so her
-            # first turn must call a tool - never a plain "sure, added!"
-            logger.info(
-                "router: sure of %s (%.2f, %s) - tool call required",
-                sure.skill,
-                sure.score,
-                sure.via,
-            )
-            first = await _forced_tool_turn(prefix, tools, config)
-        if first is None:
-            first = await _reply_turn(prefix, config, speaker, tools=tools, guard=claims_a_tool_use)
-        if not first.tool_calls and claims_a_tool_use(first.text):
-            claimed = True
-            # FELT-108: she said she'd look it up ("pulling up the wiki...")
-            # or do it ("turning the shelf light off") but called nothing.
-            # Ask again with a tool call required, so the claim is true or
-            # the answer honest.
-            logger.warning("reply claimed a lookup or action without a tool call - retrying with a tool required")
-            forced = await _forced_tool_turn(prefix, tools, config)
-            if forced is not None:
-                first = forced
+        ha_done = await _ha_assist_reply(message, config, session_id, tone, history, speaker, pick_task)
+        if ha_done is not None:
+            return ha_done
+        first, claimed = await _first_turn(prefix, tools, config, speaker, registry, pick_task)
         if first.tool_calls:
-            tool_call = first.tool_calls[0]
-            name, params = local_llm.parse_tool_arguments(tool_call)
+            name, params = local_llm.parse_tool_arguments(first.tool_calls[0])
             call = (name, params) if name else None
 
     call = _apply_call_guards(call, fast_call, message)
@@ -165,63 +280,12 @@ async def _chat_local(
 
     reply = ""
     steps = [(call, tool_output)]
-    if tool_call is not None and first is not None:
-        # the guard caught the claim only after part of it was said
-        late = claimed and speaker is not None and bool(speaker.said)
-        followup = prefix
-        assistant_text = first.text
-        while True:
-            more = len(steps) < _MAX_TOOL_STEPS
-            only_looked = all(done[0] in _LOOKUP_SKILLS for done, _ in steps)
-            check = claims_an_action if more and only_looked else None
-            tool_message = _tool_result_instruction(tool_output)
-            if more:
-                tool_message += "\n\n" + _CHAIN_NOTE
-            if late and speaker is not None:
-                tool_message += "\n\n" + correction_note(speaker.said_text())
-            followup = [
-                *followup,
-                {"role": "assistant", "content": assistant_text, "tool_calls": [tool_call]},
-                {"role": "tool", "tool_call_id": str(tool_call.get("id") or ""), "content": tool_message},
-            ]
-            said_before = len(speaker.said) if speaker is not None else 0
-            nxt = await _reply_turn(followup, config, speaker, tools=tools, guard=check)
-            late = False
-            if check is not None and not nxt.tool_calls and check(nxt.text):
-                # cm-p6a: "I've got it set for you" with no set_reminder call
-                logger.warning("follow-up claimed an action without a tool call - retrying with a tool required")
-                forced = await _forced_tool_turn(followup, tools, config)
-                if forced is not None:
-                    nxt = forced
-                    late = speaker is not None and len(speaker.said) > said_before
-            next_call = None
-            if more and nxt.tool_calls:
-                name, params = local_llm.parse_tool_arguments(nxt.tool_calls[0])
-                next_call = _apply_call_guards((name, params) if name else None, None, message)
-            if next_call is None:
-                reply = "" if nxt.tool_calls else nxt.text.strip()
-                break
-            if any(next_call == done for done, _ in steps):
-                logger.warning(
-                    "she repeated %s with the same arguments - answering with what she has",
-                    next_call[0],
-                )
-                break
-            tool_call, assistant_text = nxt.tool_calls[0], nxt.text
-            skill_name = next_call[0]
-            result, tool_output = await _run_skill_call(next_call, registry, config, message)
-            steps.append((next_call, tool_output))
+    if first is not None and first.tool_calls:
+        reply, result, skill_name, tool_output = await _tool_chain(
+            message, config, speaker, registry, tools, prefix, first, claimed, steps, result
+        )
     if not reply:
-        # The presence fast path (no model turn yet), an empty phrasing
-        # call, or a tool chain cut short: the shared plain phrasing step,
-        # told everything that was really done.
-        if len(steps) > 1:
-            tool_output = (
-                "\n".join(f"{done[0]}: {output}" for done, output in steps)
-                + "\nOnly these steps were done - don't say anything else was."
-            )
-        async with metrics.timed("reply", route="local", model=config.local_llm_model):
-            reply = await phrase_skill_result(message, tool_output, history, config, tone)
+        reply = await _phrase_steps(message, steps, tool_output, history, config, tone)
     reply = _said(config, session_id, reply, speaker)
     return _skill_chat_result(reply, result, skill_name, registry)
 

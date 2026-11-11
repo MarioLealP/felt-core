@@ -188,6 +188,37 @@ async def _generate_line(event: str, prompt: str, config: FeltConfig, tone: str 
     return _line_and_emotion(text, EMOTIONS)
 
 
+def _skip_reason(
+    event: str, details: dict, table: dict, key: str | None, config: FeltConfig, session_id: str
+) -> str | None:
+    """Why this event gets no line right now (cooldowns, policy), or None."""
+    since_screen = seconds_since_last_spoken_reaction(config.db_path, session_id)
+    since_any_event = seconds_since_last_event_reaction(config.db_path)
+    since_any = min((s for s in (since_screen, since_any_event) if s is not None), default=None)
+    return decide(
+        event,
+        details,
+        table,
+        min_gap_s=config.event_reaction_min_gap_s,
+        since_any_remark=since_any,
+        since_event=seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
+        since_same=seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
+    )
+
+
+async def _unhushed_line(
+    prompt: str, config: FeltConfig, tone: str | None, previous: str | None
+) -> tuple[str, str | None]:
+    """The back-from-hush line, capped, asked for once more if it repeats the last one."""
+    line, emotion = await _generate_line("unhushed", prompt, config, tone)
+    line = cap_words(line, UNHUSHED_MAX_WORDS)
+    if same_line(line, previous):
+        logger.info("event reaction %s: repeated the last line, asking once more", "unhushed")
+        line, emotion = await _generate_line("unhushed", prompt, config, tone)
+        line = cap_words(line, UNHUSHED_MAX_WORDS)
+    return line, emotion
+
+
 async def react_to_event(
     event: str,
     details: dict | None,
@@ -200,18 +231,7 @@ async def react_to_event(
     table = policies(config)
     key = dedupe_key(event, details)
 
-    since_screen = seconds_since_last_spoken_reaction(config.db_path, session_id)
-    since_any_event = seconds_since_last_event_reaction(config.db_path)
-    since_any = min((s for s in (since_screen, since_any_event) if s is not None), default=None)
-    reason = decide(
-        event,
-        details,
-        table,
-        min_gap_s=config.event_reaction_min_gap_s,
-        since_any_remark=since_any,
-        since_event=seconds_since_last_event_reaction(config.db_path, event) if event in table else None,
-        since_same=seconds_since_last_event_reaction(config.db_path, event, key) if key else None,
-    )
+    reason = _skip_reason(event, details, table, key, config, session_id)
     if reason is not None:
         logger.info("event reaction %s: no line (%s)", event, reason)
         return EventReaction(skipped=reason)
@@ -238,13 +258,10 @@ async def react_to_event(
     )
 
     try:
-        line, emotion = await _generate_line(event, prompt, config, tone)
         if event == "unhushed":
-            line = cap_words(line, UNHUSHED_MAX_WORDS)
-            if same_line(line, previous):
-                logger.info("event reaction %s: repeated the last line, asking once more", event)
-                line, emotion = await _generate_line(event, prompt, config, tone)
-                line = cap_words(line, UNHUSHED_MAX_WORDS)
+            line, emotion = await _unhushed_line(prompt, config, tone, previous)
+        else:
+            line, emotion = await _generate_line(event, prompt, config, tone)
     except local_llm.LocalLLMUnavailableError:
         logger.warning("event reaction %s: felt-llm unavailable", event)
         raise
