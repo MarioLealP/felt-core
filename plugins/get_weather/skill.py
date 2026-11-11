@@ -23,7 +23,7 @@ import httpx2
 
 from felt_core.core.date_resolution import resolve_date, upcoming_weekend
 from felt_core.core.params import get_single_param
-from felt_core.db.store import get_setting
+from felt_core.db.settings import get_setting
 from felt_core.models.plugin import SkillResult
 
 # WP-06: the fetch itself only ever cost ~0.3s, so this cache isn't the

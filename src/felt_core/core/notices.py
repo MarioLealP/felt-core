@@ -19,7 +19,8 @@ import json
 import sqlite3
 
 from felt_core.core.incidents import _ensure
-from felt_core.db.store import ALERT, _connect
+from felt_core.db.kinds import ALERT
+from felt_core.db.session import _connect
 
 _POPS = ("urgent", "high")
 

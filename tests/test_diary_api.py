@@ -9,13 +9,9 @@ from fastapi.testclient import TestClient
 
 import felt_core.api.app as api
 import felt_core.core.diary as diary
-from felt_core.db.store import (
-    get_diary,
-    get_events_between,
-    get_self_memories,
-    insert_diary,
-    insert_self_memory,
-)
+from felt_core.db.diary import get_diary, insert_diary
+from felt_core.db.events import get_events_between
+from felt_core.db.self_memory import get_self_memories, insert_self_memory
 
 
 def _client(tmp_path, monkeypatch, debug=False):

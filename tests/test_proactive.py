@@ -222,7 +222,7 @@ async def test_enqueue_inside_the_loop_presynthesises_and_audio_joins_it(tmp_pat
         return b"RIFFwav"
 
     monkeypatch.setattr(proactive, "_synthesize", fake_synth)
-    monkeypatch.setattr(proactive.db, "insert_proactive", lambda *a, **k: 7)
+    monkeypatch.setattr(proactive, "insert_proactive", lambda *a, **k: 7)
     cfg = SimpleNamespace(db_path=str(tmp_path / "x.db"), voice_url="http://voice")
     text = "prewarm check, unique 42"
     assert proactive.enqueue_proactive(cfg, "test", text, ttl_s=60) == 7

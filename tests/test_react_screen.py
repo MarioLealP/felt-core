@@ -7,9 +7,7 @@ import felt_core.brain.screen_reactions as brain
 from felt_core.api.app import app
 from felt_core.clients.local_llm import LocalLLMUnavailable
 from felt_core.config import FeltConfig
-from felt_core.db.store import (
-    get_recent_observations,
-)
+from felt_core.db.observations import get_recent_observations
 
 
 def _config(tmp_path, **kwargs):

@@ -1,4 +1,4 @@
-from felt_core.db.store import get_history, save_message
+from felt_core.db.messages import get_history, save_message
 
 
 def test_get_history_respects_chronological_order(tmp_path):

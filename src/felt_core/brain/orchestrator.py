@@ -44,12 +44,8 @@ from felt_core.core import emails, features, metrics
 from felt_core.core.animation import resolve_animation_tag
 from felt_core.core.plugin_loader import LoadedSkill, load_plugins
 from felt_core.core.tools import run_skill
-from felt_core.db.store import (
-    get_current_screen_description,
-    get_her_recent_lines,
-    get_history,
-    save_message,
-)
+from felt_core.db.messages import get_her_recent_lines, get_history, save_message
+from felt_core.db.observations import get_current_screen_description
 from felt_core.dj import control as dj_control
 from felt_core.models.plugin import ExecutionContext
 

@@ -18,7 +18,7 @@ too, and says so when the PC is off.
 import json
 from datetime import UTC, datetime, timedelta
 
-from felt_core.db.store import get_setting, set_setting
+from felt_core.db.settings import get_setting, set_setting
 
 CONTROLS = ("hide", "quiet")
 TIMERS = (15, 30, 60, 480)  # the slide's stops, minutes

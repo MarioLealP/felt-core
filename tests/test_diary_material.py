@@ -5,7 +5,10 @@ import json
 
 import felt_core.core.diary as diary
 from felt_core.config import FeltConfig
-from felt_core.db.store import _connect, save_event, save_fact, save_message
+from felt_core.db.events import save_event
+from felt_core.db.facts import save_fact
+from felt_core.db.messages import save_message
+from felt_core.db.session import _connect
 
 
 def _config(tmp_path):

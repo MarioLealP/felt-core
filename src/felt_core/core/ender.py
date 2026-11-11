@@ -28,7 +28,7 @@ from felt_core.config import FeltConfig, reveal
 from felt_core.core import features, llm_gate
 from felt_core.core.her_line import her_line
 from felt_core.core.proactive import enqueue_proactive
-from felt_core.db import store as db
+from felt_core.db.settings import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 
@@ -249,10 +249,10 @@ async def check(config: FeltConfig) -> str | None:
     cur = (await _states(config, ("state",))).get("state")
     if cur is None or cur in _GONE:
         return None  # offline is not a transition; resume from the last real state
-    prev = db.get_setting(config.db_path, _LAST_KEY)
+    prev = get_setting(config.db_path, _LAST_KEY)
     if prev == cur:
         return None
-    db.set_setting(config.db_path, _LAST_KEY, cur)
+    set_setting(config.db_path, _LAST_KEY, cur)
     event = event_for(prev, cur)
     if event == "paused" and await _filament(config) == "off":
         event = "runout"  # Klipper's runout sensor paused it (pause_on_runout)

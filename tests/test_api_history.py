@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from felt_core.api.app import app
-from felt_core.db.store import save_message
+from felt_core.db.messages import save_message
 
 
 def test_history_endpoint_returns_saved_messages(tmp_path, monkeypatch):

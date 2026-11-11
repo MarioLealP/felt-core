@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from felt_core.clients import spotify_client as sp
 from felt_core.config import FeltConfig
 from felt_core.core import features, llm_gate
-from felt_core.db.store import APP_SESSION
+from felt_core.db.kinds import APP_SESSION
 from felt_core.dj import learning, picker, store
 
 logger = logging.getLogger(__name__)

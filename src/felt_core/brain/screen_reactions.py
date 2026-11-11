@@ -31,12 +31,10 @@ from felt_core.clients import local_llm, vision
 from felt_core.config import FeltConfig
 from felt_core.core import features, metrics
 from felt_core.core.asides import schedule_pick
-from felt_core.db.store import (
-    REMARK,
-    get_her_recent_lines,
-    get_history,
+from felt_core.db.kinds import REMARK
+from felt_core.db.messages import get_her_recent_lines, get_history, save_message
+from felt_core.db.observations import (
     get_recent_observations,
-    save_message,
     save_observation,
     seconds_since_last_spoken_reaction,
     set_observation_reply,

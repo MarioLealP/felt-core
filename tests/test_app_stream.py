@@ -8,7 +8,7 @@ from felt_core.api.app import app
 from felt_core.api.app_stream import notices
 from felt_core.core.marks import _connect as marks_connect
 from felt_core.core.marks import _ensure as ensure_marks
-from felt_core.db.store import save_message
+from felt_core.db.messages import save_message
 
 
 def _parse(chunk: str) -> tuple[str, dict]:

@@ -29,7 +29,7 @@ import httpx2
 import websockets
 
 from felt_core.config import FeltConfig, reveal
-from felt_core.db import store as db
+from felt_core.db.settings import get_setting, set_setting
 
 TZ = ZoneInfo("Europe/Lisbon")
 # the appointment create_calendar_event made last, for "where is it?"
@@ -187,17 +187,17 @@ def remember_created(config: FeltConfig, calendar_id: str, summary: str, start: 
         "end": end.isoformat(),
         "at": datetime.now(TZ).isoformat(),
     }
-    db.set_setting(config.db_path, _LAST_KEY, json.dumps(last))
+    set_setting(config.db_path, _LAST_KEY, json.dumps(last))
 
 
 def forget_created(config: FeltConfig) -> None:
     """No appointment counts as just made (the e2e run's cases are separate days)."""
-    db.set_setting(config.db_path, _LAST_KEY, "")
+    set_setting(config.db_path, _LAST_KEY, "")
 
 
 def last_created(config: FeltConfig, now: datetime) -> dict | None:
     """The appointment create_calendar_event made in the last 2 h, if any."""
-    raw = db.get_setting(config.db_path, _LAST_KEY)
+    raw = get_setting(config.db_path, _LAST_KEY)
     if not raw:
         return None
     last = json.loads(raw)

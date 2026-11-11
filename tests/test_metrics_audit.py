@@ -10,7 +10,7 @@ import felt_core.brain.screen_reactions as brain
 import felt_core.core.metrics as metrics
 from felt_core.api.app import app
 from felt_core.config import FeltConfig
-from felt_core.db.store import get_latency_rows
+from felt_core.db.latency import get_latency_rows
 
 
 async def test_a_cancelled_stage_is_not_recorded(tmp_path):

@@ -9,7 +9,8 @@ import pytest
 from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core import calendar_headsup as ch
-from felt_core.db import store as db
+from felt_core.db.events import save_event
+from felt_core.db.proactive import claim_next_proactive
 
 NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
@@ -71,10 +72,10 @@ def test_moved_event_gets_a_new_dedupe_key():
 def test_current_game_is_the_unstopped_game_start(tmp_path):
     config = _config(tmp_path)
     at = (NOW - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
-    db.save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
+    save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
     assert ch.current_game(config, NOW) == "PathOfExile"
     later = (NOW - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-    db.save_event(config.db_path, "game_stop", "{}", later)
+    save_event(config.db_path, "game_stop", "{}", later)
     assert ch.current_game(config, NOW) is None
 
 
@@ -99,7 +100,7 @@ def _patch(monkeypatch, fresh, line="dentist in ten, go"):
 
 
 def _queued(config):
-    return db.claim_next_proactive(config.db_path)
+    return claim_next_proactive(config.db_path)
 
 
 async def test_urgent_heads_up_is_enqueued_once(tmp_path, monkeypatch):
@@ -142,7 +143,7 @@ async def test_stale_normal_stage_is_not_sent_late(tmp_path, monkeypatch):
 async def test_game_context_reaches_the_prompt(tmp_path, monkeypatch):
     config = _config(tmp_path)
     at = (NOW - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
-    db.save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
+    save_event(config.db_path, "game_start", json.dumps({"name": "PathOfExile.exe"}), at)
     event = _event(25)
     prompts = _patch(monkeypatch, event)
     assert await ch.deliver(config, "cal", event, ch.NORMAL, now=NOW)

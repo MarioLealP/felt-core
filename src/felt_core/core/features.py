@@ -15,7 +15,7 @@ tool out of her list, for chat and the warm-up alike, so the cached prefix
 stays the one chat uses.
 """
 
-from felt_core.db.store import get_setting, set_setting
+from felt_core.db.settings import get_setting, set_setting
 
 FEATURES: dict[str, tuple[bool, str]] = {
     "ambient.screen_reactions": (True, "Comments on your screen (screenshot), ~90 s cooldown"),

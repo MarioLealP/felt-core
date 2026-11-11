@@ -8,7 +8,7 @@ from datetime import datetime
 
 from felt_core.clients.ha_calendar import TZ
 from felt_core.clients.phone import PhoneUnavailable, next_alarm
-from felt_core.db.store import get_pending_alarms
+from felt_core.db.alarms import get_pending_alarms
 from felt_core.models.plugin import SkillResult
 
 name = "list_alarms"

@@ -76,26 +76,13 @@ from felt_core.core.events import react_to_event
 from felt_core.core.ntfy_listener import listen as ntfy_listen
 from felt_core.core.proactive import clamp_timeout, enqueue_proactive, proactive_audio, wait_for_next
 from felt_core.core.speech import speech_chunks, strip_for_tts, tts_request_body
-from felt_core.db.store import (
-    delete_diary,
-    delete_old_latency_rows,
-    delete_self_memory,
-    get_diary,
-    get_diary_list,
-    get_diary_weeks,
-    get_history,
-    get_latency_rows,
-    get_proactive_item,
-    get_self_memories,
-    get_self_memory,
-    get_setting,
-    prune_expired_proactive,
-    requeue_proactive,
-    save_event,
-    set_setting,
-    update_diary_entry,
-    update_self_memory,
-)
+from felt_core.db.diary import delete_diary, get_diary, get_diary_list, get_diary_weeks, update_diary_entry
+from felt_core.db.events import save_event
+from felt_core.db.latency import delete_old_latency_rows, get_latency_rows
+from felt_core.db.messages import get_history
+from felt_core.db.proactive import get_proactive_item, prune_expired_proactive, requeue_proactive
+from felt_core.db.self_memory import delete_self_memory, get_self_memories, get_self_memory, update_self_memory
+from felt_core.db.settings import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 

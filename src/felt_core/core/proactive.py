@@ -20,7 +20,9 @@ from typing import Any
 from felt_core.clients.felt_tls import voice_client
 from felt_core.core import metrics, tts_cache
 from felt_core.core.speech import strip_for_tts, tts_request_body
-from felt_core.db import store as db
+from felt_core.db.kinds import APP_SESSION, PROACTIVE
+from felt_core.db.messages import save_message
+from felt_core.db.proactive import claim_next_proactive, insert_proactive
 
 logger = logging.getLogger(__name__)
 
@@ -136,16 +138,16 @@ def enqueue_proactive(
     if emotion is not None:
         payload["emotion"] = emotion
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_s)).strftime("%Y-%m-%d %H:%M:%S")
-    item_id = db.insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
+    item_id = insert_proactive(config.db_path, kind, text, json.dumps(payload), expires_at)
     # WP-42.3: she said it, whether or not the desktop catches it in time;
     # it's in her history and in the Margins
     if record:
-        db.save_message(
+        save_message(
             config.db_path,
-            db.APP_SESSION,
+            APP_SESSION,
             "assistant",
             text,
-            kind=db.PROACTIVE,
+            kind=PROACTIVE,
             source_ref=f"proactive:{kind}:{item_id}",
         )
     if ttl_s > 0:
@@ -172,7 +174,7 @@ async def wait_for_next(config: Any, timeout_s: float) -> dict | None:
     """
     deadline = time.monotonic() + timeout_s
     while True:
-        row = db.claim_next_proactive(config.db_path)
+        row = claim_next_proactive(config.db_path)
         if row is not None:
             return _item_to_response(row)
         remaining = deadline - time.monotonic()

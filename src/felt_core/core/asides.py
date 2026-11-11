@@ -32,7 +32,8 @@ import sqlite3
 from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core import features, llm_gate
-from felt_core.db.store import ALERT, APP_SESSION, ASIDE_KINDS, _connect
+from felt_core.db.kinds import ALERT, APP_SESSION, ASIDE_KINDS
+from felt_core.db.session import _connect
 
 logger = logging.getLogger(__name__)
 

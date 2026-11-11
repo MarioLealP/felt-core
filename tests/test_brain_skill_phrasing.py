@@ -6,7 +6,7 @@ import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
 from felt_core.config import FeltConfig
 from felt_core.core.plugin_loader import LoadedSkill
-from felt_core.db.store import save_fact
+from felt_core.db.facts import save_fact
 from felt_core.models.plugin import SkillResult
 
 

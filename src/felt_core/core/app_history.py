@@ -8,7 +8,8 @@ ids and times and pages backwards, for a long-running scroll.
 
 from felt_core.core.asides import answered
 from felt_core.core.marks import marks_for
-from felt_core.db.store import CHAT_ONLY_SQL, _connect
+from felt_core.db.messages import CHAT_ONLY_SQL
+from felt_core.db.session import _connect
 
 MAX_PAGE = 200
 

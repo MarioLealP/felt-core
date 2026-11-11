@@ -35,7 +35,12 @@ from felt_core.config import FeltConfig
 from felt_core.core import features, llm_gate
 from felt_core.core.proactive import enqueue_proactive
 from felt_core.core.self_memory import LISBON, add_self_memory
-from felt_core.db import store as db
+from felt_core.db.diary import get_diary, insert_diary, insert_or_update_diary_week
+from felt_core.db.events import get_events_between
+from felt_core.db.messages import get_message_sessions_between
+from felt_core.db.observations import get_screen_observations_between
+from felt_core.db.self_memory import get_self_memories, get_vetoed_self_memory_texts
+from felt_core.db.settings import set_setting
 
 logger = logging.getLogger(__name__)
 
@@ -221,9 +226,9 @@ async def gather_material(config: FeltConfig, date_str: str) -> str:
     session windows.
     """
     start, end = _lisbon_date_bounds_utc(date_str)
-    seen = db.get_screen_observations_between(config.db_path, start, end)
-    events = db.get_events_between(config.db_path, start, end)
-    sessions = db.get_message_sessions_between(config.db_path, start, end)
+    seen = get_screen_observations_between(config.db_path, start, end)
+    events = get_events_between(config.db_path, start, end)
+    sessions = get_message_sessions_between(config.db_path, start, end)
 
     chat_windows: list[str] = []
     for session in sessions:
@@ -307,7 +312,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
     """
     if not features.enabled(config.db_path, "memory.diary"):
         return False
-    if db.get_diary(config.db_path, date_str) is not None:
+    if get_diary(config.db_path, date_str) is not None:
         return False
 
     material = await gather_material(config, date_str)
@@ -315,8 +320,8 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
         logger.info("diary: no material for %s (AFK/away all day) - skipping", date_str)
         return False
 
-    active_memories = db.get_self_memories(config.db_path, status="active")
-    vetoed_texts = db.get_vetoed_self_memory_texts(config.db_path)
+    active_memories = get_self_memories(config.db_path, status="active")
+    vetoed_texts = get_vetoed_self_memory_texts(config.db_path)
     system = compile_persona() + "\n\n" + _WRITING_INSTRUCTIONS
     user_prompt = _build_writer_prompt(material, active_memories, vetoed_texts)
 
@@ -340,7 +345,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
         {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
     ]
     mood_word = str(parsed.get("mood_word") or "").strip()
-    db.insert_diary(config.db_path, date_str, entry, json.dumps(callbacks), mood_word)
+    insert_diary(config.db_path, date_str, entry, json.dumps(callbacks), mood_word)
     logger.info("diary: wrote entry for %s (%d chars, mood=%r)", date_str, len(entry), mood_word)
 
     for update in (parsed.get("self_updates") or [])[:_MAX_SELF_UPDATES]:
@@ -357,7 +362,7 @@ async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
         from felt_core.core import brief
 
         if brief.will_open_with(config):  # the brief opens with it (brief.py)
-            db.set_setting(config.db_path, brief.GREETING_KEY, greeting)
+            set_setting(config.db_path, brief.GREETING_KEY, greeting)
         else:
             enqueue_proactive(config, "diary", greeting, ttl_s=_GREETING_TTL_S)
 
@@ -389,7 +394,7 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
     """
     end = datetime.strptime(date_str, "%Y-%m-%d").date()
     week_dates = [(end - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
-    rows = [r for d in week_dates if (r := db.get_diary(config.db_path, d)) is not None]
+    rows = [r for d in week_dates if (r := get_diary(config.db_path, d)) is not None]
     if not rows:
         return
 
@@ -411,7 +416,7 @@ async def _compress_week(config: FeltConfig, date_str: str) -> None:
         {"text": str(c).strip(), "uses": 0} for c in (parsed.get("callbacks") or [])[:_MAX_CALLBACKS] if str(c).strip()
     ]
     week = _iso_week(date_str)
-    db.insert_or_update_diary_week(config.db_path, week, summary, json.dumps(callbacks))
+    insert_or_update_diary_week(config.db_path, week, summary, json.dumps(callbacks))
     logger.info("diary: compressed week %s from %d entries", week, len(rows))
 
 
@@ -517,7 +522,7 @@ def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
             return
     else:
         _tried[target] = at.timestamp()
-        if db.get_diary(config.db_path, target) is None:
+        if get_diary(config.db_path, target) is None:
             work = on_event(config, "day_start", at_str)  # the diary, then the brief
         elif brief.will_open_with(config, at):
             work = _brief(config)

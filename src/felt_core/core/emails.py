@@ -37,7 +37,9 @@ from email.utils import parseaddr
 from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core import features, llm_gate
-from felt_core.db.store import APP_SESSION, EMAIL, _connect, save_message
+from felt_core.db.kinds import APP_SESSION, EMAIL
+from felt_core.db.messages import save_message
+from felt_core.db.session import _connect
 
 logger = logging.getLogger(__name__)
 

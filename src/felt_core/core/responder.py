@@ -23,7 +23,7 @@ from pathlib import Path
 
 from felt_core.core.controls import claude_alerts
 from felt_core.core.incidents import _ensure, _ts, get
-from felt_core.db.store import _connect
+from felt_core.db.session import _connect
 
 # investigations per UTC day: only a safety net against a runaway loop. The
 # real limit is the runner's: it skips when Claude's usage is past 70% of the

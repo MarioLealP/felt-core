@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 from felt_core.core.params import get_single_param
 from felt_core.core.self_memory import LISBON
-from felt_core.db.store import get_diary, get_latest_diary_week
+from felt_core.db.diary import get_diary, get_latest_diary_week
 from felt_core.models.plugin import SkillResult
 
 name = "diary_recall"

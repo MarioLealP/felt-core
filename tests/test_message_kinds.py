@@ -4,7 +4,9 @@ tables. A database from before gets the columns and its remarks labelled once.""
 
 import sqlite3
 
-from felt_core.db.store import CHAT, EVENT, REMARK, _connect, get_history, save_message
+from felt_core.db.kinds import CHAT, EVENT, REMARK
+from felt_core.db.messages import get_history, save_message
+from felt_core.db.session import _connect
 
 
 def _old_database(path: str) -> None:

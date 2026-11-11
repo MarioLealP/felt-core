@@ -21,7 +21,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from felt_core.config import FeltConfig
-from felt_core.db import store as db
+from felt_core.db.diary import get_diary, get_latest_diary_week, update_diary_callbacks
+from felt_core.db.self_memory import (
+    get_self_memories,
+    get_vetoed_self_memory_texts,
+    insert_self_memory,
+    retire_self_memories,
+    touch_self_memories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,22 +81,22 @@ def add_self_memory(config: FeltConfig, kind: str, text: str, keywords: list[str
     text = " ".join(text.split()).strip()
     if not text:
         return None
-    vetoed = db.get_vetoed_self_memory_texts(config.db_path)
+    vetoed = get_vetoed_self_memory_texts(config.db_path)
     if is_duplicate(text, vetoed):
         logger.info("self-memory: %r matches a vetoed memory - not adding", text)
         return None
-    active_texts = [m["text"] for m in db.get_self_memories(config.db_path, status="active")]
+    active_texts = [m["text"] for m in get_self_memories(config.db_path, status="active")]
     if is_duplicate(text, active_texts):
         logger.info("self-memory: %r duplicates an existing active one - not adding", text)
         return None
 
-    memory_id = db.insert_self_memory(config.db_path, kind, text, json.dumps(keywords), source_date)
+    memory_id = insert_self_memory(config.db_path, kind, text, json.dumps(keywords), source_date)
     _enforce_active_cap(config)
     return memory_id
 
 
 def _enforce_active_cap(config: FeltConfig) -> None:
-    active = list(db.get_self_memories(config.db_path, status="active"))
+    active = list(get_self_memories(config.db_path, status="active"))
     overflow = len(active) - MAX_ACTIVE
     if overflow <= 0:
         return
@@ -103,7 +110,7 @@ def _enforce_active_cap(config: FeltConfig) -> None:
     # order happened to list first in the tie.
     unpinned.sort(key=lambda m: (m["uses"], m["created_at"], m["id"]))
     to_retire = [m["id"] for m in unpinned[:overflow]]
-    db.retire_self_memories(config.db_path, to_retire)
+    retire_self_memories(config.db_path, to_retire)
     if to_retire:
         logger.info("self-memory: retired %d memory(ies) over the %d-active cap", len(to_retire), MAX_ACTIVE)
 
@@ -167,17 +174,17 @@ MEMORY_FRAMING = (
 
 
 def _recently_block(config: FeltConfig, yesterday: str) -> str:
-    diary_row = db.get_diary(config.db_path, yesterday)
+    diary_row = get_diary(config.db_path, yesterday)
     parts: list[str] = []
     if diary_row is not None:
         callbacks = json.loads(diary_row["callbacks_json"] or "[]")
         picked, updated = _pick_callbacks(callbacks)
         if updated != callbacks:
-            db.update_diary_callbacks(config.db_path, yesterday, json.dumps(updated))
+            update_diary_callbacks(config.db_path, yesterday, json.dumps(updated))
         bits = ([diary_row["mood_word"]] if diary_row["mood_word"] else []) + picked
         if bits:
             parts.append("yesterday: " + ", ".join(bits))
-    week_row = db.get_latest_diary_week(config.db_path)
+    week_row = get_latest_diary_week(config.db_path)
     if week_row is not None and week_row.get("summary"):
         parts.append(f"this week: {week_row['summary']}")
     if not parts:
@@ -196,11 +203,11 @@ def memory_block(config: FeltConfig, context_text: str | None = None, now: datet
     yesterday = ((now.astimezone(LISBON)).date() - timedelta(days=1)).isoformat()
     recently = _recently_block(config, yesterday)
 
-    active = db.get_self_memories(config.db_path, status="active")
+    active = get_self_memories(config.db_path, status="active")
     ranked = rank_self_memories(active, context_text, now)
     memories_block = ""
     if ranked:
-        db.touch_self_memories(config.db_path, [m["id"] for m in ranked])
+        touch_self_memories(config.db_path, [m["id"] for m in ranked])
         memories_block = "Who you've become:\n" + "\n".join(f"- {m['text']}" for m in ranked)
 
     block = "\n\n".join(s for s in (recently, memories_block) if s)

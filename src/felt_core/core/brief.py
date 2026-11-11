@@ -27,7 +27,7 @@ from felt_core.core.incidents import _connect, _ensure, _ts
 from felt_core.core.plugin_loader import load_plugins
 from felt_core.core.proactive import enqueue_proactive
 from felt_core.core.tools import run_skill
-from felt_core.db import store as db
+from felt_core.db.settings import get_setting, set_setting
 from felt_core.models.plugin import ExecutionContext
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ def will_open_with(config: FeltConfig, now: datetime | None = None) -> bool:
     waits for it instead of going out alone.
     """
     now = now or datetime.now(UTC)
-    last = db.get_setting(config.db_path, _DONE_KEY)
+    last = get_setting(config.db_path, _DONE_KEY)
     return features.enabled(config.db_path, FEATURE) and due(now, last) is not None
 
 
@@ -147,12 +147,12 @@ async def maybe_brief(config: FeltConfig, now: datetime | None = None) -> str | 
     the phone. Returns what she said (None when not due / off).
     """
     now = now or datetime.now(UTC)
-    today = due(now, db.get_setting(config.db_path, _DONE_KEY))
+    today = due(now, get_setting(config.db_path, _DONE_KEY))
     if today is None or not features.enabled(config.db_path, FEATURE):
         return None
-    db.set_setting(config.db_path, _DONE_KEY, today)  # once, even if it fails below
-    greeting = db.get_setting(config.db_path, GREETING_KEY) or None
-    db.set_setting(config.db_path, GREETING_KEY, "")
+    set_setting(config.db_path, _DONE_KEY, today)  # once, even if it fails below
+    greeting = get_setting(config.db_path, GREETING_KEY) or None
+    set_setting(config.db_path, GREETING_KEY, "")
     try:
         facts = await gather(config, now)
         line = await asyncio.wait_for(word(config, facts, greeting), _TIMEOUT_S)

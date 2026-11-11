@@ -8,7 +8,7 @@ from felt_core.core.alarms import (
     reschedule_pending_alarms,
     schedule_alarm,
 )
-from felt_core.db.store import get_pending_alarms, save_alarm
+from felt_core.db.alarms import get_pending_alarms, save_alarm
 
 
 def _config(tmp_path) -> FeltConfig:

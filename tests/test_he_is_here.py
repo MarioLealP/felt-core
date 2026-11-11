@@ -55,7 +55,7 @@ def test_nothing_before_five_or_once_the_entry_exists(tmp_path, monkeypatch):
     calls = _calls(monkeypatch)
     config = Config(str(tmp_path / "f.db"))
     _run(config, datetime(2026, 10, 3, 3, 0, tzinfo=UTC))  # 04:00 in Lisbon
-    from felt_core.db.store import insert_diary
+    from felt_core.db.diary import insert_diary
 
     insert_diary(config.db_path, "2026-10-02", "A day.", "[]", "calm")
     _run(config, datetime(2026, 10, 3, 9, 0, tzinfo=UTC))

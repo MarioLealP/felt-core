@@ -23,7 +23,8 @@ import httpx2
 
 from felt_core.config import FeltConfig, reveal
 from felt_core.core import incidents, responder
-from felt_core.db.store import get_setting, save_ntfy_event, set_setting
+from felt_core.db.ntfy_events import save_ntfy_event
+from felt_core.db.settings import get_setting, set_setting
 
 LAST_ID = "ntfy_last_id"
 

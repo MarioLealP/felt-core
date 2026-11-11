@@ -10,7 +10,7 @@ from felt_core.config import FeltConfig
 from felt_core.core import brief, features
 from felt_core.core.incidents import _connect, _ensure
 from felt_core.core.plugin_loader import LoadedSkill
-from felt_core.db import store as db
+from felt_core.db.settings import get_setting, set_setting
 from felt_core.models.plugin import SkillResult
 
 MORNING = datetime(2026, 10, 23, 7, 30, tzinfo=UTC)  # 08:30 in Lisbon (WEST)
@@ -105,10 +105,10 @@ async def test_felt_llm_down_says_the_facts(tmp_path, world):
 
 async def test_the_diary_greeting_opens_it(tmp_path, world):
     config = _config(tmp_path)
-    db.set_setting(config.db_path, brief.GREETING_KEY, "Slept well? You were up late.")
+    set_setting(config.db_path, brief.GREETING_KEY, "Slept well? You were up late.")
     await brief.maybe_brief(config, MORNING)
     assert 'Open with this morning thought of yours: "Slept well?' in world.prompts[0]
-    assert db.get_setting(config.db_path, brief.GREETING_KEY) == ""
+    assert get_setting(config.db_path, brief.GREETING_KEY) == ""
 
 
 async def test_switched_off(tmp_path, world):

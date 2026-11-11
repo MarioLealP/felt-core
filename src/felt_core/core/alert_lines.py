@@ -25,7 +25,9 @@ from felt_core.clients import local_llm
 from felt_core.config import FeltConfig
 from felt_core.core.alert_types import by_name
 from felt_core.core.incidents import _ensure
-from felt_core.db.store import ALERT, APP_SESSION, _connect, save_message
+from felt_core.db.kinds import ALERT, APP_SESSION
+from felt_core.db.messages import save_message
+from felt_core.db.session import _connect
 
 logger = logging.getLogger(__name__)
 

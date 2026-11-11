@@ -19,7 +19,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 
-from felt_core.db.store import _connect
+from felt_core.db.session import _connect
 
 POLL_S = 1.5
 KEEPALIVE_S = 15.0

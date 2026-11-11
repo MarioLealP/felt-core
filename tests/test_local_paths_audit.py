@@ -7,13 +7,9 @@ import felt_core.brain.orchestrator as orchestrator
 import felt_core.brain.replies as brain
 import felt_core.brain.screen_reactions as screen_reactions
 from felt_core.config import FeltConfig
-from felt_core.db.store import (
-    get_history,
-    save_fact,
-    save_message,
-    save_observation,
-    set_observation_reply,
-)
+from felt_core.db.facts import save_fact
+from felt_core.db.messages import get_history, save_message
+from felt_core.db.observations import save_observation, set_observation_reply
 
 
 def _config(tmp_path, **kwargs):
