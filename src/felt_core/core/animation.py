@@ -1,5 +1,6 @@
-"""Output-to-animation middleware — the animation-side counterpart to how
-voice output already gets its own dedicated stage (the /v1/voice-chat
+"""Output-to-animation middleware — the animation-side counterpart to voice output.
+
+Voice output already gets its own dedicated stage (the /v1/voice-chat
 handler's call out to felt-voice's TTS, not something each skill computes
 inline). This is the same shape: one small, centralized, independently
 testable function that decides what Felt's overlay should react with,

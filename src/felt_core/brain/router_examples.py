@@ -1,5 +1,6 @@
-"""Example phrasings per route for the semantic router (router.py) - what
-replaces the regex lists: a new way of saying something is a new line
+"""Example phrasings per route for the semantic router (router.py).
+
+They replace the regex lists: a new way of saying something is a new line
 here. Written fresh, not copied from Mario's real messages, which are the
 test set (2026-10-18 spike: tested on 139 of them).
 

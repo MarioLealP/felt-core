@@ -27,11 +27,14 @@ PLATFORMS = [Platform.CONVERSATION, Platform.SENSOR, Platform.SWITCH]
 
 @dataclass
 class FeltData:
+    """The client and coordinator kept on the entry as runtime data."""
+
     client: FeltClient
     coordinator: FeltCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up one config entry: client, coordinator, platforms, panel, mail forwarding and tell."""
     d = entry.data
     client = FeltClient(
         async_get_clientsession(hass),
@@ -65,6 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unregister Felt's panel and services, then unload its platforms."""
     unregister_panel(hass)
     tell.async_unregister(hass)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

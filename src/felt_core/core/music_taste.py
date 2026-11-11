@@ -1,6 +1,7 @@
-"""WP-16 Part 2: light listening-taste memory - "Mario often skips X /
-replays Y" - extracted from db.py so the classification/summary logic is
-unit-testable without a real SQLite file, same split as date_resolution.py.
+"""WP-16 Part 2: light listening-taste memory.
+
+"Mario often skips X / replays Y" - extracted from db.py so the classification/summary logic is unit-testable without
+a real SQLite file, same split as date_resolution.py.
 """
 
 _SKIP_THRESHOLD = 0.30
@@ -8,10 +9,10 @@ _MIN_PLAYS_TO_MENTION = 2
 
 
 def is_skip(played_ms: int, duration_ms: int) -> bool:
-    """A track counts as skipped if it changed before _SKIP_THRESHOLD of
-    its duration played. An unknown/zero duration can't be classified as a
-    skip (there's nothing to compare against), so it's counted as a full
-    play rather than silently dropped.
+    """A track counts as skipped if it changed before _SKIP_THRESHOLD of its duration played.
+
+    An unknown/zero duration can't be classified as a skip (there's nothing to compare against), so it's counted as a
+    full play rather than silently dropped.
     """
     if duration_ms <= 0:
         return False
@@ -19,12 +20,11 @@ def is_skip(played_ms: int, duration_ms: int) -> bool:
 
 
 def summarize_taste(rows: list[dict]) -> str:
-    """Pure: `rows` is one dict per distinct track (as
-    db.get_music_taste_stats returns) - {"track_name", "artists", "plays",
-    "skips"}. Picks the most-skipped and most-replayed tracks that have
-    enough history to say anything about (_MIN_PLAYS_TO_MENTION+), and
-    returns a short note to fold into the prompt, or "" if nothing has
-    enough history yet.
+    """Pure: a short note on Mario's listening taste, to fold into the prompt.
+
+    `rows` is one dict per distinct track (as db.get_music_taste_stats returns) - {"track_name", "artists", "plays",
+    "skips"}. Picks the most-skipped and most-replayed tracks that have enough history to say anything about
+    (_MIN_PLAYS_TO_MENTION+), or "" if nothing has enough history yet.
     """
     eligible = [r for r in rows if r["plays"] >= _MIN_PLAYS_TO_MENTION]
     if not eligible:

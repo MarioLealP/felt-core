@@ -21,9 +21,11 @@ router = APIRouter()
 
 @router.get("/v1/proactive/next")
 async def proactive_next_endpoint(timeout: float = 25.0) -> Response:
-    """felt-tray's long-poll. Returns the oldest undelivered, unexpired
-    item (already marked delivered) as soon as one exists, or an empty
-    204 once the (clamped) timeout elapses with nothing to hand out.
+    """felt-tray's long-poll.
+
+    Returns the oldest undelivered, unexpired item (already marked delivered) as
+    soon as one exists, or an empty 204 once the (clamped) timeout elapses with
+    nothing to hand out.
     """
     config = load_config()
     item = await wait_for_next(config, clamp_timeout(timeout))
@@ -34,8 +36,9 @@ async def proactive_next_endpoint(timeout: float = 25.0) -> Response:
 
 @router.get("/v1/proactive/{item_id}/audio")
 async def proactive_audio_endpoint(item_id: int) -> Response:
-    """The item's TTS WAV, fetched separately from /next so a client can
-    show/queue the item before audio is ready - reuses the same WP-06
+    """The item's TTS WAV, fetched separately from /next.
+
+    so a client can show/queue the item before audio is ready - reuses the same WP-06
     cache + felt-voice call /v1/voice-chat and friends already share via
     tts_cache/_synthesize_reply, just without the X-* reply headers (there's
     no ui_action/animation_tag to carry here beyond what /next already
@@ -62,14 +65,17 @@ async def proactive_audio_endpoint(item_id: int) -> Response:
 
 @router.post("/v1/proactive/{item_id}/requeue")
 async def proactive_requeue_endpoint(item_id: int) -> dict:
-    """felt-tray calls this when Felt was hidden/away and the item wasn't
-    `urgent` - don't lose it, hand it out again on the next /next poll.
+    """felt-tray calls this when Felt was hidden/away and the item wasn't `urgent`.
+
+    don't lose it, hand it out again on the next /next poll.
     """
     config = load_config()
     return {"requeued": requeue_proactive(config.db_path, item_id)}
 
 
 class ProactiveDebugRequest(BaseModel):
+    """The fields for one test item pushed through /v1/proactive/debug."""
+
     kind: str = "debug"
     text: str
     animation_tag: str | None = None
@@ -79,8 +85,9 @@ class ProactiveDebugRequest(BaseModel):
 
 @router.post("/v1/proactive/debug")
 async def proactive_debug_endpoint(req: ProactiveDebugRequest) -> dict:
-    """WP-25 accept test's door into the queue - only reachable with
-    FELT_DEBUG=1, a 404 (not just an auth error) otherwise so its
+    """WP-25 accept test's door into the queue.
+
+    only reachable with FELT_DEBUG=1, a 404 (not just an auth error) otherwise so its
     existence isn't even discoverable on a normal deployment.
     """
     config = load_config()

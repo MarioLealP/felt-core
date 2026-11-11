@@ -78,8 +78,9 @@ def _open(db_path: str) -> sqlite3.Connection:
 
 
 def split_sender(raw: str) -> tuple[str, str]:
-    """Pure: ("Patreon", "bingo@patreon.com") from 'Patreon <bingo@patreon.com>';
-    the address doubles as the name when there is none.
+    """Pure: ("Patreon", "bingo@patreon.com") from 'Patreon <bingo@patreon.com>'.
+
+    The address doubles as the name when there is none.
     """
     name, address = parseaddr(raw)
     address = address.lower()
@@ -94,7 +95,8 @@ def plain_text(body: str) -> str:
 
 
 def domain_of(address: str) -> str:
-    """Pure: the registered domain, roughly - "mail.patreon.com" -> "patreon.com",
+    """Pure: the registered domain, roughly - "mail.patreon.com" -> "patreon.com".
+
     "news.loja.com.pt" -> "loja.com.pt".
     """
     labels = address.rsplit("@", 1)[-1].split(".")
@@ -103,8 +105,9 @@ def domain_of(address: str) -> str:
 
 
 def is_noise(address: str, patterns: list[str]) -> bool:
-    """Pure: a pattern is a whole address, or a domain that covers its
-    subdomains too.
+    """Pure: a pattern is a whole address, or a domain.
+
+    A domain covers its subdomains too.
     """
     host = address.rsplit("@", 1)[-1]
     for p in patterns:
@@ -117,8 +120,9 @@ def is_noise(address: str, patterns: list[str]) -> bool:
 
 
 def add(db_path: str, key: str, sender: str, subject: str, body: str, bulk: bool) -> int | None:
-    """Store a mail HA forwarded; None when it was already here (HA repeats the
-    newest one on every restart).
+    """Store a mail HA forwarded.
+
+    None when it was already here (HA repeats the newest one on every restart).
     """
     name, address = split_sender(sender)
     conn = _open(db_path)
@@ -190,8 +194,10 @@ async def _worth_mentioning(config: FeltConfig, row: tuple) -> bool:
 
 
 async def sort_new(config: FeltConfig) -> None:
-    """Decide each new mail: noise, waiting, or (list mail) her call. A list
-    mail she couldn't judge (felt-llm busy or down) stays new for the next tick.
+    """Decide each new mail: noise, waiting, or (list mail) her call.
+
+    A list mail she couldn't judge (felt-llm busy or down) stays new for the
+    next tick.
     """
     conn = _open(config.db_path)
     try:
@@ -224,8 +230,9 @@ async def sort_new(config: FeltConfig) -> None:
 
 
 def mention_facts(mails: list[tuple[str, str]]) -> tuple[str, str]:
-    """Pure: (facts for her line, the plain fallback) about the waiting mails,
-    [(sender, subject)], people before lists.
+    """Pure: (facts for her line, the plain fallback) about the waiting mails.
+
+    The waiting mails are [(sender, subject)], people before lists.
     """
     named = [f'from {s}: "{subj}"' if subj else f"from {s}" for s, subj in mails[:NAMED]]
     more = len(mails) - NAMED
@@ -244,8 +251,9 @@ def _since_last_mention_s(conn: sqlite3.Connection) -> float | None:
 
 
 async def mention(config: FeltConfig) -> str | None:
-    """Her one line about everything waiting, if the hour since the last one is
-    up. Returns the line said.
+    """Her one line about everything waiting, if the hour since the last one is up.
+
+    Returns the line said.
     """
     from felt_core.core.asides import schedule_pick
     from felt_core.core.her_line import her_line
@@ -285,6 +293,7 @@ async def mention(config: FeltConfig) -> str | None:
 
 
 async def tick(config: FeltConfig) -> None:
+    """One email round: sort the new mail, then mention what's waiting."""
     if not features.enabled(config.db_path, "email.new_mail"):
         return
     await sort_new(config)
@@ -292,6 +301,7 @@ async def tick(config: FeltConfig) -> None:
 
 
 async def watch(config: FeltConfig) -> None:
+    """Run tick() every TICK_S seconds forever, logging any failure."""
     while True:
         try:
             await tick(config)
@@ -301,8 +311,9 @@ async def watch(config: FeltConfig) -> None:
 
 
 def just_mentioned(db_path: str) -> list[dict]:
-    """The mails of her last mention, if it was within ANSWER_WINDOW and he
-    hasn't had them summarised: what a bare "yes" / "tell me more" means.
+    """The mails of her last mention, if it was within ANSWER_WINDOW and he hasn't had them summarised.
+
+    What a bare "yes" / "tell me more" means.
     """
     conn = _open(db_path)
     try:
@@ -318,6 +329,7 @@ def just_mentioned(db_path: str) -> list[dict]:
 
 
 def mark_summarised(db_path: str, ids: list[int]) -> None:
+    """Mark the given mails as summarised."""
     _set_state(db_path, ids, "summarised")
 
 
@@ -343,11 +355,12 @@ def recent(db_path: str, limit: int = 5) -> list[dict]:
 
 
 def noise_pattern(who: str, senders: list[tuple[str, str, bool]]) -> str | None:
-    """Pure: what muting `who` adds to the noise list. An address or a domain
-    is taken as said. A name is looked up in the recent senders [(name,
-    address, bulk)], newest first: a list sender's whole domain goes (Patreon
-    mails from several addresses), a person's one address (never all of
-    gmail.com).
+    """Pure: what muting `who` adds to the noise list.
+
+    An address or a domain is taken as said. A name is looked up in the recent
+    senders [(name, address, bulk)], newest first: a list sender's whole domain
+    goes (Patreon mails from several addresses), a person's one address (never
+    all of gmail.com).
     """
     who = who.strip().lower()
     if not who:
@@ -363,8 +376,10 @@ def noise_pattern(who: str, senders: list[tuple[str, str, bool]]) -> str | None:
 
 
 def mute(db_path: str, who: str) -> str | None:
-    """ "I don't care about X emails": the pattern added (None = no sender like
-    that); mails from it still waiting won't be mentioned either.
+    """The "I don't care about X emails" pattern added to the noise list.
+
+    None = no sender like that; mails from it still waiting won't be mentioned
+    either.
     """
     conn = _open(db_path)
     try:

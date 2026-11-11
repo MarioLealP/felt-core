@@ -1,9 +1,10 @@
-"""Personality plan P4, merged into WP-26 (Mario, 2026-09-27): what Felt
-takes away from a day - opinions, likes/dislikes, running jokes, grudges -
-distinct from the diary (`felt_core.core.diary`), which is *their* shared
-record of the day. Self-memories are added automatically by the diary's
-nightly writer, with no approval queue (Decision 3, 2026-09-27); Mario
-views/pins/edits/vetoes/deletes them afterward via /v1/self-memory.
+"""Personality plan P4, merged into WP-26 (Mario, 2026-09-27).
+
+what Felt takes away from a day - opinions, likes/dislikes, running jokes, grudges -
+distinct from the diary (`felt_core.core.diary`), which is *their* shared record of the
+day. Self-memories are added automatically by the diary's nightly writer, with no
+approval queue (Decision 3, 2026-09-27); Mario views/pins/edits/vetoes/deletes them
+afterward via /v1/self-memory.
 
 The hard constraint is the prompt budget (Decision 3): at most 8 memories
 in any one prompt, keyword-relevant ones first, and the diary snippet plus
@@ -65,18 +66,20 @@ def _similarity(a: str, b: str) -> float:
 
 
 def is_duplicate(text: str, existing_texts: list[str]) -> bool:
-    """Pure: whether `text` is close enough to something in
-    `existing_texts` that adding it again would just be noise.
+    """Pure: whether `text` is close enough to something in `existing_texts`.
+
+    that adding it again would just be noise.
     """
     return any(_similarity(text, existing) >= _DEDUPE_SIMILARITY for existing in existing_texts)
 
 
 def add_self_memory(config: FeltConfig, kind: str, text: str, keywords: list[str], source_date: str) -> int | None:
-    """Adds one self-memory the nightly writer proposed - skipped if it's
-    a near-duplicate of an existing active one, or matches something Mario
-    already vetoed (vetoed text never comes back, WP-26's spec). Returns
-    the new row's id, or None if it was skipped. Enforces the <=30 active
-    cap afterward by retiring the least-used, oldest, unpinned actives.
+    """Adds one self-memory the nightly writer proposed.
+
+    skipped if it's a near-duplicate of an existing active one, or matches something Mario
+    already vetoed (vetoed text never comes back, WP-26's spec). Returns the new row's id,
+    or None if it was skipped. Enforces the <=30 active cap afterward by retiring the
+    least-used, oldest, unpinned actives.
     """
     text = " ".join(text.split()).strip()
     if not text:
@@ -121,10 +124,11 @@ def rank_self_memories(
     now: datetime,
     cooldown_s: int = COOLDOWN_S,
 ) -> list[dict[str, Any]]:
-    """Pure: pinned first, then keyword overlap with `context_text` (the
-    SillyTavern lorebook idea - an opinion only fires when its topic is
-    live), then recency. A memory used within `cooldown_s` is excluded
-    from the pool unless that would empty it. Caps to MAX_IN_PROMPT.
+    """Pure: pinned first, then keyword overlap with `context_text`.
+
+    (the SillyTavern lorebook idea - an opinion only fires when its topic is live), then
+    recency. A memory used within `cooldown_s` is excluded from the pool unless that
+    would empty it. Caps to MAX_IN_PROMPT.
     """
     context_words = _words(context_text) if context_text else set()
 
@@ -154,10 +158,10 @@ def rank_self_memories(
 
 
 def _pick_callbacks(callbacks: list[dict], max_n: int = 2) -> tuple[list[str], list[dict]]:
-    """Pure: from a diary row's callbacks_json ({"text", "uses"} objects),
-    picks up to `max_n` with uses < 2 ("each callback is used at most
-    twice, then retired" - WP-26), least-used first, and returns (the
-    picked texts, the full list with their uses incremented).
+    """Pure: from a diary row's callbacks_json ({"text", "uses"} objects), picks up to `max_n` with uses < 2.
+
+    ("each callback is used at most twice, then retired" - WP-26), least-used first, and
+    returns (the picked texts, the full list with their uses incremented).
     """
     eligible = sorted((c for c in callbacks if c.get("uses", 0) < 2), key=lambda c: c.get("uses", 0))
     picked_ids = {id(c) for c in eligible[:max_n]}
@@ -193,11 +197,11 @@ def _recently_block(config: FeltConfig, yesterday: str) -> str:
 
 
 def memory_block(config: FeltConfig, context_text: str | None = None, now: datetime | None = None) -> str:
-    """The compiled "Recently (from your diary)" + "Who you've become"
-    block every reply carries (via brain.personality.per_call_context),
-    hard-capped at MAX_BLOCK_CHARS (~200 tokens). Each self-memory placed
-    in the prompt has its use count/last_used bumped (db.touch_self_memories)
-    - what the next call's cooldown/recency ranking is computed from.
+    """The compiled "Recently (from your diary)" + "Who you've become" block every reply carries.
+
+    (via brain.personality.per_call_context), hard-capped at MAX_BLOCK_CHARS (~200 tokens).
+    Each self-memory placed in the prompt has its use count/last_used bumped
+    (db.touch_self_memories) - what the next call's cooldown/recency ranking is computed from.
     """
     now = now or datetime.now(UTC)
     yesterday = ((now.astimezone(LISBON)).date() - timedelta(days=1)).isoformat()

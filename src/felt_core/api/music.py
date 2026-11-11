@@ -14,11 +14,13 @@ router = APIRouter()
 
 @router.get("/v1/music/now")
 async def music_now_endpoint() -> dict:
-    """WP-16 Part 2: what's currently playing on Spotify - polled by
-    felt-tray every ~15s to drive unprompted "oh, this one again" remarks
-    on a track change, and answerable directly via the now_playing skill.
-    `{"is_playing": false}` covers both "nothing loaded" and "Spotify not
-    connected" - callers don't need to distinguish those.
+    """WP-16 Part 2: what's currently playing on Spotify.
+
+    Polled by felt-tray every ~15s to drive unprompted "oh, this one
+    again" remarks on a track change, and answerable directly via the
+    now_playing skill. `{"is_playing": false}` covers both "nothing
+    loaded" and "Spotify not connected" - callers don't need to
+    distinguish those.
     """
     config = load_config()
     if not config.spotify_refresh_token:
@@ -46,11 +48,12 @@ async def music_now_endpoint() -> dict:
 
 @router.get("/v1/music/lyrics")
 async def music_lyrics_endpoint() -> dict:
-    """WP-16 Part 3: lyrics for whatever's currently playing, from LRCLIB
-    (Spotify's own API has no lyrics endpoint). `current_line`/`chorus`
-    are only populated when LRCLIB returned synced (LRC) lyrics - plenty
-    of tracks only have plain text, which is still usable for a quoted
-    remark but has no per-line timing to build them from.
+    """WP-16 Part 3: lyrics for whatever's currently playing, from LRCLIB (Spotify's own API has no lyrics endpoint).
+
+    `current_line`/`chorus` are only populated when LRCLIB returned synced
+    (LRC) lyrics - plenty of tracks only have plain text, which is still
+    usable for a quoted remark but has no per-line timing to build them
+    from.
     """
     config = load_config()
     if not config.spotify_refresh_token:

@@ -1,5 +1,6 @@
-"""Docker container health on the clockmost server, via Zabbix's own
-existing monitoring (Docker-by-Zabbix-agent-2 template already tracks
+"""Docker container health on the clockmost server, via Zabbix's own existing monitoring.
+
+(Docker-by-Zabbix-agent-2 template already tracks
 every container) rather than building a separate health-check path.
 """
 
@@ -37,6 +38,7 @@ async def _zabbix_call(client: httpx2.AsyncClient, config, method: str, params: 
 
 
 async def handle(params, ctx):
+    """Report container health from Zabbix, for one named container or the failing ones."""
     config = ctx.config
     if not config.zabbix_url or not config.zabbix_api_token:
         return SkillResult(text="Container status check isn't configured (no Zabbix URL/token set).")

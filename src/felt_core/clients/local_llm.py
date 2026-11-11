@@ -30,18 +30,23 @@ logger = logging.getLogger(__name__)
 
 
 class LocalLLMUnavailableError(Exception):
-    """felt-llm couldn't produce a reply (down, timed out, 5xx, or a
-    malformed response). The API maps it to a 503, background loops skip.
+    """felt-llm couldn't produce a reply (down, timed out, 5xx, or a malformed response).
+
+    The API maps it to a 503, background loops skip.
     """
 
 
 class AmbientSkippedError(LocalLLMUnavailableError):
-    """An ambient call that gave way (llm_gate): Mario is talking, the
+    """An ambient call that gave way (llm_gate).
+
+    Mario is talking, the
     ambient budget is spent, or it couldn't start in time.
     """
 
 
 class LocalReply(BaseModel):
+    """One felt-llm reply: text, raw tool calls, truncation flag, prompt/cache token counts."""
+
     text: str
     # Raw OpenAI-shaped tool calls, e.g. [{"id": ..., "type": "function",
     # "function": {"name": ..., "arguments": "<json string>"}}]. Kept raw so
@@ -64,8 +69,9 @@ _SENTENCE_END = re.compile(r"[.!?…][\"')\]*~]*(?=\s|$)")
 
 
 def end_at_last_sentence(text: str) -> str:
-    """A reply cut off by max_tokens, ended at its last complete sentence so
-    it never stops mid-word (FELT-71). No complete sentence at all: the
+    """A reply cut off by max_tokens, ended at its last complete sentence so it never stops mid-word (FELT-71).
+
+    No complete sentence at all: the
     fragment gets an ellipsis instead.
     """
     ends = list(_SENTENCE_END.finditer(text))
@@ -75,7 +81,9 @@ def end_at_last_sentence(text: str) -> str:
 
 
 def _merge_system_messages(messages: list[dict]) -> list[dict]:
-    """One leading system message. Callers append context as extra
+    """One leading system message.
+
+    Callers append context as extra
     "system" entries (facts, music taste, "currently on screen"), and
     llama.cpp's chat templates reject or mangle a system message that isn't
     first - so they're folded into the first one, in order.
@@ -157,7 +165,9 @@ async def chat(
     json_schema: dict | None = None,
     config: FeltConfig,
 ) -> LocalReply:
-    """`json_schema` is the bare JSON schema; it's sent as an OpenAI
+    """`json_schema` is the bare JSON schema.
+
+    It's sent as an OpenAI
     `response_format` so llama.cpp constrains the output to it.
     """
     if not config.local_llm_url:
@@ -195,7 +205,9 @@ async def chat(
 
 
 def _add_tool_call_delta(calls: list[dict], delta: dict) -> None:
-    """Tool calls stream in pieces: the first delta for an index carries the
+    """Tool calls stream in pieces.
+
+    The first delta for an index carries the
     id and name, later ones append to the arguments string.
     """
     index = delta.get("index", len(calls))
@@ -220,7 +232,9 @@ async def chat_stream(
     tools: list[dict] | None = None,
     config: FeltConfig,
 ) -> LocalReply:
-    """`chat()` with `stream: true` (WP-65): `on_text` gets each piece of the
+    """`chat()` with `stream: true` (WP-65).
+
+    `on_text` gets each piece of the
     reply text as felt-llm writes it, and the whole reply comes back at the
     end, same shape as chat(). Tool-call pieces are collected whole, never
     passed to `on_text` - and once a tool call has started, neither is any
@@ -291,8 +305,10 @@ async def chat_stream(
 
 
 async def is_healthy(config: FeltConfig) -> bool:
-    """`GET {local_llm_url}/health` - True only on a 200 (llama.cpp answers
-    503 while the model is still loading).
+    """`GET {local_llm_url}/health` - True only on a 200.
+
+    llama.cpp answers
+    503 while the model is still loading.
     """
     if not config.local_llm_url:
         return False
@@ -305,7 +321,9 @@ async def is_healthy(config: FeltConfig) -> bool:
 
 
 def parse_tool_arguments(tool_call: dict) -> tuple[str, dict]:
-    """(name, params) from one raw tool call. Arguments arrive as a JSON
+    """(name, params) from one raw tool call.
+
+    Arguments arrive as a JSON
     string; anything that doesn't decode to an object becomes {} - the
     skill then falls back to `ctx.original_message`, same as it always has
     when the router omitted params.

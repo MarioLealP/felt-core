@@ -214,9 +214,9 @@ def followup_facts(incident: dict) -> str:
 
 
 def plain_line(incident: dict, kind: str) -> str:
-    """Her line without her model, when felt-llm is down: the same fixed
-    facts, plainly put. Only for the levels that pop, so a felt-llm outage
-    never silences an urgent alert (WP-42.5).
+    """Her line without her model, when felt-llm is down: the same fixed facts, plainly put.
+
+    Only for the levels that pop, so a felt-llm outage never silences an urgent alert (WP-42.5).
     """
     about, todo = MEANINGS.get(incident["type"], MEANINGS["unknown"])
     report = json.loads(incident["report"]) if incident.get("report") else None
@@ -241,6 +241,7 @@ def _clip(text: str) -> str:
 
 
 async def line_for(config: FeltConfig, incident: dict, kind: str = "line") -> str:
+    """Ask felt-llm for her line about this incident."""
     from felt_core.brain.replies import local_reply
 
     if kind == "both":
@@ -258,12 +259,13 @@ async def line_for(config: FeltConfig, incident: dict, kind: str = "line") -> st
 
 
 def due(db_path: str, now: datetime | None = None) -> list[tuple[int, str]]:
-    """(incident id, which line) for every incident owed one: "line" for open
-    ones and settled expected runs, "back" for ones that counted, got a line
-    and have since resolved, "followup" once Claude reported or was missed
-    (always after her first line), and "both" when Claude's report came in
-    before her first line - pushed to him at once, he can finish before her
-    loop comes round, and she must still say something: one line with both.
+    """(incident id, which line) for every incident owed one.
+
+    "line" for open ones and settled expected runs, "back" for ones that counted, got a
+    line and have since resolved, "followup" once Claude reported or was missed (always
+    after her first line), and "both" when Claude's report came in before her first line -
+    pushed to him at once, he can finish before her loop comes round, and she must still
+    say something: one line with both.
     """
     settled = ((now or datetime.now(UTC)) - SETTLE).strftime("%Y-%m-%d %H:%M:%S")
     conn = _connect(db_path)
@@ -292,6 +294,7 @@ _COLUMNS["both"] = ("line", "followup")
 
 
 def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None:
+    """Store one alert line on the incident and in the message history."""
     conn = _connect(db_path)
     try:
         _ensure(conn)
@@ -314,8 +317,9 @@ def store(db_path: str, incident_id: int, text: str, kind: str = "line") -> None
 
 
 async def write_due(config: FeltConfig) -> int:
-    """Writes every line that's owed; stops at the first felt-llm outage
-    (the next round retries). Returns how many it wrote.
+    """Writes every line that's owed; stops at the first felt-llm outage (the next round retries).
+
+    Returns how many it wrote.
     """
     from felt_core.core.incidents import get
 

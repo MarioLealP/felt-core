@@ -1,5 +1,6 @@
-"""Lets Felt be asked about ntfy alerts conversationally, instead of only
-ever being a silent log — the read half of the ntfy integration.
+"""Lets Felt be asked about ntfy alerts conversationally, instead of only ever being a silent log.
+
+— the read half of the ntfy integration.
 """
 
 from felt_core.db.ntfy_events import get_recent_ntfy_events
@@ -11,6 +12,7 @@ parameters_schema = {"type": "object", "properties": {}}
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Return the five most recent ntfy alerts, each with time, title and message."""
     events = get_recent_ntfy_events(ctx.config.db_path, limit=5)
     if not events:
         return SkillResult(text="No recent alerts.")

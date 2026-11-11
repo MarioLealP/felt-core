@@ -21,6 +21,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Save the fact to the facts table and confirm it back."""
     content = params.get("content") or ctx.original_message
     save_fact(ctx.config.db_path, content)
     return SkillResult(text=f"Remembered: {content}")

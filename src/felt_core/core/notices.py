@@ -57,8 +57,9 @@ def latest(db_path: str) -> int:
 
 
 def after(db_path: str, last_id: int, limit: int = 20) -> list[dict]:
-    """Her alert lines newer than `last_id`, oldest first, each with what
-    the pop-up needs and whether it pops at all.
+    """Her alert lines newer than `last_id`, oldest first.
+
+    Each with what the pop-up needs and whether it pops at all.
     """
     conn = _connect(db_path)
     try:

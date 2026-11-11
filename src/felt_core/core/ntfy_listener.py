@@ -1,6 +1,6 @@
-"""Consumes Mario's existing ntfy topic (assistant-automation.md) —
-not a new notification system, just Felt listening to the same channel
-he already gets alerts on.
+"""Consumes Mario's existing ntfy topic (assistant-automation.md).
+
+Not a new notification system, just Felt listening to the same channel he already gets alerts on.
 
 Uses ntfy's long-lived JSON stream endpoint (one JSON object per line,
 held open indefinitely) rather than polling. Runs as a background task
@@ -47,12 +47,11 @@ logger = logging.getLogger(__name__)
 
 
 def _basic_auth(user: str | None, password: str | None) -> tuple[str, str] | None:
-    """`httpx2.AsyncClient(auth=...)` wants either a real `(user, password)`
-    pair or `None` - never a pair with a `None` half. A user set without a
-    password (WP-40 audit: `config.ntfy_password` is independently
-    Optional) used to build exactly that broken half-pair and would have
-    failed at the first real connection; treat it the same as "no auth
-    configured" instead.
+    """`httpx2.AsyncClient(auth=...)` wants a real `(user, password)` pair or `None`.
+
+    Never a pair with a `None` half. A user set without a password (WP-40 audit: `config.ntfy_password` is
+    independently Optional) used to build exactly that broken half-pair and would have failed at the first real
+    connection; treat it the same as "no auth configured" instead.
     """
     if user and password:
         return (user, password)
@@ -60,6 +59,7 @@ def _basic_auth(user: str | None, password: str | None) -> tuple[str, str] | Non
 
 
 async def listen(config: FeltConfig) -> None:
+    """Consume the ntfy stream forever, saving each alert and opening incidents."""
     if not config.ntfy_url or not config.ntfy_topic:
         logger.info("ntfy not configured, listener not starting")
         return

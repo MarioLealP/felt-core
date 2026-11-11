@@ -1,8 +1,8 @@
-"""Today's morning brief out of her Margins: the newest line with source
-"brief" from today (local time), paging back through the app's /margins
-(a busy day of remarks can push the morning's brief a few pages back).
-The same rule as the dashboard's felt-brief-card. No Home Assistant imports,
-so it is testable on its own.
+"""Today's morning brief out of her Margins.
+
+The newest line with source "brief" from today (local time), paging back through the app's /margins (a busy day of
+remarks can push the morning's brief a few pages back). The same rule as the dashboard's felt-brief-card. No Home
+Assistant imports, so it is testable on its own.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ PAGES = 6
 
 async def todays_brief(fetch: Callable[[str], Awaitable[Any]], today: date, tz: tzinfo) -> dict | None:
     """{"text", "at"} for today's brief, None when there isn't one (yet).
+
     `fetch` GETs an app path (pages come oldest first).
     """
     before = None

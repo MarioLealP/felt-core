@@ -41,7 +41,7 @@ HOBBY_PHRASES = {
 
 
 def _hobbies_phrase(details: dict) -> str:
-    """ "reading a book (about 12 min) and napping" from details["hobbies"]."""
+    """The hobby line: "reading a book (about 12 min) and napping" from details["hobbies"]."""
     parts = []
     for h in details.get("hobbies") or []:
         if not isinstance(h, dict) or h.get("hobby") not in HOBBY_PHRASES:
@@ -90,10 +90,10 @@ def _unhushed_prompt(details: dict, previous: str | None) -> str:
 
 
 def build_prompt(event: str, details: dict, lyric: str | None = None, previous: str | None = None) -> str | None:
-    """Pure: the user-turn text for an event, from whitelisted fields
-    only. None if the details are too thin to say anything real about.
-    `previous` is this event's last spoken line (unhushed uses it so the
-    same line never plays twice in a row).
+    """Pure: the user-turn text for an event, from whitelisted fields only.
+
+    None if the details are too thin to say anything real about. `previous` is this event's last spoken line (unhushed
+    uses it so the same line never plays twice in a row).
     """
     if event == "unhushed":
         return _unhushed_prompt(details, previous)
@@ -159,9 +159,10 @@ def build_prompt(event: str, details: dict, lyric: str | None = None, previous: 
 
 
 def _poe_item_prompt(details: dict) -> str | None:
-    """Mario price-checked an item (details filled by react_to_event from the
-    item text: name, base, rarity, prices). Only with a real price - she
-    never invents one; rares stay Exiled Exchange's job for now (WP-57).
+    """Mario price-checked an item.
+
+    Details filled by react_to_event from the item text: name, base, rarity, prices. Only with a real price - she never
+    invents one; rares stay Exiled Exchange's job for now (WP-57).
     """
     name = _text(details, "name")
     if not name:

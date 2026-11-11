@@ -1,5 +1,6 @@
-"""Phone battery from the Home Assistant app's sensors (phone.py,
-2026-10-18 - KDE Connect went with the Windows desktop agent).
+"""Phone battery from the Home Assistant app's sensors.
+
+(phone.py, 2026-10-18 - KDE Connect went with the Windows desktop agent).
 """
 
 from felt_core.clients.phone import PhoneUnavailableError, battery
@@ -11,6 +12,7 @@ parameters_schema = {"type": "object", "properties": {}}
 
 
 async def handle(params, ctx):
+    """Report Mario's phone battery level and whether it's charging."""
     try:
         percent, charging = await battery(ctx.config)
     except PhoneUnavailableError:

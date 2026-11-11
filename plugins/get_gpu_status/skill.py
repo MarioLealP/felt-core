@@ -1,4 +1,6 @@
-"""GPU/VRAM headroom of the Nitro5 AI node — the actual capability lives
+"""GPU/VRAM headroom of the Nitro5 AI node.
+
+— the actual capability lives
 on felt-voice, which already runs there as a systemd service, via its
 `/v1/gpu-status` endpoint.
 """
@@ -13,6 +15,7 @@ parameters_schema = {"type": "object", "properties": {}}
 
 
 async def handle(params, ctx):
+    """Fetch GPU utilization, VRAM and temperature from the Nitro5's voice service."""
     config = ctx.config
     if not config.voice_url:
         return SkillResult(text="GPU status check isn't configured (no voice service URL set).")

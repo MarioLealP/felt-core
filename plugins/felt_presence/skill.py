@@ -1,5 +1,6 @@
-"""WP-09/WP-10: Mario-initiated presence control - hush/unhush (WP-09), plus
-hide/brb/come-back/come/move/look/repeat (WP-10). One skill, one UIAction
+"""WP-09/WP-10: Mario-initiated presence control - hush/unhush (WP-09).
+
+plus hide/brb/come-back/come/move/look/repeat (WP-10). One skill, one UIAction
 kind ("presence") for everything here - felt-tray's app.py dispatches on
 `payload["action"]` to the matching felt-animation call (/hush, /unhush,
 /presence, /repeat) or, for "look_at_this", its own local manual-capture
@@ -131,6 +132,7 @@ def _canonical_intent(raw: str) -> str | None:
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Map the requested intent to her reply and the felt-tray presence action."""
     raw_intent = str(get_single_param(params, "intent") or "")
     intent = _canonical_intent(raw_intent) if raw_intent.strip() else None
     if intent is None:

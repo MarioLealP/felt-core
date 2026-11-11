@@ -1,5 +1,6 @@
-"""Parsing helpers for get_container_status — reuses clockmost's existing
-Zabbix monitoring (Docker-by-Zabbix-agent-2 template) rather than adding a
+"""Parsing helpers for get_container_status.
+
+— reuses clockmost's existing Zabbix monitoring (Docker-by-Zabbix-agent-2 template) rather than adding a
 separate container health-check system. Split out from the network calls
 so it's unit testable without a live Zabbix instance.
 """
@@ -14,14 +15,15 @@ _HEALTH_LABELS = {
 
 
 def health_label(code: str) -> str:
+    """Turn a Zabbix container health code into its human label."""
     return _HEALTH_LABELS.get(code, f"unknown ({code})")
 
 
 def parse_container_items(items: list[dict]) -> dict[str, dict]:
-    """Groups Zabbix `docker.container_info.state.*[...]` items (each a
-    dict with `key_`, `lastvalue`, and `lastclock`, as returned by
-    `item.get`) by container name — the bracketed part of the key,
-    leading '/' stripped.
+    """Groups Zabbix `docker.container_info.state.*[...]` items by container name.
+
+    (each a dict with `key_`, `lastvalue`, and `lastclock`, as returned by `item.get`) —
+    the bracketed part of the key, leading '/' stripped.
 
     Excludes containers where every item has `lastclock == "0"` — Zabbix's
     sentinel for "never received a real value." Real 2026-09-12 finding:
@@ -46,8 +48,9 @@ def parse_container_items(items: list[dict]) -> dict[str, dict]:
 
 
 def matching_containers(containers: dict[str, dict], query: str) -> list[str]:
-    """Case-insensitive match of `query` against known container names —
-    an exact match wins outright (a single-element list); otherwise every
+    """Case-insensitive match of `query` against known container names.
+
+    — an exact match wins outright (a single-element list); otherwise every
     substring match is returned, so the caller can tell "no match" (empty
     list) apart from "ambiguous, pick one" (more than one) instead of
     collapsing both into the same "not found" response.
@@ -60,9 +63,9 @@ def matching_containers(containers: dict[str, dict], query: str) -> list[str]:
 
 
 def unhealthy_containers(containers: dict[str, dict]) -> list[str]:
-    """Container names Docker's own health check currently reports as
-    'unhealthy' (code '2') — an unambiguous problem signal, unlike merely
-    'not running', which is often just an intentionally-stopped service
-    and can't be judged as good or bad without knowing what's expected.
+    """Container names Docker's own health check currently reports as 'unhealthy' (code '2').
+
+    — an unambiguous problem signal, unlike merely 'not running', which is often just an
+    intentionally-stopped service and can't be judged as good or bad without knowing what's expected.
     """
     return sorted(name for name, info in containers.items() if info.get("health") == "2")

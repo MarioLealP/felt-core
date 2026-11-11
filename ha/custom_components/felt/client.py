@@ -22,6 +22,8 @@ class FeltError(Exception):
 
 
 class FeltClient:
+    """Talks to felt-core's API with an Authentik access token."""
+
     def __init__(
         self,
         session: aiohttp.ClientSession,
@@ -31,6 +33,7 @@ class FeltClient:
         username: str,
         password: str,
     ) -> None:
+        """Store the session, felt-core URL, token URL and Authentik login form."""
         self._session = session
         self._base = url.rstrip("/")
         self._token_url = token_url
@@ -85,6 +88,7 @@ class FeltClient:
         raise FeltError("felt-core refused the token")
 
     async def chat(self, text: str, language: str | None) -> str:
+        """Her reply for `text`, in `language` when given."""
         reply = await self._call("POST", "/v1/ha/chat", {"text": text, "language": language})
         return reply["reply"]
 
@@ -97,6 +101,7 @@ class FeltClient:
         return await self._call("GET", "/v1/ha/systems")
 
     async def set_control(self, name: str, on: bool) -> dict:
+        """Set control `name` on or off and return the new controls."""
         return await self._call("POST", "/v1/ha/controls", {"name": name, "on": on})
 
     async def email(self, mail: dict) -> None:
@@ -112,8 +117,9 @@ class FeltClient:
         return await self._call(method, "/v1/ha/app" + path, payload)
 
     async def app_stream(self) -> AsyncIterator[tuple[str, dict]]:
-        """The app's live notices (server-sent events) as (event, data), until
-        felt-core closes the stream or it breaks (FeltError).
+        """The app's live notices (server-sent events) as (event, data).
+
+        Runs until felt-core closes the stream or it breaks (FeltError).
         """
         for attempt in (0, 1):
             token = await self._access_token(fresh=attempt == 1)

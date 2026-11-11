@@ -1,6 +1,8 @@
-"""WP-44: the alert catalogue as rules - what each kind of alert on the
-clockmost ntfy topic is, how loudly it notifies, who handles it, and how
-long a self-fixing one waits for its RESOLVED before it counts.
+"""WP-44: the alert catalogue as rules - one rule per kind of alert.
+
+What each kind of alert on the clockmost ntfy topic is, how loudly it
+notifies, who handles it, and how long a self-fixing one waits for its
+RESOLVED before it counts.
 
 Built from the 1,449 real alerts (docs/plans/impl/alert-catalogue.md) and
 gone through with Mario 10-03. Fixed rules, no model: her 12B only words
@@ -20,6 +22,8 @@ HANDLERS = ("felt", "claude", "drop")
 
 
 class AlertType(BaseModel):
+    """One kind of alert: its title pattern, tier, handler, and incident rules."""
+
     model_config = ConfigDict(frozen=True)
 
     name: str
@@ -162,10 +166,12 @@ _ZABBIX = re.compile(r"^clockmost (RESOLVED|Disaster|High|Average|Warning|Inform
 
 
 def by_name(name: str) -> AlertType:
+    """The catalogue entry with this name, or UNKNOWN when it isn't listed."""
     return _BY_NAME.get(name, UNKNOWN)
 
 
 def classify(title: str | None) -> AlertType:
+    """The first catalogue entry whose pattern matches the alert title."""
     text = title or ""
     for alert_type in CATALOGUE:
         if re.search(alert_type.pattern, text):
@@ -174,6 +180,8 @@ def classify(title: str | None) -> AlertType:
 
 
 class Parsed(BaseModel):
+    """One parsed alert title: its type, its matching key, and its RESOLVED flag."""
+
     model_config = ConfigDict(frozen=True)
 
     type: AlertType
@@ -183,6 +191,7 @@ class Parsed(BaseModel):
 
 def parse(title: str | None) -> Parsed:
     """The alert's type, its matching key, and whether it's a RESOLVED.
+
     Zabbix's severity can change between firings (Warning, then High), so
     the key is the subject without it.
     """

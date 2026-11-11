@@ -1,9 +1,8 @@
-"""Wraps the existing ComfyUI instance on the Nitro5 (clockmost-nitro5-
-ai-node.md) — no new infra, just a Felt-facing interface to what's
-already running. Workflow-driven by design (assistant-skills.md, Mario
-2026-09-11): each style is a saved API-format workflow JSON under
-workflows/, substituted and submitted as-is, so adding a new style later
-is "drop in another workflow file," not new code.
+"""Wraps the existing ComfyUI instance on the Nitro5 (clockmost-nitro5-ai-node.md) — no new infra.
+
+Just a Felt-facing interface to what's already running. Workflow-driven by design (assistant-skills.md, Mario
+2026-09-11): each style is a saved API-format workflow JSON under workflows/, substituted and submitted as-is, so
+adding a new style later is "drop in another workflow file," not new code.
 
 Deliberately NOT the full graph-editor "UI format" ComfyUI saves by
 default (nodes/links/groups) — that needs converting to the flat
@@ -64,12 +63,11 @@ def _load_workflow_template(style: str) -> dict:
 
 
 def _apply_prompt(template: dict, prompt: str) -> dict:
-    """Pure: a fresh copy of the template with the prompt substituted
-    into its `{prompt}` placeholder (keeping any style-specific quality-
-    tag suffix around it intact, e.g. animexld's) and a random seed — the
-    saved templates carry a fixed seed (42) for their own reproducible
-    testing, but every real generation needs its own, or every call with
-    the same prompt would return the same image.
+    """Pure: a fresh copy of the template with the prompt substituted.
+
+    Into its `{prompt}` placeholder (keeping any style-specific quality-tag suffix around it intact, e.g. animexld's)
+    and a random seed — the saved templates carry a fixed seed (42) for their own reproducible testing, but every real
+    generation needs its own, or every call with the same prompt would return the same image.
     """
     workflow = copy.deepcopy(template)
     text_template = workflow[_POSITIVE_PROMPT_NODE]["inputs"]["text"]
@@ -79,9 +77,9 @@ def _apply_prompt(template: dict, prompt: str) -> dict:
 
 
 def _extract_first_image(history_entry: dict) -> dict | None:
-    """Pure: pick the first output image out of one /history/{id} entry's
-    `outputs` block. Returns {"filename", "subfolder", "type"} or None if
-    the run hasn't produced an image (yet, or at all).
+    """Pure: pick the first output image out of one /history/{id} entry's `outputs` block.
+
+    Returns {"filename", "subfolder", "type"} or None if the run hasn't produced an image (yet, or at all).
     """
     outputs = history_entry.get("outputs", {})
     images = outputs.get(_SAVE_IMAGE_NODE, {}).get("images", [])
@@ -89,18 +87,16 @@ def _extract_first_image(history_entry: dict) -> dict | None:
 
 
 def _build_image_url(display_base: str, image: dict) -> str:
-    """Pure: the browsable link Mario's own browser (already SSO'd
-    against comfy.clockmost.com) can open directly.
-    """
+    """Pure: the browsable link Mario's own browser (already SSO'd against comfy.clockmost.com) can open directly."""
     params = f"filename={image['filename']}&subfolder={image.get('subfolder', '')}&type={image.get('type', 'output')}"
     return f"{display_base.rstrip('/')}/view?{params}"
 
 
 async def _submit_and_wait(comfyui_url: str, workflow: dict) -> dict | None:
-    """Submits the workflow, polls /history until it completes. Returns
-    the first output image's info, or None on timeout. sdxl takes ~90s
-    for a single image on the Nitro5's RTX 3060 — poll generously rather
-    than risk giving up on a run that's still legitimately in progress.
+    """Submits the workflow, polls /history until it completes.
+
+    Returns the first output image's info, or None on timeout. sdxl takes ~90s for a single image on the Nitro5's RTX
+    3060 — poll generously rather than risk giving up on a run that's still legitimately in progress.
     """
     async with httpx2.AsyncClient(timeout=30) as client:
         response = await client.post(f"{comfyui_url}/prompt", json={"prompt": workflow})
@@ -119,6 +115,7 @@ async def _submit_and_wait(comfyui_url: str, workflow: dict) -> dict | None:
 
 
 async def handle(params, ctx):
+    """Generate an image from the prompt and return the link to it."""
     config = ctx.config
     if not config.comfyui_url:
         return SkillResult(text="Image generation isn't configured (no ComfyUI URL set).")

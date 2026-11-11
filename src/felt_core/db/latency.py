@@ -16,6 +16,7 @@ def save_latency_row(
     chars: int | None = None,
     session_id: str | None = None,
 ) -> None:
+    """Store one per-request stage timing row."""
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -27,6 +28,7 @@ def save_latency_row(
 
 
 def get_latency_rows(db_path: str, since_hours: int = 24, endpoint: str | None = None) -> list[dict]:
+    """Stage timings from the last given hours, optionally for one endpoint."""
     conn = _connect(db_path)
     query = "SELECT stage, ms, route, skill FROM latency WHERE created_at >= datetime('now', ?)"
     params: list = [f"-{since_hours} hours"]
@@ -39,6 +41,7 @@ def get_latency_rows(db_path: str, since_hours: int = 24, endpoint: str | None =
 
 
 def delete_old_latency_rows(db_path: str, older_than_days: int = 30) -> None:
+    """Drop latency rows older than the given number of days."""
     conn = _connect(db_path)
     with conn:
         conn.execute(

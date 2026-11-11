@@ -1,7 +1,8 @@
-"""The `felt.tell` action: an automation hands Felt plain text, she words it
-and says it at the desk + on the phone (felt-core POST /v1/ha/tell,
-ha_tell.py). Optional response: {"said": her line, or None when her ha.tell
-feature is off}.
+"""The `felt.tell` action: an automation hands Felt plain text to say.
+
+She words it and says it at the desk + on the phone (felt-core
+POST /v1/ha/tell, ha_tell.py). Optional response: {"said": her line, or
+None when her ha.tell feature is off}.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ SCHEMA = vol.Schema(
 
 
 def async_register(hass: HomeAssistant, client: FeltClient) -> None:
+    """Register the felt.tell service that forwards text to Felt."""
+
     async def handle(call: ServiceCall) -> ServiceResponse:
         try:
             return await client.tell(call.data["text"], call.data["title"], call.data["tag"])
@@ -36,4 +39,5 @@ def async_register(hass: HomeAssistant, client: FeltClient) -> None:
 
 
 def async_unregister(hass: HomeAssistant) -> None:
+    """Remove the felt.tell service from Home Assistant."""
     hass.services.async_remove(DOMAIN, SERVICE)

@@ -1,5 +1,7 @@
-"""Turns a reply written the way an LLM naturally writes (markdown, lists,
-URLs, emoji) into plain text safe to hand to TTS. Applied only to the audio
+"""Turns a reply into plain text safe to hand to TTS.
+
+The reply is written the way an LLM naturally writes (markdown, lists,
+URLs, emoji). Applied only to the audio
 input (api.py's _synthesize_reply) - the original text still goes out in
 X-Reply-Text for toasts and the chat window, where markdown/emoji are fine.
 
@@ -41,6 +43,8 @@ _BLANK_LINES_RE = re.compile(r"\n+")
 
 
 def strip_for_tts(text: str) -> str:
+    """Strip markdown, URLs, emoji and stage directions from a reply for TTS."""
+
     def _unwrap_emphasis(match: re.Match) -> str:
         return match.group(2) if match.group(2) is not None else match.group(4)
 
@@ -79,9 +83,10 @@ def _is_abbreviation(text: str, end_match: re.Match) -> bool:
 
 
 def speech_chunks(text: str, first_chunk_chars: int = 40, min_chunk_chars: int = 25) -> list[str]:
-    """Splits TTS text (already through strip_for_tts) into sentence chunks
-    for streamed synthesis (WP-54): the first chunk is synthesised before
-    answering, the rest in the background. Sentences accumulate until a
+    """Splits TTS text (already through strip_for_tts) into sentence chunks for streamed synthesis (WP-54).
+
+    The first chunk is synthesised before answering, the rest in the
+    background. Sentences accumulate until a
     chunk reaches `first_chunk_chars` (first) / `min_chunk_chars` (later),
     so a short "Hm." never becomes a chunk of its own; a short leftover at
     the end joins the previous chunk. One chunk back means "don't stream".
@@ -115,9 +120,10 @@ _CLAUSE_END_RE = re.compile(r"[,;:](?=\s)|\s[-\u2013\u2014](?=\s)")
 
 
 class SpeechChunker:
-    """speech_chunks() for text that arrives in pieces (WP-65, streamed
-    replies): `feed()` each piece as felt-llm writes it and get back the
-    chunks that just became complete, then `close()` for the rest. Same
+    """speech_chunks() for text that arrives in pieces (WP-65, streamed replies).
+
+    `feed()` each piece as felt-llm writes it and get back the chunks that
+    just became complete, then `close()` for the rest. Same
     sentence ends, abbreviations and size rules as speech_chunks - with two
     differences that come from not knowing the end yet:
     - a sentence end only counts once the next character is in (the "." of
@@ -136,6 +142,7 @@ class SpeechChunker:
     """
 
     def __init__(self, first_chunk_chars: int = 40, min_chunk_chars: int = 25, first_at_clause: bool = False) -> None:
+        """Set the chunk thresholds and the streaming state."""
         self.first_chunk_chars = first_chunk_chars
         self.min_chunk_chars = min_chunk_chars
         self.first_at_clause = first_at_clause
@@ -146,6 +153,7 @@ class SpeechChunker:
         self._first_out = False
 
     def feed(self, piece: str) -> list[str]:
+        """Feed the next written piece and return the chunks that just completed."""
         self.text += piece
         out: list[str] = []
         pos = self._start
@@ -173,9 +181,10 @@ class SpeechChunker:
             self._start = m.end()
 
     def close(self, final_text: str | None = None) -> list[str]:
-        """`final_text`: the reply as it finally stands, if it differs from
-        what was fed (felt-llm hit max_tokens and the reply was ended at its
-        last full sentence) - only the not-yet-chunked part is taken from it.
+        """`final_text`: the reply as it finally stands, if it differs from what was fed.
+
+        Felt-llm hit max_tokens and the reply was ended at its last full
+        sentence - only the not-yet-chunked part is taken from it.
         """
         if final_text is not None and final_text.startswith(self.text[: self._start]):
             self.text = final_text
@@ -209,8 +218,10 @@ class SpeechChunker:
 
 
 def tts_request_body(text: str, emotion: str | None = None) -> dict[str, str]:
-    """The JSON body for felt-voice's /v1/tts. `emotion` (WP-54) is only
-    sent when felt-core has one - chat replies don't, and speak neutrally.
+    """The JSON body for felt-voice's /v1/tts.
+
+    `emotion` (WP-54) is only sent when felt-core has one - chat replies
+    don't, and speak neutrally.
     """
     body = {"text": text}
     if emotion:

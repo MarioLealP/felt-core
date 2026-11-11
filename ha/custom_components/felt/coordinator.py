@@ -1,7 +1,9 @@
-"""Polls felt-core: her switches (quiet, hide, DJ mode), the Systems
-summary (Zabbix/Wazuh/ntfy as triaged incidents) and today's brief, as
-{"controls", "systems", "brief"}. The brief is looked up every 5 minutes, not
-every poll (it pages through her Margins).
+"""Polls felt-core for her switches, the Systems summary and today's brief.
+
+Her switches are quiet, hide and DJ mode; the Systems summary is
+Zabbix/Wazuh/ntfy as triaged incidents. They arrive as {"controls",
+"systems", "brief"}. The brief is looked up every 5 minutes, not every
+poll (it pages through her Margins).
 """
 
 from __future__ import annotations
@@ -23,7 +25,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FeltCoordinator(DataUpdateCoordinator[dict]):
+    """Poll felt-core on a timer for her controls, systems and brief."""
+
     def __init__(self, hass: HomeAssistant, client: FeltClient) -> None:
+        """Store the felt-core client and set a 30-second poll interval."""
         super().__init__(hass, _LOGGER, name="Felt", update_interval=timedelta(seconds=30))
         self.client = client
         self._brief: dict | None = None

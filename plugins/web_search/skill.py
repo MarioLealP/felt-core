@@ -1,7 +1,8 @@
-"""General web search — self-hosted SearXNG, no API key, no vendor
-lock-in. Returns raw result snippets for the LOCAL chat model to read and
-answer from, unlike delegate_research: no cloud LLM call happens here at
-all, just a search engine fetch. Stays local-first — only reaches for
+"""General web search — self-hosted SearXNG, no API key, no vendor lock-in.
+
+Returns raw result snippets for the LOCAL chat model to read and answer
+from, unlike delegate_research: no cloud LLM call happens here at all,
+just a search engine fetch. Stays local-first — only reaches for
 delegate_research when the question needs actual synthesis/reasoning a
 snippet list can't provide.
 """
@@ -23,6 +24,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Search the web and return raw result snippets for her to answer from."""
     query = params.get("query") or ctx.original_message
     async with httpx2.AsyncClient(timeout=20) as client:
         params = {"q": query, "format": "json"}

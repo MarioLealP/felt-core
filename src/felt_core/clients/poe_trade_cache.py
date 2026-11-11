@@ -1,7 +1,7 @@
-"""Local cache of Path of Exile 2 trade-API reference data — the item
-name -> base-type index needed to search real listings (the official
-trade API requires both, e.g. name="The Taming", type="Prismatic Ring";
-name-only or type-only searches fail, confirmed live 2026-09-14) and the
+"""Local cache of Path of Exile 2 trade-API reference data.
+
+The item name -> base-type index needed to search real listings (the official trade API requires both, e.g.
+name="The Taming", type="Prismatic Ring"; name-only or type-only searches fail, confirmed live 2026-09-14) and the
 current league list.
 
 Refreshed weekly rather than on every price check — this reference data
@@ -41,13 +41,12 @@ _REFRESH_HOUR = 23
 
 
 def _build_name_index(items_data: dict) -> dict[str, dict]:
-    """Pure: {lowercased unique item name: {"type", "display_name"}} from
-    the raw /data/items response. Only entries with a "name" field are
-    actual unique items (e.g. {"type": "Prismatic Ring", "name": "The
-    Taming"}) — base types, gems, and currency have no name to look up
-    by, and are deliberately excluded rather than kept as noise. The
-    original-case name is kept alongside the lookup key so callers can
-    display "The Taming" rather than whatever case the user typed.
+    """Pure: {lowercased unique item name: {"type", "display_name"}} from the raw /data/items response.
+
+    Only entries with a "name" field are actual unique items (e.g. {"type": "Prismatic Ring", "name": "The Taming"})
+    — base types, gems, and currency have no name to look up by, and are deliberately excluded rather than kept as
+    noise. The original-case name is kept alongside the lookup key so callers can display "The Taming" rather than
+    whatever case the user typed.
     """
     index: dict[str, dict] = {}
     for group in items_data.get("result", []):
@@ -65,6 +64,7 @@ async def _fetch_json(client: httpx2.AsyncClient, path: str) -> dict:
 
 
 async def refresh(config: FeltConfig) -> None:
+    """Fetch the items and leagues from the trade API and write the cache file."""
     async with httpx2.AsyncClient(timeout=30) as client:
         items_data = await _fetch_json(client, "/data/items")
         leagues_data = await _fetch_json(client, "/data/leagues")
@@ -90,10 +90,10 @@ async def refresh(config: FeltConfig) -> None:
 
 
 def load_cache(config: FeltConfig) -> dict | None:
-    """Returns None if there's no cache yet (first run before the
-    initial refresh has completed) or it's unreadable — callers fall
-    back to poe.ninja-only behavior in that case, same "degrade, don't
-    crash" convention as everything else in this project.
+    """Returns None if there's no cache yet (first run before the initial refresh has completed) or it's unreadable.
+
+    Callers fall back to poe.ninja-only behavior in that case, same "degrade, don't crash" convention as
+    everything else in this project.
     """
     path = Path(config.poe_trade_cache_path)
     if not path.exists():
@@ -105,8 +105,9 @@ def load_cache(config: FeltConfig) -> dict | None:
 
 
 def seconds_until_next_refresh(now: datetime) -> float:
-    """Pure, unit-testable: seconds from `now` (tz-aware, Europe/Lisbon)
-    until the next Friday 23:00 in that timezone.
+    """Pure, unit-testable: seconds from `now` (tz-aware, Europe/Lisbon) until the next Friday 23:00.
+
+    In that timezone.
     """
     days_ahead = (_REFRESH_WEEKDAY - now.weekday()) % 7
     target = (now + timedelta(days=days_ahead)).replace(hour=_REFRESH_HOUR, minute=0, second=0, microsecond=0)
@@ -116,6 +117,7 @@ def seconds_until_next_refresh(now: datetime) -> float:
 
 
 async def watch(config: FeltConfig) -> None:
+    """Refresh the cache weekly (Friday 23:00 Europe/Lisbon), once right away if there's none yet."""
     if load_cache(config) is None:
         # No cache at all yet (first run ever) — get one immediately
         # rather than leaving price checks degraded for up to a week.

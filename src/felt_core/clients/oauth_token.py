@@ -28,8 +28,9 @@ async def refresh_access_token(
     data: dict,
     headers: dict | None = None,
 ) -> str:
-    """Returns a cached access token if it's not within 60s of expiring,
-    otherwise POSTs `data` (and `headers`, if given) to `token_url` and
+    """Returns a cached access token if it's not within 60s of expiring.
+
+    Otherwise POSTs `data` (and `headers`, if given) to `token_url` and
     caches the result. `cache` is the caller's own module-level
     `{"access_token": ..., "expires_at": ...}` dict - mutated in place, so
     every caller keeps a separate cache per provider/account.

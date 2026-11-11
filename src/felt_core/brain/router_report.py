@@ -1,5 +1,6 @@
-"""What the semantic router would have done (cm-6b0 shadow mode) vs what
-Felt did - run inside the felt-core container:
+"""What the semantic router would have done (cm-6b0 shadow mode) vs what Felt did.
+
+Run inside the felt-core container:
 
     docker exec felt-core /app/.venv/bin/python -m felt_core.brain.router_report [--all]
 
@@ -17,6 +18,7 @@ from felt_core.config import load_config
 
 
 def main() -> int:
+    """Print the router-vs-Felt shadow report and return 0."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="list every row, not just differences")
     args = ap.parse_args()

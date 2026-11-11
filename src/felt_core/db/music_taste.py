@@ -12,6 +12,7 @@ def record_music_play(
     duration_ms: int,
     skipped: bool,
 ) -> None:
+    """Store one play or skip row for a track in the music_taste table."""
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -23,11 +24,12 @@ def record_music_play(
 
 
 def get_music_taste_stats(db_path: str, limit: int = 200) -> list[dict]:
-    """One row per distinct track_id seen in the last `limit` recorded
-    plays (most recent first, so a long-since-stopped track's old plays
-    don't drown out current taste forever) - plays/skips counted across
-    that window, track_name/artists taken from whichever recorded row is
-    used to group it (they don't change track to track).
+    """One row per distinct track_id seen in the last `limit` recorded plays.
+
+    Most recent first, so a long-since-stopped track's old plays don't
+    drown out current taste forever - plays/skips counted across that
+    window, track_name/artists taken from whichever recorded row is used
+    to group it (they don't change track to track).
     """
     conn = _connect(db_path)
     rows = conn.execute(

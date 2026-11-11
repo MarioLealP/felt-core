@@ -1,11 +1,13 @@
-"""Per-request latency instrumentation (WP-04). Every speed decision made
-about felt-core up to 2026-09-22 (TTS engine choice, caching, model picks,
-the Nitro5 Ollama/ComfyUI split) was made from hand-correlating container
-log timestamps - this gives every /v1/* request a request_id, times named
-stages against it, persists each stage to SQLite for later percentile
-queries (`/v1/metrics/latency`), and puts the same numbers directly on the
-response via a standard Server-Timing header so a client (felt-tray) can
-log its own turn's breakdown without a second round trip.
+"""Per-request latency instrumentation (WP-04).
+
+Every speed decision made about felt-core up to 2026-09-22 (TTS engine
+choice, caching, model picks, the Nitro5 Ollama/ComfyUI split) was made
+from hand-correlating container log timestamps - this gives every /v1/*
+request a request_id, times named stages against it, persists each stage
+to SQLite for later percentile queries (`/v1/metrics/latency`), and puts
+the same numbers directly on the response via a standard Server-Timing
+header so a client (felt-tray) can log its own turn's breakdown without a
+second round trip.
 
 A metrics failure must never break a real request - every write here is
 wrapped in try/except + log, never allowed to propagate.
@@ -38,16 +40,18 @@ _current: ContextVar[_RequestMetrics | None] = ContextVar("felt_core_metrics", d
 
 
 def start_request(request_id: str, endpoint: str, db_path: str, session_id: str | None = None) -> None:
-    """Called once by the FastAPI middleware, before the route handler
-    runs. Everything `timed()`/`record()` do below reads this same
-    ContextVar - contextvars.copy_context() (what asyncio.create_task uses
-    under the hood) means a task spawned after this point, like WP-03's
-    concurrent privacy-check task, still sees it.
+    """Called once by the FastAPI middleware, before the route handler runs.
+
+    Everything `timed()`/`record()` do below reads this same ContextVar -
+    contextvars.copy_context() (what asyncio.create_task uses under the
+    hood) means a task spawned after this point, like WP-03's concurrent
+    privacy-check task, still sees it.
     """
     _current.set(_RequestMetrics(request_id=request_id, endpoint=endpoint, db_path=db_path, session_id=session_id))
 
 
 def record(stage: str, ms: float, **tags) -> None:
+    """Record one finished stage's duration in ms, with its tags."""
     metrics = _current.get()
     if metrics is None:
         # Nothing wrapped this call in a request (e.g. a unit test calling
@@ -63,7 +67,8 @@ def record(stage: str, ms: float, **tags) -> None:
 
 @asynccontextmanager
 async def timed(stage: str, **tags):
-    """Records the stage when it finishes - normally or by raising - but
+    """Records the stage when it finishes - normally or by raising.
+
     NOT when it was cancelled: a cancelled stage (e.g. chat()'s concurrent
     privacy check, cancelled once a skill is picked) never ran to
     completion, so its duration isn't a timing of that stage at all and
@@ -98,8 +103,9 @@ def _save_stage(metrics: _RequestMetrics, stage: str, ms: float, tags: dict) -> 
 
 
 def server_timing_header() -> str | None:
-    """Standard Server-Timing syntax:
-    `router;dur=3812.4, reply;desc="cloud";dur=612.0, tts;dur=2430.1`.
+    """The stages as a standard Server-Timing header.
+
+    Syntax: `router;dur=3812.4, reply;desc="cloud";dur=612.0, tts;dur=2430.1`.
     None (no header added) when nothing was ever recorded for this
     request, rather than an empty string.
     """
@@ -141,6 +147,7 @@ def _stats(values: list[float]) -> dict:
 
 def compute_stats(rows: list[dict]) -> dict:
     """Rows: each a dict with at least stage/ms, optionally route/skill.
+
     Grouped by stage; a stage that carries a route or skill tag also gets
     a breakdown by that tag (e.g. "reply" split into cloud vs local).
     """

@@ -1,5 +1,6 @@
-"""WP-65: streamed chat replies - she starts talking while she's still
-writing. chat_streamed() (orchestrator.py) runs the same turn as chat() with
+"""WP-65: streamed chat replies - she starts talking while she's still writing.
+
+chat_streamed() (orchestrator.py) runs the same turn as chat() with
 a ReplySpeaker attached; the reply calls that can be her answer then go
 through `ReplySpeaker.turn()` (felt-llm streamed) instead of
 `local_llm.chat()`, and each sentence chunk is let out as soon as it's
@@ -30,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 class ReplyMeta(BaseModel):
-    """What a reply does besides speak - known once the skill has run, before
+    """What a reply does besides speak.
+
+    Known once the skill has run, before
     her answer streams: chat_streamed() yields it ahead of the first chunk, so
     the API can send it with chunk 0 (a hush or a reaction can't wait for the
     reply to finish).
@@ -45,12 +48,15 @@ def _norm(text: str) -> str:
 
 
 class ReplySpeaker:
-    """Collects what she says during one streamed chat turn. `chunks` gets
+    """Collects what she says during one streamed chat turn.
+
+    `chunks` gets
     each released chunk (the reply's own text, not yet stripped for TTS);
     `said` keeps them in order.
     """
 
     def __init__(self, config: FeltConfig) -> None:
+        """Set up the chunk queue and per-turn state."""
         self.first_chunk_chars = config.reply_stream_first_chunk_chars
         self.chunks: asyncio.Queue[str | ReplyMeta | None] = asyncio.Queue()
         self.said: list[str] = []
@@ -60,6 +66,7 @@ class ReplySpeaker:
         self._turn_text = ""
 
     def said_text(self) -> str:
+        """Everything said so far, joined into one text."""
         return " ".join(self.said)
 
     def _release(self, chunk: str) -> None:
@@ -67,8 +74,9 @@ class ReplySpeaker:
         self.chunks.put_nowait(chunk)
 
     def tell(self, meta: ReplyMeta) -> None:
-        """The reply's ui_action / animation tag, as soon as they're known -
-        only while nothing has been said yet (after that, the final result
+        """The reply's ui_action / animation tag, as soon as they're known.
+
+        Only while nothing has been said yet (after that, the final result
         carries them).
         """
         if not self.said and (meta.ui_action is not None or meta.animation_tag is not None):
@@ -90,8 +98,9 @@ class ReplySpeaker:
         guard: Callable[[str], bool] | None = None,
         config: FeltConfig,
     ) -> local_llm.LocalReply:
-        """One streamed felt-llm call; returns the whole reply like
-        local_llm.chat(). Its chunks are let out as they complete, unless
+        """One streamed felt-llm call; returns the whole reply like local_llm.chat().
+
+        Its chunks are let out as they complete, unless
         `guard` (a tool-carrying call's claim check) catches a claimed lookup or
         action in the opening - then nothing more of this call is said and
         the caller's full-text check takes over. A reply that turns into a
@@ -123,7 +132,9 @@ class ReplySpeaker:
         return reply
 
     def full_reply(self, reply: str) -> str:
-        """What she said this turn, as one text: `reply` plus whatever was
+        """What she said this turn, as one text.
+
+        `reply` plus whatever was
         let out before the call it came from (a late fake-claim hit, a few
         words before a tool call), in front.
         """
@@ -138,7 +149,9 @@ class ReplySpeaker:
         return f"{before} {reply}" if reply else before
 
     def rest(self, reply: str) -> list[str]:
-        """The chunks of `reply` not said yet - all of it when the answer
+        """The chunks of `reply` not said yet.
+
+        All of it when the answer
         came from a path that doesn't stream (a fast path, a held reply).
         """
         said, full = _norm(self.said_text()), _norm(reply)
@@ -148,9 +161,9 @@ class ReplySpeaker:
 
 
 def correction_note(said: str) -> str:
-    """Added to the tool result when the guard caught a claim only after she
-    had already said part of the reply (a late hit): she corrects herself,
-    in her own words.
+    """Added to the tool result when the guard caught a claim only after she had already said part of the reply.
+
+    A late hit: she corrects herself, in her own words.
     """
     return (
         f'You already said this out loud: "{said}" - but at that point you '

@@ -1,5 +1,6 @@
-"""The frontend API — what a dashboard, voice pipeline, or Android client
-actually talks to. None of them touch brain internals directly.
+"""The frontend API — what a dashboard, voice pipeline, or Android client actually talks to.
+
+None of them touch brain internals directly.
 
 v1, deliberately simple: one request in, one reply out, no session/
 conversation-history handling yet (that's SQLite persistence, a separate
@@ -63,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Start the background watchers and loops, and cancel them on shutdown."""
     config = load_config()
     # WP-62 M1: say whether the vault path delivered (never the value itself)
     if config.vault_probe:
@@ -175,7 +177,9 @@ def _is_untimed(path: str) -> bool:
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """WP-55: with FELT_API_TOKEN set, every other route needs
+    """WP-55: the bearer-token check on every route but the exempt ones.
+
+    With FELT_API_TOKEN set, every other route needs
     `Authorization: Bearer <token>` (constant-time compare) or gets 401.
     """
     config = load_config()
@@ -243,10 +247,10 @@ async def auth_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def latency_middleware(request: Request, call_next):
-    """Times every /v1/* request end-to-end and stamps a standard
-    Server-Timing header on the response, built from whatever brain.py/
-    api.py stages recorded via metrics.timed() during the request (WP-04).
-    Non-/v1/ paths (static assets, /openapi.json) aren't worth the
+    """Times every /v1/* request end-to-end and stamps a standard Server-Timing header on the response.
+
+    Built from whatever brain.py/api.py stages recorded via metrics.timed()
+    during the request (WP-04). Non-/v1/ paths (static assets, /openapi.json) aren't worth the
     request_id/SQLite overhead - and neither are the polling/status reads
     (_UNTIMED_PATHS): felt-tray polls /v1/music/now every 15 s, and those
     near-instant rows swamped the `total` stage's percentiles, hiding the
@@ -271,8 +275,9 @@ async def latency_middleware(request: Request, call_next):
 
 @app.exception_handler(local_llm.AmbientSkippedError)
 async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkippedError):  # ruff: ignore[unused-async]  # async by contract
-    """An ambient line that gave way (llm_gate) isn't an outage: the react
-    endpoints' "no reaction" answer - empty body, the reason in a header.
+    """An ambient line that gave way (llm_gate) isn't an outage.
+
+    The react endpoints' "no reaction" answer - empty body, the reason in a header.
     """
     logger.info("%s: %s", request.url.path, exc)
     return Response(content=b"", media_type="audio/wav", headers={"X-Reaction-Skipped": "llm-gate"})
@@ -280,8 +285,10 @@ async def ambient_skipped_handler(request: Request, exc: local_llm.AmbientSkippe
 
 @app.exception_handler(local_llm.LocalLLMUnavailableError)
 async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnavailableError):  # ruff: ignore[unused-async]  # async by contract
-    """felt-llm is the only model backend (WP-36 D''): when it's down every
-    model-backed endpoint answers 503 and the client just skips the turn.
+    """felt-llm is the only model backend (WP-36 D'').
+
+    When it's down every model-backed endpoint answers 503 and the client
+    just skips the turn.
     """
     logger.warning("%s: felt-llm offline (%s)", request.url.path, exc)
     return JSONResponse(status_code=503, content={"detail": "felt-llm offline"})
@@ -289,10 +296,12 @@ async def felt_llm_offline_handler(request: Request, exc: local_llm.LocalLLMUnav
 
 @app.exception_handler(shopping.ShoppingUnavailableError)
 async def shopping_unavailable_handler(_request: Request, _exc: Exception) -> JSONResponse:  # ruff: ignore[unused-async]  # async by contract
+    """Answer 503 when Home Assistant didn't answer a shopping call."""
     return JSONResponse(status_code=503, content={"detail": "Home Assistant didn't answer"})
 
 
 def run() -> None:
+    """Configure logging and serve the felt-core API with uvicorn."""
     # No logging config existed anywhere in this codebase - felt_core's own
     # logger.info() calls (e.g. brain.py's chat routing)
     # were silently dropped below the default WARNING threshold. Only

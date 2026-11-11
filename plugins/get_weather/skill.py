@@ -129,8 +129,9 @@ def _describe_day(daily: dict, index: int) -> str:
 
 
 def _location_today(data: dict) -> date | None:
-    """Today's date at the forecast location, from the response's own
-    utc_offset_seconds (timezone=auto) - None if the response doesn't say.
+    """Today's date at the forecast location, from the response's own utc_offset_seconds (timezone=auto).
+
+    - None if the response doesn't say.
     """
     offset = data.get("utc_offset_seconds")
     if offset is None:
@@ -171,6 +172,7 @@ async def _fetch(lat: float, lon: float, unit: str, max_age_s: float = _CURRENT_
 
 
 async def handle(params, ctx):
+    """Give the current weather or the forecast for the day Mario asked about."""
     config = ctx.config
     if config.home_latitude is None or config.home_longitude is None:
         return SkillResult(text="Weather isn't configured (no home location set).")

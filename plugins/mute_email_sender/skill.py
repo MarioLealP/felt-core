@@ -1,6 +1,7 @@
-"""WP-43: "I don't care about X emails" - X goes on the noise list and she
-never mentions its mail again (emails.py; a mailing list's whole domain, a
-person's one address).
+"""WP-43: "I don't care about X emails" - X goes on the noise list.
+
+She never mentions its mail again (emails.py; a mailing list's whole
+domain, a person's one address).
 """
 
 from felt_core.core import emails
@@ -23,6 +24,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Mute emails from the given sender so she never mentions them again."""
     who = params.get("sender") or ""
     pattern = emails.mute(ctx.config.db_path, who)
     if pattern is None:

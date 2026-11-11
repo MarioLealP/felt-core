@@ -1,5 +1,6 @@
-"""End-to-end chat check: real messages through chat() with the real felt-llm,
-everything else faked and recorded - what does she send to Spotify (or
+"""End-to-end chat check: real messages through chat() with the real felt-llm, everything else faked and recorded.
+
+What does she send to Spotify (or
 anywhere else) for each thing Mario says?
 
 Runs inside the felt-core container (felt-llm is only reachable there), on a
@@ -39,7 +40,9 @@ from felt_core.core import appointment_hold, features
 
 
 def _llm_hosts() -> set[str]:
-    """The models are real; everything else is faked. Their hosts come from her settings, so
+    """The models are real; everything else is faked.
+
+    Their hosts come from her settings, so
     a model moved to a fixed address (felt-vision on k3s: FELT_VISION_URL=http://10.43.0.71)
     stays real.
     """
@@ -53,6 +56,8 @@ FAKE_URI = "spotify:track:{:022d}"
 
 
 class Case(BaseModel):
+    """One e2e case: what Mario says and what must (or mustn't) happen."""
+
     say: str
     # the Spotify writes expected, e.g. "PUT /me/player/pause"; None = any
     writes: list[str] | None
@@ -366,6 +371,7 @@ class Recorder:
     """Fakes every non-LLM host; records each call."""
 
     def __init__(self) -> None:
+        """Start an empty call log and the fake Spotify/HA state."""
         self.calls: list[str] = []
         self.queue: list[str] = []
         self.playing = True
@@ -397,7 +403,9 @@ class Recorder:
         return track
 
     def _ha(self, request: httpx2.Request, path: str) -> httpx2.Response:
-        """Home Assistant: the phone (companion app) part - recorded as
+        """Home Assistant: the phone (companion app) part.
+
+        Recorded as
         'POST /phone/SET_TIMER' etc., never reaching the real phone.
         """
         calendar = self._calendar(request, path)
@@ -466,7 +474,9 @@ class Recorder:
         return httpx2.Response(503)
 
     def _calendar(self, request: httpx2.Request, path: str) -> httpx2.Response | None:
-        """HA's calendars: Mario's primary and the reminders one, holding only
+        """HA's calendars: Mario's primary and the reminders one.
+
+        Holding only
         what she created this case.
         """
         if path == "/api/calendars":
@@ -482,8 +492,9 @@ class Recorder:
         return None
 
     async def ws_call(self, config, message: dict) -> dict:
-        """ha_calendar's websocket: a created event is recorded as 'POST
-        /calendar/event' (reminder when in the reminders calendar, + ' weekly'
+        """ha_calendar's websocket: a created event is recorded as 'POST /calendar/event'.
+
+        (reminder when in the reminders calendar, + ' weekly'
         etc. when it repeats, + ' @place' with a place), a deleted one as
         'POST /calendar/delete', never reaching HA.
         """
@@ -510,6 +521,7 @@ class Recorder:
         return {"success": True}
 
     def respond(self, request: httpx2.Request) -> httpx2.Response:
+        """Record the call and answer it with a fake response."""
         host = request.url.host
         path = request.url.path
         query = parse_qs(request.url.query.decode())
@@ -600,7 +612,8 @@ def _verdict(case: Case, writes: list[str], route: list[str]) -> bool:
 
 
 async def _streamed(message: str, config, session_id: str, timing: dict) -> ChatResult:
-    """chat() through chat_streamed(): the chunks must add up to the reply
+    """chat() through chat_streamed(): the chunks must add up to the reply.
+
     (else it's a CRASH line); `timing` gets the seconds to the first chunk
     and the chunk count.
     """
@@ -624,6 +637,7 @@ async def _streamed(message: str, config, session_id: str, timing: dict) -> Chat
 
 
 async def main() -> int:
+    """Run the selected cases and return 1 if any of them fails."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only")

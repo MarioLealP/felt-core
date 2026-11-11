@@ -47,8 +47,9 @@ logger = logging.getLogger(__name__)
 
 
 class EventReaction(BaseModel):
-    """`line` empty = no reaction; `skipped` then says why (cooldown,
-    unknown_event, ...).
+    """`line` empty = no reaction.
+
+    `skipped` then says why (cooldown, unknown_event, ...).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -59,8 +60,9 @@ class EventReaction(BaseModel):
 
 
 def cap_words(line: str, max_words: int) -> str:
-    """Pure: keep a line within max_words - its first sentence if that
-    fits, otherwise the first max_words words.
+    """Pure: keep a line within max_words.
+
+    Its first sentence if that fits, otherwise the first max_words words.
     """
     words = line.split()
     if len(words) <= max_words:
@@ -81,9 +83,11 @@ def same_line(a: str | None, b: str | None) -> bool:
 
 
 async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
-    """Best-effort quotable lyric for a new track: the current line if one
-    is active, else the chorus line. Only when Spotify is actually playing
-    that same title (so the id/duration LRCLIB needs are real).
+    """Best-effort quotable lyric for a new track.
+
+    The current line if one is active, else the chorus line. Only when
+    Spotify is actually playing that same title (so the id/duration LRCLIB
+    needs are real).
     """
     if not config.spotify_refresh_token:
         return None
@@ -120,8 +124,9 @@ async def _lyric_for(details: dict, config: FeltConfig) -> str | None:
 
 
 async def _poe_item_details(details: dict, config: FeltConfig) -> dict:
-    """The forwarded item text -> the whitelisted fields build_prompt reads,
-    priced (uniques and currency) with poe_price_check.
+    """The forwarded item text -> the whitelisted fields build_prompt reads.
+
+    Priced (uniques and currency) with poe_price_check.
     """
     from felt_core.brain import poe_reactions
 
@@ -151,8 +156,9 @@ def _emotion_note(emotions: frozenset[str]) -> str:
 
 
 def _line_and_emotion(text: str, emotions: frozenset[str]) -> tuple[str, str | None]:
-    """Her "[feeling] line" reply; without a known tag it's all line, with no
-    emotion of her own.
+    """Her "[feeling] line" reply.
+
+    Without a known tag it's all line, with no emotion of her own.
     """
     tag = _EMOTION_TAG.match(text)
     emotion = tag.group(1).lower() if tag else None
@@ -189,6 +195,7 @@ async def react_to_event(
     session_id: str = "dashboard",
     tone: str | None = None,
 ) -> EventReaction:
+    """One desktop event: her spoken line about it, or why there's no reaction."""
     details = details if isinstance(details, dict) else {}
     table = policies(config)
     key = dedupe_key(event, details)

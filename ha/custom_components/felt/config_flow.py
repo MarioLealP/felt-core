@@ -34,9 +34,12 @@ SCHEMA = vol.Schema(
 
 
 class FeltConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Config flow that sets up the felt-core connection and the ha-felt login."""
+
     VERSION = 1
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Show the login form, or check the credentials and create the entry."""
         errors: dict[str, str] = {}
         if user_input is not None:
             await self.async_set_unique_id(DOMAIN)

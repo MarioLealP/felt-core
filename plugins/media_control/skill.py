@@ -1,4 +1,6 @@
-"""Spotify transport + "save this song" (WP-48): pause, resume, skip, go
+"""Spotify transport + "save this song" (WP-48).
+
+pause, resume, skip, go
 back, volume, and saving what's playing to Mario's library. Through the
 Spotify Web API since 2026-10-17 - the old MPRIS path went through
 felt-desktop-agent, retired in WP-62 M2b, so this had been dead since.
@@ -85,6 +87,7 @@ def _percent(level) -> int | None:
 
 
 async def handle(params, ctx):
+    """Apply the requested transport action to the music already playing on Spotify."""
     config = ctx.config
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected.")

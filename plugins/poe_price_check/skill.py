@@ -77,8 +77,9 @@ async def _current_league(client: httpx2.AsyncClient, cache: dict | None) -> str
 
 
 def _format_value(core: dict, primary_value: float) -> str:
-    """More decimal places for cheap items — 0.00 reads as broken, not
-    cheap. Deliberately NOT converting to a secondary currency: the API's
+    """More decimal places for cheap items — 0.00 reads as broken, not cheap.
+
+    Deliberately NOT converting to a secondary currency: the API's
     'rates' field semantics aren't documented/verified, and an unverified
     conversion risks quietly showing a wrong number, which is worse than
     an honest number in an unfamiliar-feeling unit.
@@ -127,9 +128,11 @@ async def _search_uniques(client: httpx2.AsyncClient, league: str, item_name: st
 
 
 def _resolve_item(items_by_name: dict, query: str) -> dict | None:
-    """Exact match preferred; otherwise the shortest (most specific)
-    entry whose name contains, or is contained in, the query — same
-    substring-match convention as _search_uniques above.
+    """Exact match preferred.
+
+    Otherwise the shortest (most specific) entry whose name contains, or
+    is contained in, the query — same substring-match convention as
+    _search_uniques above.
     """
     q = query.strip().lower()
     if q in items_by_name:
@@ -169,10 +172,12 @@ async def _fetch_trade_listings(client: httpx2.AsyncClient, ids: list[str], sear
 
 
 async def _currency_rates_to_divine(client: httpx2.AsyncClient, league: str) -> dict[str, float]:
-    """{trade listing currency code: divine-equivalent value} — poe.ninja's
-    currency overview uses the exact same short codes ("divine", "chaos",
-    "exalted", ...) as the trade API's listing `currency` field, confirmed
-    live 2026-09-14, so no separate name-mapping table is needed.
+    """{trade listing currency code: divine-equivalent value} - divine value per trade listing currency code.
+
+    poe.ninja's currency overview uses the exact same short codes
+    ("divine", "chaos", "exalted", ...) as the trade API's listing
+    `currency` field, confirmed live 2026-09-14, so no separate
+    name-mapping table is needed.
     """
     response = await client.get(
         f"{_NINJA_BASE}/exchange/current/overview", params={"league": league, "type": "Currency"}
@@ -186,8 +191,9 @@ async def _currency_rates_to_divine(client: httpx2.AsyncClient, league: str) -> 
 
 
 def _convert_to_divine(listings: list[dict], rates: dict[str, float]) -> list[float]:
-    """Pure: each listing's price converted to divine, skipping any whose
-    currency has no known rate rather than guessing.
+    """Pure: each listing's price converted to divine.
+
+    Skipping any whose currency has no known rate rather than guessing.
     """
     values = []
     for entry in listings:
@@ -244,6 +250,7 @@ async def _search_real_listings(
 
 
 async def handle(params, ctx):
+    """Look up the current price of one PoE2 item or currency."""
     config = ctx.config
     item_name = get_single_param(params, "item_name", "item", "name", "query")
     item_name = (item_name or ctx.original_message).strip()

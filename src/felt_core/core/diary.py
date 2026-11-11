@@ -1,11 +1,12 @@
-"""WP-26: the diary (day-to-day continuity), combined with personality
-plan P4 self-memory (Mario, 2026-09-27: "do it along with the personality
-change since she will have memories on that side too"). One nightly
-felt-llm call reads one set of material about a day and writes both halves
-in a single JSON response: the diary
-(their shared record - `entry`/`callbacks`/`mood_word`) and self-memory
-(what SHE takes away - `self_updates`, felt_core.core.self_memory), plus one
-morning greeting line to enqueue via the WP-25 proactive channel.
+"""WP-26: the diary (day-to-day continuity), combined with personality plan P4 self-memory.
+
+Mario, 2026-09-27: "do it along with the personality change since she
+will have memories on that side too". One nightly felt-llm call reads one
+set of material about a day and writes both halves in a single JSON
+response: the diary (their shared record - `entry`/`callbacks`/`mood_word`)
+and self-memory (what SHE takes away - `self_updates`,
+felt_core.core.self_memory), plus one morning greeting line to enqueue via
+the WP-25 proactive channel.
 
 Trigger: the first `day_start`/`afk_end` event after 05:00 local
 (Europe/Lisbon) for a date with no diary row yet writes YESTERDAY's entry
@@ -99,8 +100,9 @@ def _parse_writer_json(raw: str) -> dict | None:
 
 
 async def _generate_json(config: FeltConfig, system: str, user_prompt: str, *, max_tokens: int) -> str:
-    """One felt-llm call for the nightly writers. Raises LocalLLMUnavailableError
-    when it's down; callers log and skip.
+    """One felt-llm call for the nightly writers.
+
+    Raises LocalLLMUnavailableError when it's down; callers log and skip.
     """
     reply = await local_llm.chat(
         [{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
@@ -111,12 +113,13 @@ async def _generate_json(config: FeltConfig, system: str, user_prompt: str, *, m
 
 
 async def write_diary_for_date(config: FeltConfig, date_str: str) -> bool:
-    """The nightly writer for one date - ONE felt-llm call producing the
-    diary entry, its callbacks/mood, up to 3 new self-memories, and the
-    morning greeting all at once. Returns whether an entry was actually
-    written - False if there was no material (Mario was AFK/away the whole
-    day), felt-llm was unavailable, the response didn't parse, or the diary
-    is switched off.
+    """The nightly writer for one date - ONE felt-llm call.
+
+    Producing the diary entry, its callbacks/mood, up to 3 new
+    self-memories, and the morning greeting all at once. Returns whether
+    an entry was actually written - False if there was no material (Mario
+    was AFK/away the whole day), felt-llm was unavailable, the response
+    didn't parse, or the diary is switched off.
     """
     if not features.enabled(config.db_path, "memory.diary"):
         return False
@@ -196,9 +199,9 @@ _WEEKLY_INSTRUCTIONS = (
 
 
 async def _compress_week(config: FeltConfig, date_str: str) -> None:
-    """The week ending on `date_str` (inclusive, 7 days back) condensed
-    into one diary_weeks row - kept simple per WP-26's spec ("keep it
-    simple; monthly can be a TODO note").
+    """The week ending on `date_str` (inclusive, 7 days back) condensed into one diary_weeks row.
+
+    Kept simple per WP-26's spec ("keep it simple; monthly can be a TODO note").
     """
     end = datetime.strptime(date_str, "%Y-%m-%d").date()
     week_dates = [(end - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
@@ -237,9 +240,10 @@ async def _maybe_compress_week(config: FeltConfig, date_str: str) -> None:
 
 
 def _target_date_for_trigger(kind: str, at_utc_str: str) -> str | None:
-    """Pure: given a logged event's kind and its normalized UTC `at`,
-    which date's diary this should try to write - None if this event
-    isn't a trigger at all (wrong kind, or before 05:00 local).
+    """Pure: which date's diary this should try to write.
+
+    Given a logged event's kind and its normalized UTC `at` - None if
+    this event isn't a trigger at all (wrong kind, or before 05:00 local).
     """
     if kind not in _TRIGGER_KINDS:
         return None
@@ -251,8 +255,9 @@ def _target_date_for_trigger(kind: str, at_utc_str: str) -> str | None:
 
 
 async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
-    """Called from api.py's POST /v1/events for every logged event -
-    checks the WP-26 trigger (the first day_start/afk_end after 05:00
+    """Called from api.py's POST /v1/events for every logged event.
+
+    Checks the WP-26 trigger (the first day_start/afk_end after 05:00
     local for a date with no diary row yet) and writes that date's entry
     if so. A no-op for every other event kind or time of day. Errors are
     logged, never raised - a diary-writer failure must never break the
@@ -281,8 +286,9 @@ async def on_event(config: FeltConfig, kind: str, at_utc_str: str) -> None:
 
 
 async def _brief(config: FeltConfig) -> None:
-    """The morning brief after the diary (WP-45, brief.py) - its greeting
-    is the brief's opening. Once a day; errors logged, never raised.
+    """The morning brief after the diary (WP-45, brief.py) - its greeting is the brief's opening.
+
+    Once a day; errors logged, never raised.
     """
     from felt_core.core import brief
 
@@ -309,9 +315,11 @@ _tasks: set = set()
 
 
 def he_is_here(config: FeltConfig, now: datetime | None = None) -> None:
-    """Fire-and-forget day-start trigger: yesterday's diary entry if it's
-    missing (not retried within RETRY_S), then the morning brief if it's
-    still due today. A no-op before 05:00 local.
+    """Fire-and-forget day-start trigger.
+
+    Yesterday's diary entry if it's missing (not retried within RETRY_S),
+    then the morning brief if it's still due today. A no-op before 05:00
+    local.
     """
     import asyncio
 

@@ -1,8 +1,9 @@
-"""Answers "what's this song?" by reading Spotify's currently-playing
-endpoint directly (Mario, 2026-09-22: "she can have access to the lyrics
-and song name directly from Spotify, I don't care if she knows the name of
-the song"). Read-only - no device/transport control, unlike play_music
-(starts something new) and media_control (pause/skip/volume on whatever's
+"""Answers "what's this song?" by reading Spotify's currently-playing endpoint directly.
+
+Mario, 2026-09-22: "she can have access to the lyrics and song name
+directly from Spotify, I don't care if she knows the name of the song".
+Read-only - no device/transport control, unlike play_music (starts
+something new) and media_control (pause/skip/volume on whatever's
 already loaded).
 """
 
@@ -20,6 +21,7 @@ parameters_schema = {"type": "object", "properties": {}}
 
 
 async def handle(params, ctx):
+    """Say which song is playing now, with a lyric line when one exists."""
     config = ctx.config
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected.")

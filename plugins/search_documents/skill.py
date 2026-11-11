@@ -1,5 +1,6 @@
-"""Personal document search ("find that PDF about X") — RAG over Mario's
-locally-synced Google Drive, via the sibling drive-rag service.
+"""Personal document search ("find that PDF about X") — RAG over Mario's locally-synced Google Drive.
+
+Via the sibling drive-rag service.
 
 Mario, 2026-09-14: "For the RAG do my google drive only, I don't keep
 important documents outside of it... it's a 1 solution fits all" (his
@@ -28,6 +29,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Search Mario's documents and answer the question from the matching ones."""
     config = ctx.config
     if not config.drive_rag_url:
         return SkillResult(text="Document search isn't configured yet.")

@@ -13,6 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FeltConfig(BaseSettings):
+    """Every environment-specific setting, read from env vars, .env and the secrets dir."""
+
     model_config = SettingsConfigDict(
         env_prefix="FELT_",
         env_file=".env",
@@ -169,6 +171,7 @@ class FeltConfig(BaseSettings):
     ha_entities: str = ""
 
     def ha_entities_list(self) -> list[str]:
+        """The comma-separated ha_entities allowlist as a list of entity ids."""
         return [e.strip() for e in self.ha_entities.split(",") if e.strip()]
 
     # The shopping list (shopping.py): HA's todo entity, the one list everywhere.
@@ -272,6 +275,7 @@ class FeltConfig(BaseSettings):
 
 
 def load_config() -> FeltConfig:
+    """Build FeltConfig from the environment, .env and the secrets dir."""
     return FeltConfig()
 
 

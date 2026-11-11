@@ -142,9 +142,10 @@ _KINDS = {"unique": "unique", "currency": "currency"}
 
 
 def parse_item_text(text: str) -> dict | None:
-    """PoE2's copied item text -> {"name", "base", "rarity", "kind", "item_class"},
-    or None if it isn't one. The header is: "Item Class: X", "Rarity: Y",
-    then the name, then (uniques, rares) the base type.
+    """PoE2's copied item text -> {"name", "base", "rarity", "kind", "item_class"}, or None if it isn't one.
+
+    The header is: "Item Class: X", "Rarity: Y", then the name, then
+    (uniques, rares) the base type.
     """
     lines = [ln.strip() for ln in text.replace("\r", "").split("\n")]
     header = []

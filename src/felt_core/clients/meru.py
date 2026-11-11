@@ -64,8 +64,9 @@ _locks: dict[tuple[str, str], asyncio.Lock] = {}
 
 
 async def access_token(config: Any, audience: str) -> str | None:
-    """A valid Authentik token for ``audience`` (= the callee's client id), or None when there's
-    no Authentik login (compose). Cached until a minute before it expires; one fetch at a time per
+    """A valid Authentik token for ``audience`` (= the callee's client id), or None with no Authentik login (compose).
+
+    Cached until a minute before it expires; one fetch at a time per
     audience.
     """
     token_file = getattr(config, "authentik_token_file", None)

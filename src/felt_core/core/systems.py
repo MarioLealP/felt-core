@@ -40,6 +40,7 @@ STATUSES = ("needs-you", "looking", "watching", "fine")
 
 
 def area_of(incident_type: str, title: str, message: str) -> str:
+    """Work out which area this incident belongs to."""
     if incident_type in _SECURITY:
         return "security"
     if incident_type in _BACKUPS:
@@ -93,9 +94,7 @@ def _row(r: sqlite3.Row | dict) -> dict:
 
 
 def _her_lines(conn, ids: list[int]) -> dict[int, int]:
-    """Incident id -> the id of her newest line about it (what "ask Felt"
-    answers in Talk).
-    """
+    """Incident id -> the id of her newest line about it (what "ask Felt" answers in Talk)."""
     if not ids:
         return {}
     try:
@@ -114,8 +113,9 @@ def _her_lines(conn, ids: list[int]) -> dict[int, int]:
 
 
 def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
-    """The areas (from every live incident) and one page of history,
-    newest first. Dropped noise never shows.
+    """The areas (from every live incident) and one page of history, newest first.
+
+    Dropped noise never shows.
     """
     conn = _connect(db_path)
     try:
@@ -153,8 +153,10 @@ def page(db_path: str, before: int | None = None, limit: int = 30) -> dict:
 
 
 def details(db_path: str, incident_id: int, links: dict[str, str]) -> dict | None:
-    """Everything about one incident: her lines, Claude's full report with
-    his trail, the raw alerts, the session to join, links out (name -> URL, from the settings).
+    """Everything about one incident.
+
+    her lines, Claude's full report with his trail, the raw alerts, the session to join,
+    links out (name -> URL, from the settings).
     """
     incident = get(db_path, incident_id)
     if incident is None or incident["state"] == "dropped":
@@ -175,8 +177,9 @@ def details(db_path: str, incident_id: int, links: dict[str, str]) -> dict | Non
 
 
 def context_for(db_path: str, incident_id: int) -> str:
-    """What she knows about an incident when Mario asks her about it: the
-    alert, its state, and Claude's conclusion if he has one.
+    """What she knows about an incident when Mario asks her about it.
+
+    the alert, its state, and Claude's conclusion if he has one.
     """
     incident = get(db_path, incident_id)
     if incident is None:
@@ -201,9 +204,7 @@ def context_for(db_path: str, incident_id: int) -> str:
 
 
 def mark_handled(db_path: str, incident_id: int) -> bool:
-    """Mario says it's dealt with: the incident closes, and nothing more
-    is said about it.
-    """
+    """Mario says it's dealt with: the incident closes, and nothing more is said about it."""
     conn = _connect(db_path)
     try:
         _ensure(conn)

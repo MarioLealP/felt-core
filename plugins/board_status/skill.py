@@ -122,6 +122,7 @@ def build_board(issues: list[dict]) -> dict[str, list[str]]:
 
 
 def summarise(board: dict[str, list[str]], focus: str) -> str:
+    """Word the board for Felt: overview counts and top titles, or one column's list."""
     if focus == "overview":
         counts = ", ".join(f"{col} {len(items)}" for col, items in board.items() if items)
         lines = [f"Board: {counts}."]
@@ -142,6 +143,7 @@ def summarise(board: dict[str, list[str]], focus: str) -> str:
 
 
 async def handle(params, ctx):
+    """Answer with the board summary for the focus Mario asked about."""
     config = ctx.config
     if not config.board_token:
         return SkillResult(text="The board isn't connected (no board token configured).")

@@ -1,8 +1,10 @@
-"""Felt as Home Assistant's conversation agent (felt-ha-hub step 1, bead
-cm-j7c): HA's "Felt" integration sends what Mario said to Assist - typed or
-spoken, from the HA app on any device - and gets her reply back. Auth is in
-ha_auth (checked by the middleware before anything else). Her own
-conversation (session `ha`), same brain, skills and memory as everywhere.
+"""Felt as Home Assistant's conversation agent.
+
+felt-ha-hub step 1, bead cm-j7c: HA's "Felt" integration sends what Mario
+said to Assist - typed or spoken, from the HA app on any device - and gets
+her reply back. Auth is in ha_auth (checked by the middleware before
+anything else). Her own conversation (session `ha`), same brain, skills and
+memory as everywhere.
 
 Step 2 (2026-10-18): her own switches as HA switches - quiet, hide (the same
 controls the app and the tray use, controls.py) and DJ mode - so the HA app
@@ -37,16 +39,21 @@ router = APIRouter(prefix="/v1/ha")
 
 
 class HaChat(BaseModel):
+    """The chat request: what Mario said, with an optional language."""
+
     text: str = Field(min_length=1, max_length=2000)
     language: str | None = None
 
 
 class HaReply(BaseModel):
+    """Her reply to what Mario said."""
+
     reply: str
 
 
 @router.post("/chat", response_model=HaReply)
 async def ha_chat(req: HaChat) -> HaReply:
+    """Her reply for what Mario said, same brain as everywhere."""
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty message")
@@ -58,6 +65,8 @@ async def ha_chat(req: HaChat) -> HaReply:
 
 
 class HaControls(BaseModel):
+    """The quiet, hide and dj switches, plus desktop presence and mood."""
+
     quiet: bool
     hide: bool
     dj: bool
@@ -67,6 +76,8 @@ class HaControls(BaseModel):
 
 
 class HaSetControl(BaseModel):
+    """Which switch to flip: quiet, hide or dj, on or off."""
+
     name: Literal["quiet", "hide", "dj"]
     on: bool
 
@@ -86,11 +97,13 @@ async def _controls(config: FeltConfig, message: str | None = None) -> HaControl
 
 @router.get("/controls", response_model=HaControls)
 async def ha_controls() -> HaControls:
+    """The current switch states and desktop presence."""
     return await _controls(load_config())
 
 
 @router.post("/controls", response_model=HaControls)
 async def ha_set_control(req: HaSetControl) -> HaControls:
+    """Flip quiet, hide or dj and return the new controls."""
     config = load_config()
     message = None
     if req.name == "dj":
@@ -104,11 +117,15 @@ async def ha_set_control(req: HaSetControl) -> HaControls:
 
 
 class HaArea(BaseModel):
+    """One area's status and open incident count."""
+
     status: str
     count: int
 
 
 class HaIncident(BaseModel):
+    """One triaged incident in the Systems summary."""
+
     id: int
     area: str
     status: str
@@ -118,6 +135,8 @@ class HaIncident(BaseModel):
 
 
 class HaSystems(BaseModel):
+    """The Systems summary: areas, needs-you total and latest incidents."""
+
     areas: dict[str, HaArea]
     needs_you: int
     latest: list[HaIncident]
@@ -125,6 +144,7 @@ class HaSystems(BaseModel):
 
 @router.get("/systems", response_model=HaSystems)
 async def ha_systems() -> HaSystems:
+    """The Systems summary for the HA dashboard."""
     page = await asyncio.to_thread(systems.page, load_config().db_path, None, 5)
     areas = {a["name"]: HaArea(status=a["status"], count=a["count"]) for a in page["areas"]}
     return HaSystems(
@@ -145,6 +165,8 @@ async def ha_systems() -> HaSystems:
 
 
 class HaEmail(BaseModel):
+    """A mail forwarded from HA's IMAP events."""
+
     # Message-ID, else the IMAP uid: the same mail forwarded twice is one mail
     key: str = Field(min_length=1, max_length=500)
     sender: str = Field(max_length=500)
@@ -155,11 +177,14 @@ class HaEmail(BaseModel):
 
 
 class HaEmailStored(BaseModel):
+    """Whether the mail was new (not seen before)."""
+
     new: bool
 
 
 @router.post("/email", response_model=HaEmailStored)
 async def ha_email(req: HaEmail) -> HaEmailStored:
+    """Store a new mail for her to maybe mention."""
     mail_id = await asyncio.to_thread(
         emails.add, load_config().db_path, req.key, req.sender, req.subject, req.text, req.bulk
     )
@@ -167,6 +192,8 @@ async def ha_email(req: HaEmail) -> HaEmailStored:
 
 
 class HaTell(BaseModel):
+    """An automation's text, its notification title and tag."""
+
     text: str = Field(min_length=1, max_length=1000)
     title: str = Field(default="Felt", min_length=1, max_length=100)
     # the phone notification's tag: the same tag replaces the last one
@@ -174,12 +201,15 @@ class HaTell(BaseModel):
 
 
 class HaTold(BaseModel):
+    """Her line, or None when the ha.tell feature is off."""
+
     # her line, or None when the ha.tell feature is off
     said: str | None
 
 
 @router.post("/tell", response_model=HaTold)
 async def ha_tell_route(req: HaTell) -> HaTold:
+    """Word the automation's text and say it at the desk + on the phone."""
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty message")

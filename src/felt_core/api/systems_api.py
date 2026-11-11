@@ -23,11 +23,13 @@ async def systems_page(
     before: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ) -> dict:
+    """Return one page of incidents for the Systems page."""
     return await asyncio.to_thread(systems.page, load_config().db_path, before, limit)
 
 
 @router.get("/incidents/{incident_id}")
 async def incident(incident_id: int, _user: Annotated[str, Depends(sso_user)]) -> dict:
+    """Return one incident's details with its source links, or 404 if unknown."""
     config = load_config()
     urls = {"zabbix": config.zabbix_url, "wazuh": config.wazuh_url}
     links = {name: url for name, url in urls.items() if url}  # an unset one gets no link
@@ -39,6 +41,7 @@ async def incident(incident_id: int, _user: Annotated[str, Depends(sso_user)]) -
 
 @router.post("/incidents/{incident_id}/handled")
 async def handled(incident_id: int, _user: Annotated[str, Depends(sso_user)]) -> dict:
+    """Mark one incident handled, or fail with 409 if it isn't still open."""
     if not await asyncio.to_thread(systems.mark_handled, load_config().db_path, incident_id):
         raise HTTPException(status_code=409, detail="not open")
     return {"ok": True}

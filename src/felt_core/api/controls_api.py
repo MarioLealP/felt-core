@@ -1,5 +1,6 @@
-"""WP-42.5: the controls' routes - the app's (SSO) and the desktop tray's
-(bearer token). The switches themselves live in controls.py.
+"""WP-42.5: the controls' routes - the app's (SSO) and the desktop tray's (bearer token).
+
+The switches themselves live in controls.py.
 """
 
 import asyncio
@@ -20,6 +21,8 @@ router = APIRouter()
 
 
 class SetControl(BaseModel):
+    """A control change: hide or quiet, on or off, for some minutes."""
+
     name: Literal["hide", "quiet"]
     on: bool
     minutes: int | None = None
@@ -58,11 +61,13 @@ async def _page(config: FeltConfig) -> dict:
 
 @router.get("/v1/app/controls")
 async def app_controls(_user: Annotated[str, Depends(sso_user)]) -> dict:
+    """The controls page data: the switches, the desktop state and the parts' health."""
     return await _page(load_config())
 
 
 @router.post("/v1/app/controls")
 async def app_set_control(req: SetControl, _user: Annotated[str, Depends(sso_user)]) -> dict:
+    """Set one control (hide or quiet), then return the controls page data."""
     if req.minutes is not None and req.minutes not in controls.TIMERS:
         raise HTTPException(status_code=422, detail=f"minutes must be one of {controls.TIMERS}")
     config = load_config()
@@ -71,11 +76,14 @@ async def app_set_control(req: SetControl, _user: Annotated[str, Depends(sso_use
 
 
 class Settings(BaseModel):
+    """The app settings body: the Claude-alerts switch."""
+
     claude_alerts: bool
 
 
 @router.get("/v1/app/settings")
 async def app_settings(_user: Annotated[str, Depends(sso_user)]) -> dict:
+    """Return the app settings: whether the server's Claude looks into alerts."""
     db = load_config().db_path
     return {"claude_alerts": await asyncio.to_thread(controls.claude_alerts, db)}
 
@@ -89,6 +97,8 @@ async def app_set_settings(req: Settings, _user: Annotated[str, Depends(sso_user
 
 
 class SetFeature(BaseModel):
+    """A feature switch change: which feature key, on or off."""
+
     key: str
     on: bool
 
@@ -105,6 +115,7 @@ async def app_features(_user: Annotated[str, Depends(sso_user)]) -> list[dict]:
 
 @router.post("/v1/app/features")
 async def app_set_feature(req: SetFeature, _user: Annotated[str, Depends(sso_user)]) -> list[dict]:
+    """Turn one feature or skill plugin on or off, then return the listing."""
     config = load_config()
     is_skill = req.key.startswith(features.SKILL_PREFIX) and (
         req.key.removeprefix(features.SKILL_PREFIX) in load_plugins(config.plugins_dir)

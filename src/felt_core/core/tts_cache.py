@@ -1,12 +1,10 @@
-"""A tiny in-memory LRU cache for rendered TTS audio, keyed by the exact
-(stripped) text that was spoken plus the emotion it was rendered with
-(WP-06, WP-54: the same words in a sleepy vs excited voice are different
-audio). In its own module, not api.py or
-brain.py, so both can reach it without a circular import between them:
-api.py checks it on every real TTS call, and brain.py's weather precompute
-loop (which lives there, not here, to avoid the reverse circularity) warms
-an entry ahead of time so the very next matching request is a cache hit
-with zero felt-voice calls.
+"""A tiny in-memory LRU cache for rendered TTS audio.
+
+Keyed by the exact (stripped) text that was spoken plus the emotion it was rendered with (WP-06, WP-54: the same words
+in a sleepy vs excited voice are different audio). In its own module, not api.py or brain.py, so both can reach it
+without a circular import between them: api.py checks it on every real TTS call, and brain.py's weather precompute loop
+(which lives there, not here, to avoid the reverse circularity) warms an entry ahead of time so the very next matching
+request is a cache hit with zero felt-voice calls.
 """
 
 import hashlib
@@ -23,6 +21,7 @@ def _key(text: str, emotion: str | None) -> str:
 
 
 def get(text: str, emotion: str | None = None) -> bytes | None:
+    """The cached wav for this text and emotion, or None."""
     key = _key(text, emotion)
     wav = _cache.get(key)
     if wav is not None:
@@ -31,6 +30,7 @@ def get(text: str, emotion: str | None = None) -> bytes | None:
 
 
 def put(text: str, wav_bytes: bytes, emotion: str | None = None) -> None:
+    """Store one rendered wav, evicting the oldest entry past the cap."""
     key = _key(text, emotion)
     _cache[key] = wav_bytes
     _cache.move_to_end(key)

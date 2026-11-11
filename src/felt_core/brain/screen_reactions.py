@@ -1,4 +1,5 @@
-"""Passive screen reactions - two entry points, kept separate on purpose
+"""Passive screen reactions - two entry points, kept separate on purpose.
+
 (WP-40's audit: they were flagged as "duplicative" because both used to
 inline their own copy of the exact same cooldown check, not because their
 model calls are the same thing):
@@ -62,11 +63,11 @@ RECENT_LINES_N = 8
 
 
 def recent_lines_block(lines: list[str]) -> str:
-    """Her own recent remarks, fed back so she stops echoing herself
-    (personality plan P3, B-1). It goes LAST, in the per-glance
-    instruction, not in `system`: models weight what they read last most
-    (the SillyTavern post-history lesson), and "don't repeat" loses to a
-    long persona block otherwise.
+    """Her own recent remarks, fed back so she stops echoing herself (personality plan P3, B-1).
+
+    It goes LAST, in the per-glance instruction, not in `system`: models
+    weight what they read last most (the SillyTavern post-history lesson),
+    and "don't repeat" loses to a long persona block otherwise.
     """
     if not lines:
         return ""
@@ -85,11 +86,12 @@ def _recent_lines(config: FeltConfig, session_id: str) -> list[str]:
 
 
 def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
-    """WP-40 merge: the one cooldown check both process_screen_context and
-    react_to_screen use - previously each inlined an identical copy of
-    this exact seconds_since_last_spoken_reaction + logging + early-return
-    block. True means "don't call a model, we're on cooldown" (already
-    logged when true).
+    """WP-40 merge: the one cooldown check both process_screen_context and react_to_screen use.
+
+    Previously each inlined an identical copy of this exact
+    seconds_since_last_spoken_reaction + logging + early-return block.
+    True means "don't call a model, we're on cooldown" (already logged
+    when true).
     """
     seconds_since = seconds_since_last_spoken_reaction(config.db_path, session_id)
     if seconds_since is not None and seconds_since < config.screen_reaction_cooldown_s:
@@ -105,9 +107,10 @@ def _on_cooldown(config: FeltConfig, session_id: str) -> bool:
 async def process_screen_context(
     description: str, config: FeltConfig, session_id: str = "default", tone: str | None = None
 ) -> ChatResult:
-    """Handles passive screen context from felt-vision - always produces a
-    spoken reaction (Mario's rule), rate-limited by a deterministic
-    cooldown rather than the model deciding to stay silent.
+    """Handles passive screen context from felt-vision - always produces a spoken reaction (Mario's rule).
+
+    Rate-limited by a deterministic cooldown rather than the model
+    deciding to stay silent.
 
     2026-09-22 fix: this used to have the model invent its own animation tag
     vocabulary (bracket tags like [nod], [look_bored], [lean_in]) for the
@@ -222,9 +225,10 @@ async def _react_to_screen_local(
     title: str = "",
     seen: str | None = None,
 ) -> dict | None:
-    """felt-llm with the JPEG as an image part and the schema-constrained
-    JSON reply. One retry on a parse failure; None after two unparseable
-    replies. LocalLLMUnavailableError propagates (the API answers 503).
+    """felt-llm with the JPEG as an image part and the schema-constrained JSON reply.
+
+    One retry on a parse failure; None after two unparseable replies.
+    LocalLLMUnavailableError propagates (the API answers 503).
 
     `seen` is a description felt-tray already got from the desktop's own
     felt-vision (cm-qplv) - then nobody here looks at an image.
@@ -280,11 +284,12 @@ async def react_to_screen(
     tone: str | None = None,
     seen: str | None = None,
 ) -> ChatResult:
-    """WP-07's per-window, image-based screen reaction path: ONE felt-llm
-    multimodal call (schema-constrained JSON, route "local"). Raises
-    LocalLLMUnavailableError when felt-llm is down (api.py maps it to a 503,
-    and felt-tray just skips the reaction). Two unparseable replies give
-    no reaction.
+    """WP-07's per-window, image-based screen reaction path: ONE felt-llm multimodal call.
+
+    (schema-constrained JSON, route "local"). Raises
+    LocalLLMUnavailableError when felt-llm is down (api.py maps it to a
+    503, and felt-tray just skips the reaction). Two unparseable replies
+    give no reaction.
 
     `trigger="manual"` (WP-10's future "look at this" key) bypasses the
     cooldown - every other trigger respects it, checked BEFORE any model

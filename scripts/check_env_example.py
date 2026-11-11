@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""WP-39: fail if config.py declares a settings field .env.example doesn't
-document (ENGINEERING-RULES.md rule 6).
+"""WP-39: fail if config.py declares a settings field .env.example doesn't document (ENGINEERING-RULES.md rule 6).
 
 felt-core's FeltConfig is a pydantic-settings BaseSettings with env_prefix
 "FELT_" — every class-level annotated attribute maps 1:1 to FELT_<UPPER>.
@@ -20,6 +19,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 
 def main() -> int:
+    """Check that .env.example documents every FeltConfig settings field."""
     src = CONFIG.read_text(encoding="utf-8")
     env = ENV_EXAMPLE.read_text(encoding="utf-8")
 

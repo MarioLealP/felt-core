@@ -83,6 +83,7 @@ def topic_lines(label: str, stories: list[dict], now: datetime) -> list[str]:
 
 
 async def handle(params, ctx):
+    """Fetch the news stories for one topic (or all) and return them for her model."""
     config = ctx.config
     if not (config.ha_url and config.ha_token):
         return SkillResult(text="The news isn't reachable - Home Assistant isn't connected.")

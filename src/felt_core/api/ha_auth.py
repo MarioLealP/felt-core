@@ -1,6 +1,8 @@
-"""Home Assistant as a caller (felt-ha-hub D3, 2026-10-18): HA's "Felt"
-conversation agent proves who it is with an Authentik access token - the
-client_credentials grant of the `ha-felt` OAuth provider, logged in as the
+"""Home Assistant as a caller (felt-ha-hub D3, 2026-10-18).
+
+HA's "Felt" conversation agent proves who it is with an Authentik access
+token - the client_credentials grant of the `ha-felt` OAuth provider,
+logged in as the
 `ha-felt` service account with its app password. felt-core checks the token
 itself (standard rule 2: an independently token-authenticated workload
 endpoint - proxy identity headers mean nothing here): signature against
@@ -47,6 +49,7 @@ _ALGORITHMS = ["RS256", "ES256"]
 
 
 def is_ha_route(method: str, path: str) -> bool:
+    """Check whether the method and path pair is one of the routes HA may call."""
     return (method, path) in HA_ROUTES
 
 

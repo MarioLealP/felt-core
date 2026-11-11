@@ -58,8 +58,9 @@ _LOOKUP_SKILLS = frozenset(
 
 
 def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
-    """WP-06 fast path: the precomputed "weather right now" line, if the
-    picked call is that question and a fresh one exists.
+    """WP-06 fast path: the precomputed "weather right now" line.
+
+    if the picked call is that question and a fresh one exists.
     """
     if call is None or call[0] != "get_weather":
         return None
@@ -71,6 +72,7 @@ def _weather_fast_line(call: tuple[str, dict] | None) -> dict | None:
 
 async def _run_skill_call(call: tuple[str, dict], registry: dict[str, LoadedSkill], config: FeltConfig, message: str):
     """Runs the picked skill; returns (SkillResult | None, tool_output).
+
     None (not the ValueError branch's job alone) so the animation/ui_action
     lookup has something safe to check regardless of which path was taken -
     a skill that raised never gets a reaction.
@@ -118,9 +120,10 @@ async def _reply_turn(
     tools: list[dict] | None = None,
     guard: Callable[[str], bool] | None = None,
 ) -> local_llm.LocalReply:
-    """A felt-llm call that may be her answer: streamed through the
-    speaker when chat_streamed() is running the turn (WP-65), else the
-    plain call. `guard` spots a fake claim in the streamed opening.
+    """A felt-llm call that may be her answer.
+
+    streamed through the speaker when chat_streamed() is running the turn (WP-65), else
+    the plain call. `guard` spots a fake claim in the streamed opening.
     """
     async with metrics.timed("reply", route="local", model=config.local_llm_model):
         if speaker is None:
@@ -129,10 +132,9 @@ async def _reply_turn(
 
 
 async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: FeltConfig) -> local_llm.LocalReply | None:
-    """FELT-108: the same call again with a tool call required, after a
-    reply claimed a lookup or action it never did. None when that fails or
-    still calls nothing - the caller keeps the plain reply (never worse than
-    before).
+    """FELT-108: the same call again with a tool call required, after a reply claimed a lookup or action it never did.
+
+    None when that fails or still calls nothing - the caller keeps the plain reply (never worse than before).
     """
     try:
         async with metrics.timed("reply", route="local", model=config.local_llm_model):
@@ -153,8 +155,9 @@ async def _forced_tool_turn(messages: list[dict], tools: list[dict], config: Fel
 
 
 def _said(config: FeltConfig, session_id: str, reply: str, speaker: ReplySpeaker | None) -> str:
-    """The reply as she said it (with anything already let out in front,
-    WP-65), written to the history - once per turn, at the end.
+    """The reply as she said it (with anything already let out in front, WP-65), written to the history.
+
+    once per turn, at the end.
     """
     if speaker is not None:
         reply = speaker.full_reply(reply)
