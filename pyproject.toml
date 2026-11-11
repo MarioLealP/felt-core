@@ -17,6 +17,7 @@ dependencies = [
     "pyjwt[crypto]>=2.10",
     "python-multipart>=0.0.32",
     "pyyaml>=6.0.3",
+    "sqlalchemy[asyncio]>=2.1.8",
     "sqlmodel>=0.0.49",
     "uvicorn[standard]>=0.52.4",
     "websockets>=17.1",

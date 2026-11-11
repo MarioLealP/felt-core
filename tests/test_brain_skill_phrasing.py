@@ -50,7 +50,7 @@ async def test_phrase_skill_result_is_one_plain_local_call_with_the_tool_output(
 async def test_phrase_skill_result_carries_facts_locally(tmp_path, fake_llm):
     # Nothing leaves the LAN, so facts are fine in the prompt.
     config = _config(tmp_path)
-    save_fact(config.db_path, "likes pizza")
+    await save_fact(config.db_path, "likes pizza")
 
     await brain.phrase_skill_result("weather?", "sunny", [], config)
 

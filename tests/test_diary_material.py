@@ -58,7 +58,7 @@ def test_cap_event_data_truncates_oversized_payloads():
 
 async def test_gather_material_includes_chat_windows_and_never_touches_facts(tmp_path):
     config = _config(tmp_path)
-    save_fact(config.db_path, "Mario's home address is a private secret")
+    await save_fact(config.db_path, "Mario's home address is a private secret")
     save_message(config.db_path, "s1", "user", "safe banter about bread")
     save_message(config.db_path, "s2", "user", "my medical history is private stuff")
     conn = _connect(config.db_path)
