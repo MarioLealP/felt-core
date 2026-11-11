@@ -12,6 +12,7 @@ def save_message(
     kind: str = CHAT,
     source_ref: str | None = None,
 ) -> int:
+    """Store one message row and return its id."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -29,10 +30,11 @@ CHAT_ONLY_SQL = f" AND kind = '{CHAT}'"
 
 
 def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks: bool = False) -> list[dict]:
-    """`exclude_remarks=True` drops her own unprompted lines (kind other than
-    chat), leaving only the real back-and-forth - what the
-    local screen-reaction path wants as "recent conversation" (audit
-    2026-09-24: it was feeding her earlier screen remarks back to her).
+    """`exclude_remarks=True` drops her own unprompted lines (kind other than chat).
+
+    Leaving only the real back-and-forth - what the local screen-reaction
+    path wants as "recent conversation" (audit 2026-09-24: it was feeding
+    her earlier screen remarks back to her).
     """
     conn = _connect(db_path)
     # ORDER BY id DESC so LIMIT keeps the MOST RECENT messages (once a
@@ -58,10 +60,11 @@ def get_history(db_path: str, session_id: str, limit: int = 20, exclude_remarks:
 
 
 def get_her_recent_lines(db_path: str, session_id: str, limit: int = 8, max_age: str = "-6 hours") -> list[dict]:
-    """Her own unprompted lines (remarks, event lines, pushes, mail; not
-    alarms, which are his own labels), newest `limit` within `max_age`,
-    oldest first. Fed back to her so she knows what she already said
-    outside the conversation and stops repeating it (Mario 10-03).
+    """Her own unprompted lines: the newest `limit` within `max_age`, oldest first.
+
+    Kinds: remarks, event lines, pushes, mail; not alarms, which are his own
+    labels. Fed back to her so she knows what she already said outside the
+    conversation and stops repeating it (Mario 10-03).
     """
     kinds = ",".join(f"'{k}'" for k in ASIDE_KINDS)
     conn = _connect(db_path)
@@ -76,10 +79,11 @@ def get_her_recent_lines(db_path: str, session_id: str, limit: int = 8, max_age:
 
 
 def get_message_sessions_between(db_path: str, start_utc: str, end_utc: str) -> list[list[dict]]:
-    """Real conversation (not her own unprompted remarks) in the window,
-    grouped by session - the diary's material gatherer treats each
-    session's text as a WHOLE window, so
-    sessions must come back separately, not pre-flattened.
+    """Real conversation (not her own unprompted remarks) in the window.
+
+    Grouped by session - the diary's material gatherer treats each
+    session's text as a WHOLE window, so sessions must come back
+    separately, not pre-flattened.
     """
     conn = _connect(db_path)
     rows = conn.execute(

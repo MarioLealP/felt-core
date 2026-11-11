@@ -35,6 +35,7 @@ SCOPES = [
 
 
 def main() -> None:
+    """Open the consent page, catch the redirect, and write the one-time code to the runtime file."""
     client_id = sys.argv[1]
     # optional: only these scopes (to find one Spotify refuses), e.g. "user-read-playback-state"
     scopes = sys.argv[2].split(",") if len(sys.argv) > 2 else SCOPES

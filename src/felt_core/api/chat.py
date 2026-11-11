@@ -26,6 +26,8 @@ router = APIRouter()
 
 
 class ChatRequest(BaseModel):
+    """Request body for a chat turn: message, session and optional tone."""
+
     message: str
     session_id: str = "default"
     # WP-15: felt-animation's GET /tone line (mood x time-of-day + streak
@@ -35,6 +37,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    """Felt's reply text plus optional ui_action and animation_tag."""
+
     reply: str
     # Both purely additive - an older client that only reads `reply` is
     # unaffected. ui_action mirrors SkillResult.ui_action (e.g.
@@ -48,6 +52,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest) -> ChatResponse:
+    """Run one chat turn through the brain and return Felt's reply."""
     config = load_config()
     result = await chat(req.message, config, req.session_id, req.tone)
     return ChatResponse(
@@ -58,14 +63,17 @@ async def chat_endpoint(req: ChatRequest) -> ChatResponse:
 
 
 class ReactionTagRequest(BaseModel):
+    """A spoken line plus the animation tags to choose from."""
+
     text: str
     tags: list[str]
 
 
 @router.post("/v1/reaction-tag")
 async def reaction_tag_endpoint(req: ReactionTagRequest) -> dict:
-    """WP-36 D'': pick the animation tag that best fits how Felt says a
-    line. felt-animation sends its known tags (it owns the animation
+    """WP-36 D'': pick the animation tag that best fits how Felt says a line.
+
+    felt-animation sends its known tags (it owns the animation
     library); ONE schema-constrained felt-llm call (the tag is an enum of
     exactly those). `{"tag": null}` if the reply couldn't be parsed; 400
     for an empty tag list; 503 when felt-llm is down (the caller keeps its
@@ -109,8 +117,9 @@ async def reaction_tag_endpoint(req: ReactionTagRequest) -> dict:
 
 @router.get("/v1/history")
 async def history_endpoint(session_id: str = "default", limit: int = 100) -> list[dict]:
-    """A client's chat window is otherwise blank on every restart even
-    though the conversation is already durable in SQLite (`get_history`
+    """A client's chat window is otherwise blank on every restart.
+
+    Even though the conversation is already durable in SQLite (`get_history`
     was previously only read internally, to build the brain's own
     context) — this just exposes that same data so a dashboard can
     restore what was actually said.
@@ -121,6 +130,7 @@ async def history_endpoint(session_id: str = "default", limit: int = 100) -> lis
 
 @router.websocket("/v1/chat/ws")
 async def chat_ws(websocket: WebSocket) -> None:
+    """Chat over the /v1/chat/ws websocket until the client disconnects."""
     if not _ws_authorized(websocket):
         await websocket.close(code=1008)  # policy violation, before accept
         return

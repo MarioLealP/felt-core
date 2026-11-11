@@ -13,18 +13,21 @@ from .const import DOMAIN
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:  # ruff: ignore[unused-async]  # async by contract
+    """Add the Felt conversation agent entity for this config entry."""
     async_add_entities([FeltAgent(entry)])
 
 
 class FeltAgent(conversation.ConversationEntity):
-    """Felt answers - her own brain, skills and memory in felt-core; HA only
-    carries the words (she does the device control herself).
+    """Felt answers - her own brain, skills and memory in felt-core.
+
+    HA only carries the words (she does the device control herself).
     """
 
     _attr_has_entity_name = True
     _attr_name = None
 
     def __init__(self, entry: ConfigEntry) -> None:
+        """Take the entry's Felt client and set the entity's unique id and device info."""
         self._client: FeltClient = entry.runtime_data.client
         self._attr_unique_id = entry.entry_id
         self._attr_device_info = {
@@ -35,6 +38,7 @@ class FeltAgent(conversation.ConversationEntity):
 
     @property
     def supported_languages(self) -> str:
+        """Accept messages in any language."""
         return MATCH_ALL
 
     async def _async_handle_message(

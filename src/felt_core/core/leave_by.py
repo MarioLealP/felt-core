@@ -1,6 +1,7 @@
-"""Leave-by reminders (Mario 2026-10-18: "i have an appointment tuesday ...
-it has a location, can we check how long to go there, and have a automated
-leave in 15min to get there in time kind of deal?").
+"""Leave-by reminders.
+
+Mario 2026-10-18: "i have an appointment tuesday ... it has a location, can we check how long to go there, and have
+a automated leave in 15min to get there in time kind of deal?".
 
 For a calendar event with an address (only those - and always by car), the
 drive time comes from Home Assistant's Waze action (free, live traffic;
@@ -30,14 +31,16 @@ _FRESH = timedelta(minutes=30)  # a phone location older than this isn't "where 
 
 
 def has_address(event: dict) -> bool:
-    """Pure: a location that looks like an address (a number or a comma),
-    not "Mom's place" or "online".
+    """Pure: a location that looks like an address.
+
+    A number or a comma - not "Mom's place" or "online".
     """
     loc = (event.get("location") or "").strip()
     return bool(loc) and (any(ch.isdigit() for ch in loc) or "," in loc)
 
 
 def leave_time(start: datetime, drive_min: float) -> datetime:
+    """The moment to leave: start minus the drive time and the buffer minutes."""
     return start - timedelta(minutes=math.ceil(drive_min) + BUFFER_MIN)
 
 

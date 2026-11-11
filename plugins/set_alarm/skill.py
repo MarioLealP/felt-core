@@ -1,5 +1,6 @@
-"""Time-of-day alarms ("wake me up at 7:30am", "alarm for 9pm") —
-distinct from set_timer, which is duration-only ("in 10 minutes").
+"""Sets time-of-day alarms ("wake me up at 7:30am", "alarm for 9pm").
+
+Distinct from set_timer, which is duration-only ("in 10 minutes").
 
 Mario, 2026-09-12: "Just use the phone alarm stuff. Its already a done
 feature from Google just need a way to call it." — prefers a real alarm
@@ -47,8 +48,9 @@ def _format(fire_at: datetime, label: str) -> str:
 
 
 def _is_next_occurrence(fire_at: datetime, now: datetime) -> bool:
-    """True if `fire_at` is just "the next time it's this o'clock" from
-    `now` — the only thing a phone-native alarm can actually express.
+    """True if `fire_at` is just "the next time it's this o'clock" from `now`.
+
+    That is the only thing a phone-native alarm can actually express.
     """
     next_occurrence = now.replace(hour=fire_at.hour, minute=fire_at.minute, second=0, microsecond=0)
     if next_occurrence <= now:
@@ -57,6 +59,7 @@ def _is_next_occurrence(fire_at: datetime, now: datetime) -> bool:
 
 
 async def handle(params, ctx):
+    """Set a time-of-day alarm on the phone, or in felt's own scheduling if it can't."""
     time_text = get_single_param(params, "time", "when", "alarm_time", "time_of_day")
     if not time_text:
         return SkillResult(text="I need a time to set an alarm for.")

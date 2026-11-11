@@ -1,12 +1,14 @@
-"""An appointment waiting for its place (Mario 2026-10-19: ask where first,
-"If no reply in 30s create"). create_calendar_event without a place holds
-it here and she asks where; set_event_location adds it with the answer (or
-at once, without a place, on "none"), or after PLACE_WAIT_S it goes in
-without one and she says so in a short line - if he missed her question,
-that's how he learns it has no place. One add either way - whoever claims
-it first. An answer after that goes through change_place (create-then-delete),
-from set_event_location or from create_calendar_event called again for the
-appointment just added (cm-2hu: never a second one).
+"""An appointment waiting for its place before it goes in the calendar.
+
+Mario 2026-10-19: ask where first, "If no reply in 30s create".
+create_calendar_event without a place holds it here and she asks where;
+set_event_location adds it with the answer (or at once, without a place,
+on "none"), or after PLACE_WAIT_S it goes in without one and she says so
+in a short line - if he missed her question, that's how he learns it has
+no place. One add either way - whoever claims it first. An answer after
+that goes through change_place (create-then-delete), from set_event_location
+or from create_calendar_event called again for the appointment just added
+(cm-2hu: never a second one).
 
 The 30 s start once her reply (the question) is out - chat() calls
 start_wait - not at the request: a slow reply used to eat the wait (cm-a4b).
@@ -52,6 +54,7 @@ def _spawn(coro) -> asyncio.Task:
 
 def hold(config: FeltConfig, calendar_id: str, summary: str, start: datetime, end: datetime):
     """Hold an appointment for its place; an earlier one still held goes in now.
+
     The wait starts at start_wait, once she has asked.
     """
     global _held
@@ -74,9 +77,10 @@ def no_place(answer: str) -> bool:
 
 
 def claim_same(start: datetime) -> dict | None:
-    """Take the held appointment if it's at `start`: create_calendar_event
-    called again for it (e2e 2026-10-19: felt-llm answered "none" that way)
-    is his answer, not a second appointment.
+    """Take the held appointment if it's at `start`.
+
+    create_calendar_event called again for it (e2e 2026-10-19: felt-llm
+    answered "none" that way) is his answer, not a second appointment.
     """
     if _held is None or _held["start"] != start:
         return None
@@ -84,9 +88,10 @@ def claim_same(start: datetime) -> dict | None:
 
 
 def just_added(config: FeltConfig, summary: str, start: datetime) -> dict | None:
-    """The appointment create_calendar_event added in the last 10 min, if it's
-    this one (`start`, and the title one inside the other: "dentist" / "Dentist
-    appointment") - being called again for it is his answer, not a second one.
+    """The appointment create_calendar_event added in the last 10 min, if it's this one.
+
+    This one: `start`, and the title one inside the other ("dentist" / "Dentist
+    appointment"). Being called again for it is his answer, not a second one.
     """
     now = datetime.now(ha_calendar.TZ)
     last = ha_calendar.last_created(config, now)
@@ -142,6 +147,7 @@ async def _matching(config, calendar_id: str, summary: str, start: datetime) -> 
 
 async def change_place(config: FeltConfig, last: dict, place: str) -> str:
     """Give the appointment already added (`last`, from remember_created) a place.
+
     HA can't edit an event, so the one with the place goes in first and the old
     one is deleted only after: a failure halfway leaves a duplicate, never a lost
     appointment. Returns what to tell her.
@@ -173,8 +179,10 @@ async def add_unanswered(config: FeltConfig) -> None:
 
 
 async def _add_and_say(config: FeltConfig, held: dict) -> None:
-    """Add without a place; he isn't waiting on a reply, so the outcome is a
-    proactive line either way.
+    """Add the held appointment without a place.
+
+    He isn't waiting on a reply, so the outcome is a proactive line
+    either way.
     """
     title, at = held["summary"], when(held["start"])
     if await add(config, held, None):

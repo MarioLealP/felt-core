@@ -77,8 +77,9 @@ def _last_user_id(conn: sqlite3.Connection, session_id: str) -> int:
 
 
 def _remarks_since(conn: sqlite3.Connection, session_id: str, after_id: int) -> list[tuple]:
-    """(id, content, created_at) of her remarks after message `after_id` and
-    younger than MAX_AGE, oldest first.
+    """(id, content, created_at) of her remarks, oldest first.
+
+    Only those after message `after_id` and younger than MAX_AGE.
     """
     return conn.execute(
         "SELECT id, content, created_at FROM messages WHERE session_id = ? AND id > ?"  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
@@ -92,10 +93,11 @@ def _row(r: tuple) -> dict:
 
 
 def current_asides(db_path: str, session_id: str = APP_SESSION) -> dict:
-    """What Talk shows under the transcript: {"asides": [up to 2 of her remarks
-    since his last message, oldest first], "more": how many others}. Her pick
-    when she has made one for this batch; otherwise (two or fewer, or a pick
-    still running) the newest.
+    """What Talk shows under the transcript.
+
+    {"asides": [up to 2 of her remarks since his last message, oldest first],
+    "more": how many others}. Her pick when she has made one for this batch;
+    otherwise (two or fewer, or a pick still running) the newest.
     """
     conn = _connect(db_path)
     try:
@@ -123,8 +125,9 @@ def parse_picks(text: str, count: int) -> list[int]:
 
 
 async def pick(config: FeltConfig, session_id: str = APP_SESSION) -> list[int]:
-    """Ask her which of her remarks since his last message she'd most like him
-    to answer, and store it. Returns the picked message ids.
+    """Ask her which of her remarks since his last message she'd most like him to answer.
+
+    Store the pick as well. Returns the picked message ids.
     """
     conn = _connect(config.db_path)
     try:
@@ -193,8 +196,10 @@ async def _pick_loop(config: FeltConfig, session_id: str) -> None:
 
 
 def schedule_pick(config: FeltConfig, session_id: str) -> None:
-    """After a remark is saved: re-pick in the background. Only the app's
-    session has asides; a remark landing mid-pick reruns it once afterwards.
+    """After a remark is saved: re-pick in the background.
+
+    Only the app's session has asides; a remark landing mid-pick reruns it
+    once afterwards.
     """
     if session_id != APP_SESSION or not features.enabled(config.db_path, "ambient.asides"):
         return
@@ -210,7 +215,8 @@ _ANSWERABLE = (*ASIDE_KINDS, ALERT)
 
 
 def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> str | None:
-    """The text of one of her remarks (or alert lines) in this session, or
+    """The text of one of her remarks (or alert lines) in this session, or None.
+
     None if that id isn't one (so a client can't pass off any message as
     hers). An alert line comes with the incident's facts and Claude's
     conclusion, so she can answer questions about it.
@@ -237,6 +243,7 @@ def remark_text(db_path: str, remark_id: int, session_id: str = APP_SESSION) -> 
 
 
 def link_answer(db_path: str, user_message_id: int, remark_id: int) -> None:
+    """Remember that his message `user_message_id` answers her remark `remark_id`."""
     conn = _connect(db_path)
     try:
         _ensure(conn)

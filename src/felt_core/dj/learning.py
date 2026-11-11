@@ -1,5 +1,6 @@
-"""What DJ mode learns, as pure functions: how adventurous to be, and how a
-pick went.
+"""What DJ mode learns, as pure functions.
+
+How adventurous to be, and how a pick went.
 """
 
 from felt_core.core.music_taste import is_skip
@@ -10,9 +11,9 @@ _MIN_OUTCOMES = 3
 
 
 def discovery_share(kept: list[bool]) -> float:
-    """How many of her picks should be new to Mario: a third to start, then
-    following how her recent discoveries went - skipped most -> fewer
-    (never none), kept most -> more.
+    """How many of her picks should be new to Mario: a third to start.
+
+    Then following how her recent discoveries went - skipped most -> fewer (never none), kept most -> more.
     """
     if len(kept) < _MIN_OUTCOMES:
         return DEFAULT_DISCOVERY
@@ -21,7 +22,8 @@ def discovery_share(kept: list[bool]) -> float:
 
 
 def outcome(progress_ms: int, duration_ms: int) -> str:
-    """A pick that changed before ~30% played was skipped - the same rule as
-    the listening history (music_taste.is_skip).
+    """A pick that changed before ~30% played was skipped.
+
+    The same rule as the listening history (music_taste.is_skip).
     """
     return "skipped" if is_skip(progress_ms, duration_ms) else "played"

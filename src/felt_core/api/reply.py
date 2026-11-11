@@ -40,10 +40,11 @@ router = APIRouter()
 
 
 class _TTSResponse(Protocol):
-    """What `_synthesize_reply` needs back from a TTS POST - narrower than
-    `httpx2.Response` so the unit tests' hand-written fake responses (no
-    real network, see `tests/test_api_tts_cache.py`) satisfy the type
-    without subclassing httpx2.
+    """What `_synthesize_reply` needs back from a TTS POST.
+
+    Narrower than `httpx2.Response` so the unit tests' hand-written fake
+    responses (no real network, see `tests/test_api_tts_cache.py`) satisfy
+    the type without subclassing httpx2.
     """
 
     @property
@@ -53,9 +54,10 @@ class _TTSResponse(Protocol):
 
 
 class _TTSClient(Protocol):
-    """What `_synthesize_reply` needs from its HTTP client - just enough
-    of `httpx2.AsyncClient`'s surface to also accept the tests' fake
-    clients (`_ExplodingClient`/`FakeClient`), which duck-type `.post()`
+    """What `_synthesize_reply` needs from its HTTP client.
+
+    Just enough of `httpx2.AsyncClient`'s surface to also accept the tests'
+    fake clients (`_ExplodingClient`/`FakeClient`), which duck-type `.post()`
     without subclassing `httpx2.AsyncClient`.
     """
 
@@ -70,10 +72,11 @@ async def _tts_audio(
     *,
     first_chunk: bool = False,
 ) -> bytes:
-    """One felt-voice /v1/tts call behind the shared WP-06 cache (keyed on
-    text + emotion). Each real call is timed as a "tts" stage; a streamed
-    reply's chunk 0 is additionally "tts_first_chunk" (WP-54) - it's the
-    part the user actually waits for.
+    """One felt-voice /v1/tts call behind the shared WP-06 cache (keyed on text + emotion).
+
+    Each real call is timed as a "tts" stage; a streamed reply's chunk 0 is
+    additionally "tts_first_chunk" (WP-54) - it's the part the user actually
+    waits for.
     """
     # WP-06: a cache hit here (warmed by brain.py's weather precompute
     # loop) means the common "what's the weather right now?" turn makes
@@ -93,8 +96,10 @@ async def _tts_audio(
 
 
 async def _fill_reply_stream(stream: reply_stream.ReplyStream, config: Any) -> None:
-    """Background half of a streamed reply: chunks 1..N-1, on a client of its
-    own (the request's is closed as soon as chunk 0's response is sent).
+    """Background half of a streamed reply: chunks 1..N-1.
+
+    On a client of its own (the request's is closed as soon as chunk 0's
+    response is sent).
     """
     async with voice_client(config, timeout=60) as client:
         await reply_stream.run(stream, lambda _n, text: _tts_audio(text, None, config, client))
@@ -110,9 +115,9 @@ async def _synthesize_reply(
     emotion: str | None = None,
     stream: bool = False,
 ) -> Response:
-    """Shared by voice-chat and text-chat: TTS the reply and build the same
-    audio/wav + X-* header response shape, so a client doesn't need to know
-    or care which input mode produced it.
+    """Shared by voice-chat and text-chat: TTS the reply and build the same audio/wav + X-* header response shape.
+
+    So a client doesn't need to know or care which input mode produced it.
 
     `stream` (WP-54, only the two chat endpoints pass it): a reply that
     splits into 2+ sentence chunks answers with chunk 0's audio plus
@@ -155,8 +160,9 @@ async def _synthesize_reply(
 
 
 def _wants_stream_v2(request: Request, config: Any) -> bool:
-    """WP-65: a client that plays protocol v2 says so per request; every
-    other client gets WP-54's whole-reply-then-chunks behaviour.
+    """WP-65: a client that plays protocol v2 says so per request.
+
+    Every other client gets WP-54's whole-reply-then-chunks behaviour.
     """
     return config.reply_streaming and request.headers.get("x-accept-stream") == "2"
 
@@ -177,9 +183,10 @@ async def _fill_open_stream(
     config: Any,
     on_result: Callable[[ChatResult], None] | None,
 ) -> None:
-    """Background half of a v2 reply: each further chunk as chat_streamed()
-    writes it, synthesised in order, then the finished result. felt-llm
-    keeps writing while a chunk is in TTS (chat_streamed queues them).
+    """Background half of a v2 reply: each further chunk as chat_streamed() writes it.
+
+    Synthesised in order, then the finished result. felt-llm keeps writing
+    while a chunk is in TTS (chat_streamed queues them).
     """
     result: ChatResult | None = None
     try:
@@ -221,11 +228,12 @@ async def _reply_v2(
     extra_headers: dict[str, str] | None = None,
     on_result: Callable[[ChatResult], None] | None = None,
 ) -> Response:
-    """WP-65 protocol v2: chat_streamed(), and chunk 0's audio goes back the
-    moment it exists - X-Reply-Text is chunk 0's text, X-Reply-Chunks
-    "open", and the rest of the reply (its text, ui_action, tag) is at
-    GET /v1/reply/{id} once done. A reply that never came out in chunks, or
-    felt-voice being down, falls back to the whole-reply response.
+    """WP-65 protocol v2: chat_streamed(), and chunk 0's audio goes back the moment it exists.
+
+    X-Reply-Text is chunk 0's text, X-Reply-Chunks "open", and the rest of the
+    reply (its text, ui_action, tag) is at GET /v1/reply/{id} once done. A
+    reply that never came out in chunks, or felt-voice being down, falls back
+    to the whole-reply response.
     """
     items = chat_streamed(message, config, session_id, tone)
     first: str | ChatResult | None = None
@@ -283,8 +291,10 @@ async def voice_chat_endpoint(
     session_id: str = "default",
     tone: Annotated[str | None, Form()] = None,
 ) -> Response:
-    """One call: audio in, audio out. Orchestrates felt-voice (STT) ->
-    the brain -> felt-voice (TTS), so a client doesn't have to.
+    """One call: audio in, audio out.
+
+    Orchestrates felt-voice (STT) -> the brain -> felt-voice (TTS), so a
+    client doesn't have to.
     """
     config = load_config()
     if not config.voice_url:
@@ -339,11 +349,12 @@ async def voice_chat_endpoint(
 
 @router.post("/v1/text-chat")
 async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
-    """Same shape as /v1/voice-chat's response (audio/wav + X-Reply-Text/
-    X-Animation-Tag headers) but for already-typed text - so a typed
-    message gets the same TTS + reaction-animation treatment a spoken one
-    does, minus the STT step (Mario, 2026-09-21: "hook up the chat like it
-    was voice input, need her to reply with TTS + animation").
+    """Same shape as /v1/voice-chat's response but for already-typed text.
+
+    The response is audio/wav + X-Reply-Text/X-Animation-Tag headers - so a
+    typed message gets the same TTS + reaction-animation treatment a spoken
+    one does, minus the STT step (Mario, 2026-09-21: "hook up the chat like
+    it was voice input, need her to reply with TTS + animation").
     """
     config = load_config()
     if not config.voice_url:
@@ -374,11 +385,11 @@ async def text_chat_endpoint(req: ChatRequest, request: Request) -> Response:
 
 @router.get("/v1/reply/{stream_id}/chunk/{n}")
 async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) -> Response:
-    """WP-54: long-polls for chunk n of a streamed reply (see
-    _synthesize_reply). 200 + WAV + X-Chunk-Text once ready, 408 if it still
-    isn't after `timeout` (clamped to 1-60 s), 204 for n past the last chunk
-    (the stream is done), 404 for an unknown/expired id, 502 if that chunk's
-    TTS failed.
+    """WP-54: long-polls for chunk n of a streamed reply (see _synthesize_reply).
+
+    200 + WAV + X-Chunk-Text once ready, 408 if it still isn't after `timeout`
+    (clamped to 1-60 s), 204 for n past the last chunk (the stream is done),
+    404 for an unknown/expired id, 502 if that chunk's TTS failed.
     """
     stream = reply_stream.get(stream_id)
     if stream is None or n < 0:
@@ -401,10 +412,11 @@ async def reply_chunk_endpoint(stream_id: str, n: int, timeout: float = 30.0) ->
 
 @router.get("/v1/reply/{stream_id}")
 async def reply_result_endpoint(stream_id: str) -> dict:
-    """WP-65 (protocol v2): the finished reply behind a stream - `{done,
-    text, ui_action, animation_tag, emotion}` (+ `error` if felt-llm went
-    away mid-reply). Before it's done: `{done: false, text}` with the chunks
-    so far. 404 for an unknown/expired id.
+    """WP-65 (protocol v2): the finished reply behind a stream.
+
+    `{done, text, ui_action, animation_tag, emotion}` (+ `error` if felt-llm
+    went away mid-reply). Before it's done: `{done: false, text}` with the
+    chunks so far. 404 for an unknown/expired id.
     """
     stream = reply_stream.get(stream_id)
     if stream is None:

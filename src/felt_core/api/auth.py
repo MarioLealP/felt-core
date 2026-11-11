@@ -69,6 +69,7 @@ _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 def _origin_ok(request: Request, app_origins: tuple[str, ...]) -> bool:
     """WP-62 phase 4 CSRF guard for the SSO-gated (cookie/forward-auth) routes.
+
     The forward-auth cookie is SameSite=Lax and every *.clockmost.com app is
     same-site, so a sibling page could drive a credentialed mutation; these
     routes carry no bearer token and felt-core has no CSRF token. A safe method
@@ -88,8 +89,10 @@ def _origin_ok(request: Request, app_origins: tuple[str, ...]) -> bool:
 
 
 def _ws_authorized(websocket: WebSocket) -> bool:
-    """WP-55: the HTTP auth middleware doesn't see websockets, and browsers
-    can't set headers on them - so a Bearer header or ?token= is checked here.
+    """WP-55: the HTTP auth middleware doesn't see websockets.
+
+    Browsers can't set headers on them - so a Bearer header or ?token= is
+    checked here.
     """
     config = load_config()
     if config.auth_mode == "identity":

@@ -16,8 +16,9 @@ _MESSAGE_COLUMNS = (
 
 
 def _migrate_message_kinds(conn: sqlite3.Connection) -> None:
-    """Adds the WP-42.3 columns to a `messages` table made before them, and
-    labels the remarks already in it: the last use of the old test (her line's
+    """Adds the WP-42.3 columns to a `messages` table made before them.
+
+    Labels the remarks already in it: the last use of the old test (her line's
     text matching a screen reaction or event line), which `kind` replaces.
     Only runs while the column is missing.
     """

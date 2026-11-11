@@ -14,6 +14,7 @@ from felt_core.config import FeltConfig, reveal
 
 
 async def notify(config: FeltConfig, message: str, title: str | None = None, priority: int = 3) -> bool:
+    """Publish one ntfy push to Mario's phone; False when the config isn't set."""
     if (
         not config.ntfy_url
         or not config.ntfy_publish_topic

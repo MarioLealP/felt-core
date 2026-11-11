@@ -1,6 +1,8 @@
-"""Printer status — multiple providers behind one skill, same pattern as
-media_control's Spotify/YouTube split (assistant-skills.md, 2026-09-11:
-Mario has three actual printers, each gets its own provider).
+"""Printer status — multiple providers behind one skill.
+
+Same pattern as media_control's Spotify/YouTube split
+(assistant-skills.md, 2026-09-11: Mario has three actual printers, each
+gets its own provider).
 
 - **Ender, via Home Assistant** (since 2026-10-19: Klipper's moonraker ->
   MQTT -> HA's `sensor.ender_*`, read with Felt's HA token; felt_core.core.ender
@@ -54,6 +56,7 @@ async def _hp_status(config) -> str | None:
 
 
 async def handle(params, ctx):
+    """Report the status of whichever printers are named or configured."""
     config = ctx.config
     which = str(get_single_param(params, "printer", "name") or "").lower()
 

@@ -1,4 +1,5 @@
 """Calendar, read side ("what's on my calendar today/tomorrow/on Friday").
+
 Checks every calendar Mario has in Home Assistant (both accounts, holidays,
 birthdays, Felt's reminders - Mario, 2026-09-14: "get all calendars"), not
 just the primary one, since a holiday or a professional-calendar meeting is
@@ -31,6 +32,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """List what's on Mario's calendars on the requested day, across every calendar."""
     config = ctx.config
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")

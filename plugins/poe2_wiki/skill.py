@@ -1,8 +1,9 @@
-"""Path of Exile 2 wiki lookup (WP-29) - the poe2-rag service's hybrid
-retrieval (local embeddings + keyword search over the PoE2 wiki), without
-its answer step: poe2-rag's /api/ask phrases with cloud Gemini, and Felt is
-fully local, so this uses /api/search and hands the passages to her own
-model to answer from.
+"""Path of Exile 2 wiki lookup (WP-29).
+
+The poe2-rag service's hybrid retrieval (local embeddings + keyword
+search over the PoE2 wiki), without its answer step: poe2-rag's /api/ask
+phrases with cloud Gemini, and Felt is fully local, so this uses
+/api/search and hands the passages to her own model to answer from.
 """
 
 from felt_core.clients.felt_tls import machine_client
@@ -28,6 +29,7 @@ _PASSAGE_CHARS = 700
 
 
 async def handle(params, ctx):
+    """Search the PoE2 wiki and answer the question from the retrieved passages."""
     query = params.get("query") or ctx.original_message
     # WP-62 M2b B5.3 (D10.1): poe2rag via Caddy's machine host with her Felt
     # cert once FELT_POE2_SEARCH_URL is https://poe2-api.clockmost.com/... On k3s (D127) she

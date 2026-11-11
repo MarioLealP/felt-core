@@ -1,7 +1,8 @@
-"""Lets Felt be asked about email conversationally ("any new mail?", "what
-was that Patreon email about?"), reading the mails Home Assistant forwarded
-(emails.py) - the newest few that weren't noise, with the start of each
-body so she can say what one is about.
+"""Lets Felt be asked about email conversationally ("any new mail?", "what was that Patreon email about?").
+
+reading the mails Home Assistant forwarded (emails.py) - the newest few
+that weren't noise, with the start of each body so she can say what one
+is about.
 """
 
 from felt_core.core import emails
@@ -18,6 +19,7 @@ _EXCERPT = 400
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Return the five newest emails, each with the start of its body."""
     mails = emails.recent(ctx.config.db_path, limit=5)
     if not mails:
         return SkillResult(text="No recent emails.")

@@ -11,6 +11,7 @@ router = APIRouter()
 
 @router.get("/v1/metrics/latency")
 async def latency_metrics_endpoint(since_hours: int = 24, endpoint: str | None = None) -> dict:
+    """Return latency stats computed from the recorded request rows."""
     config = load_config()
     rows = get_latency_rows(config.db_path, since_hours=since_hours, endpoint=endpoint)
     return metrics.compute_stats(rows)

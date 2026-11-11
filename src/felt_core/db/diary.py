@@ -4,6 +4,7 @@ from felt_core.db.session import _connect
 
 
 def get_diary(db_path: str, date: str) -> dict | None:
+    """Return one diary row for a date, or None."""
     conn = _connect(db_path)
     row = conn.execute(
         "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary WHERE date = ?",
@@ -23,6 +24,7 @@ def get_diary(db_path: str, date: str) -> dict | None:
 
 
 def insert_diary(db_path: str, date: str, entry: str, callbacks_json: str, mood_word: str) -> None:
+    """Store one diary entry for a date, ignoring one that already exists."""
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -33,9 +35,10 @@ def insert_diary(db_path: str, date: str, entry: str, callbacks_json: str, mood_
 
 
 def update_diary_entry(db_path: str, date: str, entry: str, callbacks_json: str) -> bool:
-    """Mario's edit (PATCH /v1/diary/{date}) - marks the row edited and
-    replaces its callbacks (regenerated or cleared by the caller, see
-    api.py). Returns whether a row existed to update.
+    """Mario's edit (PATCH /v1/diary/{date}) - marks the row edited and replaces its callbacks.
+
+    The callbacks are regenerated or cleared by the caller, see api.py.
+    Returns whether a row existed to update.
     """
     conn = _connect(db_path)
     with conn:
@@ -49,9 +52,10 @@ def update_diary_entry(db_path: str, date: str, entry: str, callbacks_json: str)
 
 
 def update_diary_callbacks(db_path: str, date: str, callbacks_json: str) -> None:
-    """Internal decay bookkeeping (self_memory.memory_block increments a
-    used callback's count) - deliberately doesn't touch `edited`, since
-    this isn't Mario correcting anything.
+    """Internal decay bookkeeping (self_memory.memory_block increments a used callback's count).
+
+    Deliberately doesn't touch `edited`, since this isn't Mario correcting
+    anything.
     """
     conn = _connect(db_path)
     with conn:
@@ -60,6 +64,7 @@ def update_diary_callbacks(db_path: str, date: str, callbacks_json: str) -> None
 
 
 def delete_diary(db_path: str, date: str) -> bool:
+    """Delete a diary row and return whether it existed."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute("DELETE FROM diary WHERE date = ?", (date,))
@@ -69,6 +74,7 @@ def delete_diary(db_path: str, date: str) -> bool:
 
 
 def get_diary_list(db_path: str, limit: int = 30) -> list[dict]:
+    """Return recent diary rows, newest first."""
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT date, entry, callbacks_json, mood_word, edited, created_at FROM diary ORDER BY date DESC LIMIT ?",
@@ -89,6 +95,7 @@ def get_diary_list(db_path: str, limit: int = 30) -> list[dict]:
 
 
 def insert_or_update_diary_week(db_path: str, week: str, summary: str, callbacks_json: str) -> None:
+    """Store a week's summary, replacing any existing row for that week."""
     conn = _connect(db_path)
     with conn:
         conn.execute(
@@ -101,6 +108,7 @@ def insert_or_update_diary_week(db_path: str, week: str, summary: str, callbacks
 
 
 def get_diary_weeks(db_path: str, limit: int = 12) -> list[dict]:
+    """Return recent diary weeks, newest first."""
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT week, summary, callbacks_json FROM diary_weeks ORDER BY week DESC LIMIT ?",
@@ -111,5 +119,6 @@ def get_diary_weeks(db_path: str, limit: int = 12) -> list[dict]:
 
 
 def get_latest_diary_week(db_path: str) -> dict | None:
+    """Return the newest diary week, or None."""
     weeks = get_diary_weeks(db_path, limit=1)
     return weeks[0] if weeks else None

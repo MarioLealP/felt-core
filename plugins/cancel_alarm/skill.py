@@ -1,5 +1,6 @@
-"""Cancels a pending alarm — set_alarm had no way to undo one, so a
-mis-set or no-longer-needed alarm could only be waited out.
+"""Cancels a pending alarm.
+
+set_alarm had no way to undo one, so a mis-set or no-longer-needed alarm could only be waited out.
 """
 
 from datetime import datetime
@@ -24,6 +25,7 @@ def _format(alarm: dict) -> str:
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Cancel the one pending alarm, or the one whose label matches which."""
     pending = get_pending_alarms(ctx.config.db_path)
     if not pending:
         return SkillResult(text="No alarms are currently set.")

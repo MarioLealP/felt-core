@@ -1,5 +1,6 @@
-"""WP-48 DJ mode: Felt runs Mario's Spotify queue - her picks from his taste,
-about a third new to him, a line as each comes on, learning from his skips.
+"""WP-48 DJ mode: Felt runs Mario's Spotify queue - her picks from his taste, about a third new to him.
+
+a line as each comes on, learning from his skips.
 Also "more like this" / "not this" about the current song.
 """
 
@@ -28,6 +29,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Start or stop DJ mode, or send feedback about the current song."""
     config = ctx.config
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected.")

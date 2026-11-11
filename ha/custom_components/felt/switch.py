@@ -1,5 +1,6 @@
-"""Felt's own switches in HA: quiet, hidden, DJ mode - the same ones as in
-the Felt app and on the desktop, so automations can flip them.
+"""Felt's own switches in HA: quiet, hidden, DJ mode.
+
+The same ones as in the Felt app and on the desktop, so automations can flip them.
 """
 
 from __future__ import annotations
@@ -25,14 +26,18 @@ SWITCHES = (
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:  # ruff: ignore[unused-async]  # async by contract
+    """Add the three Felt switches to Home Assistant."""
     coordinator: FeltCoordinator = entry.runtime_data.coordinator
     async_add_entities(FeltSwitch(coordinator, entry, *s) for s in SWITCHES)
 
 
 class FeltSwitch(CoordinatorEntity[FeltCoordinator], SwitchEntity):
+    """One Felt control (quiet, hidden, DJ mode) as an HA switch."""
+
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: FeltCoordinator, entry: ConfigEntry, key: str, name: str, icon: str) -> None:
+        """Wire one Felt control as an HA switch entity."""
         super().__init__(coordinator)
         self._key = key
         self._attr_name = name
@@ -42,6 +47,7 @@ class FeltSwitch(CoordinatorEntity[FeltCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
+        """Whether this control is on in the latest coordinator data."""
         return ((self.coordinator.data or {}).get("controls") or {}).get(self._key)
 
     async def _set(self, on: bool) -> None:
@@ -56,7 +62,9 @@ class FeltSwitch(CoordinatorEntity[FeltCoordinator], SwitchEntity):
             raise HomeAssistantError(state["message"])
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn this Felt switch on."""
         await self._set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn this Felt switch off."""
         await self._set(False)

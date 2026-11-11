@@ -1,5 +1,6 @@
-"""Her remark on a new song, decided on the server (Mario 10-03: she lives
-on the server, so Spotify reaches her with the desktop off too).
+"""Her remark on a new song, decided on the server.
+
+Mario 10-03: she lives on the server, so Spotify reaches her with the desktop off too.
 
 felt-tray used to spot the track change and ask for the line; now
 music_taste_loop's own Spotify poll (brain/background.py) does. The line
@@ -31,9 +32,9 @@ def _key(snapshot: dict | None) -> str | None:
 
 
 def new_track_details(previous: dict | None, current: dict | None) -> dict | None:
-    """Pure: the music_new_track details when one playing track gave way to
-    another between two polls; None otherwise - including the first poll
-    (the server starting mid-song isn't a change) and a start from silence
+    """Pure: the music_new_track details when one playing track gave way to another between two polls.
+
+    None otherwise - including the first poll (the server starting mid-song isn't a change) and a start from silence
     (same rule felt-tray had).
     """
     before, now = _key(previous), _key(current)
@@ -49,6 +50,7 @@ def new_track_details(previous: dict | None, current: dict | None) -> dict | Non
 
 
 async def remark_on(config: FeltConfig, details: dict) -> None:
+    """Generate her line for the new song and queue it for the desktop to say."""
     from felt_core.core.events import react_to_event
     from felt_core.core.proactive import enqueue_proactive
 

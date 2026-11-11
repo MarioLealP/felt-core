@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class EventPolicy(BaseModel):
+    """One event type's cooldown, dedupe, minimum duration, emotion and min-gap rules."""
+
     model_config = ConfigDict(frozen=True)
 
     # Minimum seconds between two spoken lines for this event type.
@@ -59,6 +61,7 @@ DEFAULT_POLICIES: dict[str, EventPolicy] = {
 
 
 def policies(config: FeltConfig) -> dict[str, EventPolicy]:
+    """The default policy table with FELT_EVENT_POLICIES overrides applied."""
     table = dict(DEFAULT_POLICIES)
     if config.event_policies:
         try:
@@ -96,9 +99,10 @@ def decide(
     since_event: float | None,
     since_same: float | None,
 ) -> str | None:
-    """Pure: None = speak, otherwise the reason not to. The `since_*` ages
-    are seconds since the last spoken remark of any kind / of this event /
-    about this same thing (None = never).
+    """Pure: None = speak, otherwise the reason not to.
+
+    The `since_*` ages are seconds since the last spoken remark of any kind / of this event / about this same thing
+    (None = never).
     """
     policy = table.get(event)
     if policy is None:

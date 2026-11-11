@@ -1,5 +1,4 @@
-"""WP-42.3: live updates for the open app, as server-sent events on
-GET /v1/app/stream.
+"""WP-42.3: live updates for the open app, as server-sent events on GET /v1/app/stream.
 
 Notices only, never data: "a new line" (with its kind, so the app knows
 whether Talk or the Margins changed), "her aside pick changed", "a new mark",
@@ -30,7 +29,9 @@ def _fingerprint(conn, has: set[str], table: str, sql: str) -> str:
 
 
 def _state(db_path: str, session_id: str) -> tuple[int, str, int, str, str]:
-    """(newest message id, aside picks fingerprint, number of marks,
+    """The current state the event stream compares against.
+
+    (newest message id, aside picks fingerprint, number of marks,
     incidents fingerprint, controls fingerprint).
     """
     conn = _connect(db_path)
@@ -93,9 +94,11 @@ async def notices(
     poll_s: float = POLL_S,
     keepalive_s: float = KEEPALIVE_S,
 ) -> AsyncIterator[str]:
-    """The event stream. `gone` is awaited each round; truthy ends it (the
-    client went away). `lists_version` says when the shopping list changed -
-    it lives in Home Assistant (shopping.py); "" = couldn't tell, so no notice.
+    """Yields the event stream.
+
+    `gone` is awaited each round; truthy ends it (the client went away).
+    `lists_version` says when the shopping list changed - it lives in Home
+    Assistant (shopping.py); "" = couldn't tell, so no notice.
     """
     newest, picks, marks, incidents, ctl = await asyncio.to_thread(_state, db_path, session_id)
     lists = await lists_version() if lists_version else ""

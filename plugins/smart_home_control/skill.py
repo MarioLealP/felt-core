@@ -1,10 +1,11 @@
-"""Smart-home device control via Home Assistant — reuses the same HA
-instance/token clockmost-console already talks to (its CM_HA_URL/
-CM_HA_TOKEN, confirmed live 2026-09-12), not a new integration. Device
-names are never hardcoded here: they're read live from HA's own
-`friendly_name` attribute for whichever entities are explicitly allowed
-(FELT_HA_ENTITIES), so this works for whatever's actually configured
-rather than baking in Mario's specific devices.
+"""Smart-home device control via Home Assistant.
+
+Reuses the same HA instance/token clockmost-console already talks to
+(its CM_HA_URL/CM_HA_TOKEN, confirmed live 2026-09-12), not a new
+integration. Device names are never hardcoded here: they're read live
+from HA's own `friendly_name` attribute for whichever entities are
+explicitly allowed (FELT_HA_ENTITIES), so this works for whatever's
+actually configured rather than baking in Mario's specific devices.
 
 Deliberately an explicit allowlist, not "control anything HA knows
 about" — the entities available (lights, a fan, two smart plugs) are all
@@ -60,10 +61,11 @@ parameters_schema = {
 
 
 async def _fetch_allowed_states(client: httpx2.AsyncClient, config) -> dict[str, dict]:
-    """entity_id -> {"friendly_name": ..., "state": ...} for just the
-    allowlisted entities — one call per entity rather than fetching HA's
-    entire state list and filtering, so a large HA instance elsewhere
-    doesn't cost more here than the handful of entities actually allowed.
+    """Returns entity_id -> {"friendly_name": ..., "state": ...} for just the allowlisted entities.
+
+    One call per entity rather than fetching HA's entire state list and
+    filtering, so a large HA instance elsewhere doesn't cost more here than
+    the handful of entities actually allowed.
     """
     states = {}
     for entity_id in config.ha_entities_list():
@@ -232,6 +234,7 @@ async def _colour(client, config, params, states, matches, label) -> SkillResult
 
 
 async def handle(params, ctx):
+    """Turn, dim or colour the matched devices, or report their status."""
     config = ctx.config
     if not config.ha_url or not config.ha_token or not config.ha_entities_list():
         return SkillResult(text="Smart home control isn't configured (no Home Assistant entities allowed).")

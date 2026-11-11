@@ -1,7 +1,8 @@
-"""WP-25: the proactive channel, felt-core -> desktop. A small SQLite queue
-(db.py's `proactive` table) that other WPs enqueue into (WP-26's diary
-morning greeting, WP-31's calendar heads-up), drained by felt-tray's
-long-poll against `GET /v1/proactive/next`.
+"""WP-25: the proactive channel, felt-core -> desktop.
+
+A small SQLite queue (db.py's `proactive` table) that other WPs enqueue
+into (WP-26's diary morning greeting, WP-31's calendar heads-up), drained
+by felt-tray's long-poll against `GET /v1/proactive/next`.
 
 Kept out of `api.py` (which just wires the HTTP surface) and `db.py`
 (pure SQL) - this is the poll-with-timeout logic plus `enqueue_proactive`,
@@ -63,8 +64,9 @@ async def _synthesize(config: Any, tts_text: str, emotion: str | None = None) ->
 
 
 async def proactive_audio(config: Any, text: str, emotion: str | None = None) -> bytes:
-    """The item's WAV via the shared WP-06 TTS cache, joining an in-flight
-    pre-synthesis if there is one.
+    """The item's WAV via the shared WP-06 TTS cache.
+
+    Joins an in-flight pre-synthesis if there is one.
     """
     tts_text = strip_for_tts(text)
     cached = tts_cache.get(tts_text, emotion)
@@ -77,10 +79,11 @@ async def proactive_audio(config: Any, text: str, emotion: str | None = None) ->
 
 
 def _prewarm_audio(config: Any, text: str, emotion: str | None = None) -> None:
-    """Best-effort: start synthesis now if we're inside the server's event
-    loop and felt-voice is configured. Enqueueing from sync code with no
-    running loop (scripts, tests) just skips it, and /audio synthesises on
-    demand as before.
+    """Best-effort: start synthesis now.
+
+    If we're inside the server's event loop and felt-voice is configured.
+    Enqueueing from sync code with no running loop (scripts, tests) just
+    skips it, and /audio synthesises on demand as before.
     """
     if not getattr(config, "voice_url", None):
         return
@@ -107,8 +110,9 @@ def _prewarm_audio(config: Any, text: str, emotion: str | None = None) -> None:
 
 
 def clamp_timeout(timeout_s: float) -> float:
-    """The long-poll endpoint's own `?timeout=` clamped to a sane band -
-    long enough to actually long-poll, short enough a client's HTTP
+    """The long-poll endpoint's own `?timeout=` clamped to a sane band.
+
+    Long enough to actually long-poll, short enough a client's HTTP
     timeout/connection never has to outlive it by much.
     """
     return max(_MIN_TIMEOUT_S, min(_MAX_TIMEOUT_S, timeout_s))
@@ -124,9 +128,10 @@ def enqueue_proactive(
     ttl_s: float = _DEFAULT_TTL_S,
     record: bool = True,
 ) -> int:
-    """Inserts one proactive item, picked up by the next `wait_for_next`
-    poll tick (at most `_POLL_INTERVAL_S` later). `ttl_s` is how long the
-    item stays worth delivering (WP-25: "a heads-up for an event that has
+    """Inserts one proactive item, picked up by the next `wait_for_next` poll tick.
+
+    (at most `_POLL_INTERVAL_S` later). `ttl_s` is how long the item
+    stays worth delivering (WP-25: "a heads-up for an event that has
     already started is useless") - past that, `claim_next_proactive`/the
     accept test's "an expired one never is [spoken]" guarantee kicks in.
     `record=False` when the line is already in her log (an event line), so
@@ -167,10 +172,11 @@ def _item_to_response(row: dict) -> dict:
 
 
 async def wait_for_next(config: Any, timeout_s: float) -> dict | None:
-    """Long-poll: returns the oldest undelivered, unexpired item (already
-    marked delivered by `claim_next_proactive`) as soon as one exists, or
-    None once `timeout_s` (already clamped by the caller) elapses without
-    one.
+    """Long-poll: returns the oldest undelivered, unexpired item, or None.
+
+    The item is already marked delivered by `claim_next_proactive`, and is
+    returned as soon as one exists. None once `timeout_s` (already clamped
+    by the caller) elapses without one.
     """
     deadline = time.monotonic() + timeout_s
     while True:

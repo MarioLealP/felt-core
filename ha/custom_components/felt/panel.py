@@ -1,5 +1,6 @@
-"""The Felt panel: the Felt app's Talk and Margins inside Home Assistant's
-sidebar (felt-ha-hub, 2026-10-19) - so the HA app on the phone is all Mario
+"""The Felt panel: the Felt app's Talk and Margins inside Home Assistant's sidebar.
+
+(felt-ha-hub, 2026-10-19) - so the HA app on the phone is all Mario
 needs. Controls, lists and systems are native HA already.
 
 The page (felt-dashboard's HA build, in panel/) never holds a Felt
@@ -62,6 +63,7 @@ async def async_setup(hass: HomeAssistant, version: str) -> None:
 
 
 async def async_register(hass: HomeAssistant, version: str) -> None:
+    """Set up the panel's files and commands, then register the sidebar panel."""
     await async_setup(hass, version)
     await panel_custom.async_register_panel(
         hass,
@@ -78,6 +80,7 @@ async def async_register(hass: HomeAssistant, version: str) -> None:
 
 @callback
 def async_unregister(hass: HomeAssistant) -> None:
+    """Remove the Felt panel from Home Assistant's sidebar."""
     frontend.async_remove_panel(hass, URL_PATH)
 
 
@@ -92,6 +95,7 @@ def async_unregister(hass: HomeAssistant) -> None:
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_call(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Relay one allowed panel app call to felt-core and return its result."""
     path: str = msg["path"]
     if (msg["method"], path.split("?", 1)[0]) not in _ROUTES:
         connection.send_error(msg["id"], "not_allowed", "not a Felt panel route")
@@ -112,8 +116,9 @@ async def ws_call(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_stream(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:  # ruff: ignore[unused-async]  # async by contract
-    """felt-core's live notices, relayed as subscription events. Reconnects
-    after a break; felt-core's "hello" on each connect makes the page refetch.
+    """felt-core's live notices, relayed as subscription events.
+
+    Reconnects after a break; felt-core's "hello" on each connect makes the page refetch.
     """
     client = _client(hass)
     if client is None:

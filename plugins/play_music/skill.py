@@ -1,9 +1,10 @@
-"""Start new music by name ("play Bohemian Rhapsody") via the Spotify Web
-API — the counterpart media_control's own description explicitly excludes
+"""Start new music by name ("play Bohemian Rhapsody") via the Spotify Web API.
+
+The counterpart media_control's own description explicitly excludes
 ("NOT for starting new music/videos by name"). Started as queue + skip
 (spotify_client.start_track - the plain play call doesn't work on Mario's
-Linux client); a player that hasn't played anything since it opened can't be
-woken remotely.
+Linux client); a player that hasn't played anything since it opened can't
+be woken remotely.
 
 "queue X" / "add X to the queue" / "play X next" only queues it (when=queue,
 Mario 2026-10-18: "make it different things, add to queue or play").
@@ -41,6 +42,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Start playing a track by name now, or only queue it when when=queue."""
     config = ctx.config
     if not config.spotify_refresh_token:
         return SkillResult(text="Spotify isn't connected yet.")

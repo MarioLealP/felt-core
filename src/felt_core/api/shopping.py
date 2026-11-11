@@ -18,6 +18,8 @@ _STATIC_DIR = Path(__file__).resolve().parents[3] / "static"
 
 
 class ShoppingItemRequest(BaseModel):
+    """The text of one shopping-list item to add."""
+
     text: str
 
 
@@ -27,17 +29,20 @@ _ITEM_ID = r"[0-9a-f]{32}"
 
 @router.get("/v1/shopping-list")
 async def get_shopping_list_endpoint() -> list[dict]:
+    """Return every shopping-list item."""
     return await shopping.items(load_config())
 
 
 @router.post("/v1/shopping-list")
 async def add_shopping_list_item_endpoint(req: ShoppingItemRequest) -> dict:
+    """Add one item to the shopping list."""
     await shopping.add(load_config(), req.text)
     return {"ok": True}
 
 
 @router.delete("/v1/shopping-list/checked")
 async def clear_checked_shopping_list_endpoint() -> dict:
+    """Remove every checked item from the shopping list."""
     await shopping.clear_checked(load_config())
     return {"ok": True}
 
@@ -46,6 +51,7 @@ async def clear_checked_shopping_list_endpoint() -> dict:
 async def set_shopping_item_checked_endpoint(
     checked: bool, item_id: Annotated[str, FastAPIPath(pattern=f"^{_ITEM_ID}$")]
 ) -> dict:
+    """Mark one shopping-list item checked or unchecked."""
     await shopping.set_checked(load_config(), item_id, checked)
     return {"ok": True}
 
@@ -54,10 +60,12 @@ async def set_shopping_item_checked_endpoint(
 async def delete_shopping_item_endpoint(
     item_id: Annotated[str, FastAPIPath(pattern=f"^{_ITEM_ID}$")],
 ) -> dict:
+    """Delete one item from the shopping list."""
     await shopping.remove(load_config(), item_id)
     return {"ok": True}
 
 
 @router.get("/shopping-list")
 async def shopping_list_page() -> FileResponse:
+    """Serve the static shopping-list page."""
     return FileResponse(_STATIC_DIR / "shopping-list.html")

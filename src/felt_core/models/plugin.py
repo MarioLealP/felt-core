@@ -18,6 +18,8 @@ class UIAction(BaseModel):
 
 
 class SkillResult(BaseModel):
+    """A skill's reply: text, optional voice line, UI action and animation tag."""
+
     text: str | None = None
     voice_line: str | None = None
     ui_action: UIAction | None = None
@@ -44,8 +46,12 @@ class ExecutionContext(BaseModel):
 
 
 class Skill(Protocol):
+    """The interface every Felt skill implements."""
+
     name: str
     description: str
     parameters_schema: dict[str, Any]
 
-    async def handle(self, params: dict[str, Any], ctx: ExecutionContext) -> SkillResult: ...
+    async def handle(self, params: dict[str, Any], ctx: ExecutionContext) -> SkillResult:
+        """Run one skill and return what Felt should say or show."""
+        ...

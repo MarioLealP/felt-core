@@ -1,5 +1,6 @@
-"""Semantic router (cm-6b0, Mario 2026-10-18: "we need a more broad context
-approach instead of regex"). A message is matched by meaning against the
+"""Semantic router (cm-6b0, Mario 2026-10-18: "we need a more broad context approach instead of regex").
+
+A message is matched by meaning against the
 example phrasings in router_examples.py (bge-small embeddings, CPU, a few
 ms), then a context layer weighs in: whether DJ mode is on, whether music
 is playing, and - for a short follow-up like "what about the weekend?" -
@@ -44,6 +45,8 @@ _NO_MUSIC_PENALTY = 0.05
 
 
 class Context(BaseModel):
+    """Extra context for a pick: the previous message, music playing, DJ mode."""
+
     model_config = ConfigDict(frozen=True)
 
     previous: str | None = None
@@ -52,6 +55,8 @@ class Context(BaseModel):
 
 
 class Pick(BaseModel):
+    """One routing decision: skill, route, score, sure, and how it got there."""
+
     model_config = ConfigDict(frozen=True)
 
     skill: str | None  # None = plain chat, no tool
@@ -62,11 +67,15 @@ class Pick(BaseModel):
 
 
 def skill_of(route: str | None) -> str | None:
+    """The skill part of a route (before the first "/"), or None."""
     return None if route is None else route.split("/", 1)[0]
 
 
 class Router:
+    """Matches a message by meaning against the example phrasings."""
+
     def __init__(self, embed: Embed, bar: float, examples: dict[str | None, list[str]] | None = None) -> None:
+        """Embed every example phrasing and remember which route it belongs to."""
         examples = EXAMPLES if examples is None else examples
         self._embed = embed
         self.bar = bar
@@ -91,6 +100,7 @@ class Router:
         return best
 
     def pick(self, message: str, ctx: Context | None = None) -> Pick:
+        """Pick the route for one message, with the follow-up context weighing in."""
         ctx = ctx or Context()
         alone = _top(self._scores(message, ctx))
         route, score, via = alone[0], alone[1], "message"
@@ -133,8 +143,9 @@ def fastembed_embedder(config: FeltConfig) -> Embed:
 
 
 async def warm(config: FeltConfig, embedder: Callable[[FeltConfig], Embed] = fastembed_embedder):
-    """Load the model and example matrix off the event loop; a missing model
-    (local dev, tests) leaves the router off.
+    """Load the model and example matrix off the event loop.
+
+    A missing model (local dev, tests) leaves the router off.
     """
     global _router
     if not config.router_enabled:
@@ -153,6 +164,7 @@ async def warm(config: FeltConfig, embedder: Callable[[FeltConfig], Embed] = fas
 
 
 def reset() -> None:
+    """Forget the loaded router; the next warm() loads it again."""
     global _router
     _router = None
 
@@ -169,7 +181,8 @@ def start_pick(message: str, ctx: Context) -> asyncio.Task[Pick] | None:
 
 
 async def sure_skill(config: FeltConfig, task: asyncio.Task[Pick] | None) -> Pick | None:
-    """In act mode, the pick when it's sure of a skill (not plain chat);
+    """In act mode, the pick when it's sure of a skill (not plain chat).
+
     None otherwise - or if the pick failed, which never costs her the reply.
     """
     if task is None or config.router_mode != "act":
@@ -189,6 +202,7 @@ _HA_ASSIST_SKILLS = frozenset({"smart_home_control", "shopping_list"})
 
 
 def agrees(pick: str | None, actual: str | None) -> bool:
+    """Whether the router's pick matches what Felt did (see HA_ASSIST)."""
     if actual == HA_ASSIST:
         return pick in _HA_ASSIST_SKILLS
     return pick == actual
@@ -201,8 +215,9 @@ def record_pick(
     actual: str | None,
     fast: bool,
 ) -> None:
-    """Record the pick next to what Felt did, whenever the pick is ready -
-    never awaited here.
+    """Record the pick next to what Felt did, whenever the pick is ready.
+
+    Never awaited here.
     """
     if task is None:
         return
@@ -254,6 +269,7 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS router_shadow (
 
 
 def record(db_path: str, message: str, pick: Pick, actual: str | None, fast: bool) -> None:
+    """Store one router pick next to what Felt did, in router_shadow."""
     with sqlite3.connect(db_path) as conn:
         conn.execute(_SCHEMA)
         conn.execute(
@@ -273,6 +289,7 @@ def record(db_path: str, message: str, pick: Pick, actual: str | None, fast: boo
 
 
 def shadow_rows(db_path: str) -> list[dict]:
+    """Every router_shadow row as a dict, oldest first."""
     with sqlite3.connect(db_path) as conn:
         conn.execute(_SCHEMA)
         conn.row_factory = sqlite3.Row

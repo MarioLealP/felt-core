@@ -1,5 +1,6 @@
-"""The personality system prompt applied to every reply - chat or screen
-reaction. Its own module (not folded into replies.py or
+"""The personality system prompt applied to every reply - chat or screen reaction.
+
+Its own module (not folded into replies.py or
 orchestrator.py) because every other brain submodule needs it: chat
 orchestration, reply generation, screen reactions, and the background
 precompute loops all carry it as their system framing - a leaf module
@@ -30,14 +31,15 @@ PERSONALITY_PROMPT = compile_persona(rng=random.Random(0))  # ruff: ignore[suspi
 
 
 def daily_persona() -> str:
-    """The system prompt for every felt-llm call: the compiled persona with
-    its example rotation seeded by the date (WP-36) - the same text all day,
-    so felt-llm caches it once for chat and every background line alike, and
-    a fresh sample tomorrow. Until 2026-10-21 the background lines drew a
-    fresh sample per call and carried the memory block and tone in here too,
-    so felt-llm re-read the whole persona for each one (~12 s a screen
-    reaction); what changes per call goes in the user turn now
-    (per_call_context).
+    """The system prompt for every felt-llm call: the compiled persona.
+
+    Its example rotation is seeded by the date (WP-36) - the same text all
+    day, so felt-llm caches it once for chat and every background line
+    alike, and a fresh sample tomorrow. Until 2026-10-21 the background
+    lines drew a fresh sample per call and carried the memory block and
+    tone in here too, so felt-llm re-read the whole persona for each one
+    (~12 s a screen reaction); what changes per call goes in the user turn
+    now (per_call_context).
     """
     return compile_persona(rng=random.Random(date.today().toordinal()))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security
 
@@ -48,6 +50,7 @@ def per_call_context(
     config: FeltConfig | None = None,
 ) -> str:
     """What changes per call, for the user turn - never the system prompt.
+
     WP-15: `tone` is felt-animation's GET /tone line (mood x time-of-day +
     streak awareness), None when a call site doesn't carry one. WP-26/P4:
     with `config`, `self_memory.memory_block`'s budgeted "Recently (from your

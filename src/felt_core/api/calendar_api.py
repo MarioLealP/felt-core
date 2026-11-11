@@ -1,8 +1,9 @@
-"""The desktop's agenda (2026-10-15): read-only upcoming events for the tray,
-which hands them to the bar's calendar over D-Bus. Felt reads Home Assistant's
-calendars (ha_calendar.py; HA holds the Google login) and does the reminders
-(calendar_headsup.py); the desktop only shows. Minimal fields on purpose: no
-descriptions, no attendees.
+"""The desktop's agenda (2026-10-15): read-only upcoming events for the tray.
+
+The tray hands them to the bar's calendar over D-Bus. Felt reads Home
+Assistant's calendars (ha_calendar.py; HA holds the Google login) and
+does the reminders (calendar_headsup.py); the desktop only shows.
+Minimal fields on purpose: no descriptions, no attendees.
 """
 
 import asyncio
@@ -30,9 +31,10 @@ def _when(part: dict) -> tuple[str | None, bool]:
 
 
 def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]:
-    """Pure: events -> the bar's items, sorted by start. Cancelled events
-    are left out (HA already drops the ones Mario declined); all-day
-    events stay.
+    """Pure: events -> the bar's items, sorted by start.
+
+    Cancelled events are left out (HA already drops the ones Mario
+    declined); all-day events stay.
     """
     keyed: list[tuple[tuple[str, bool, str], dict]] = []
     for calendar, events in events_by_calendar:
@@ -60,6 +62,7 @@ def agenda_items(events_by_calendar: list[tuple[str, list[dict]]]) -> list[dict]
 
 @router.get("/v1/calendar/upcoming")
 async def upcoming(days: int = 14) -> dict:
+    """Return the next `days` days of agenda events, cached for a minute."""
     days = max(1, min(days, 31))
     async with _lock:
         hit = _cache.get(days)

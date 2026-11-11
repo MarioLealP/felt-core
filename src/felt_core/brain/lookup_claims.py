@@ -1,5 +1,4 @@
-"""FELT-108: spotting a reply that *says* she's looking something up - or
-doing something - without a tool call.
+"""FELT-108: spotting a reply that *says* she's looking something up - or doing something - without a tool call.
 
 felt-llm sometimes answers a tool-worthy question with "Checking that for you,
 just a sec while I pull up the wiki... Okay, so a Chaos Orb is..." and no tool
@@ -133,20 +132,24 @@ def _opening(text: str) -> str:
 
 
 def claims_a_lookup(text: str) -> bool:
+    """Whether she says she's looking something up."""
     return bool(_CLAIM.search(_opening(text)))
 
 
 def claims_an_action(text: str) -> bool:
+    """Whether she says she's done an action a tool does."""
     opening = _opening(text)
     return bool(_ACTION.search(opening) or _MUSIC.search(opening) or _DONE.search(opening) or _SET.search(opening))
 
 
 def refuses_a_tool_job(text: str) -> bool:
+    """Whether she says she can't do a job a tool does."""
     return bool(_REFUSAL.search(_opening(text)))
 
 
 def claims_a_tool_use(text: str) -> bool:
-    """A lookup or an action she says she's doing, or one she says she can't
-    do though a tool does it - each needs a tool call.
+    """A lookup or an action she says she's doing, or one she says she can't do though a tool does it.
+
+    each needs a tool call.
     """
     return claims_a_lookup(text) or claims_an_action(text) or refuses_a_tool_job(text)

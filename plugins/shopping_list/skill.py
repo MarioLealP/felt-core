@@ -1,5 +1,6 @@
-"""A running shopping list - Home Assistant's todo.shopping_list (shopping.py),
-the same list the HA app and the Felt app's Lists page check items off.
+"""A running shopping list - Home Assistant's todo.shopping_list (shopping.py).
+
+The same list the HA app and the Felt app's Lists page check items off.
 Distinct from remember_fact: this is a working list meant to be added to,
 checked off, and cleared, not durable long-term memory.
 
@@ -33,6 +34,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Add, remove or read shopping list items, reporting if HA is unreachable."""
     try:
         return await _handle(params, ctx.config)
     except shopping.ShoppingUnavailableError:

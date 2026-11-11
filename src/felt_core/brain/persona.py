@@ -1,5 +1,6 @@
-"""Felt's character sheet (personality plan P1, 2026-09-27): loads
-persona.yaml and compiles it into the system prompt.
+"""Loads Felt's character sheet (personality plan P1, 2026-09-27).
+
+Compiles persona.yaml into the system prompt.
 
 Replaces the one-paragraph adjective persona. Adjectives without content made
 every model fall back to its generic "friendly assistant", which is why she
@@ -41,6 +42,7 @@ PT_EXAMPLES_PER_PROMPT = 3
 
 @cache
 def load_persona(path: Path = PERSONA_PATH) -> dict[str, Any]:
+    """Read and cache the persona sheet, raising if it has no 'identity'."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or "identity" not in data:
         raise ValueError(f"{path} is not a persona sheet (no 'identity')")
@@ -64,9 +66,10 @@ def compile_persona(
     rng: random.Random | None = None,
     n_examples: int = EXAMPLES_PER_PROMPT,
 ) -> str:
-    """The full system prompt for who she is. `rng` picks the rotating
-    example sample; pass `random.Random(0)` for a stable prompt (tests,
-    and the PERSONALITY_PROMPT constant).
+    """The full system prompt for who she is.
+
+    `rng` picks the rotating example sample; pass `random.Random(0)` for a
+    stable prompt (tests, and the PERSONALITY_PROMPT constant).
     """
     p = persona if persona is not None else load_persona()
     r = rng if rng is not None else random.Random()  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # flavour, not security

@@ -44,7 +44,7 @@ async def _notify(config: FeltConfig, message: str, data: dict | None = None) ->
 
 
 def _label(text: str) -> str:
-    """Pure: an intent extra value - the extras string splits on , and :"""
+    """Pure: an intent extra value - the extras string splits on , and :."""
     return " ".join(text.replace(",", " ").replace(":", " ").split())[:60]
 
 
@@ -61,8 +61,9 @@ def timer_extras(seconds: int, label: str = "") -> list[str]:
 
 
 def alarm_extras(hour: int, minute: int, label: str = "") -> list[str]:
-    """Pure: SET_ALARM's extras - a time of day only (Android has no date
-    extra), so it means "the next time it's this o'clock".
+    """Pure: SET_ALARM's extras - a time of day only (Android has no date extra).
+
+    So it means "the next time it's this o'clock".
     """
     extras = [f"{_EXTRA}HOUR:{hour}:int", f"{_EXTRA}MINUTES:{minute}:int"]
     extras.append(f"{_EXTRA}SKIP_UI:true:boolean")
@@ -72,18 +73,18 @@ def alarm_extras(hour: int, minute: int, label: str = "") -> list[str]:
 
 
 async def start_timer(config: FeltConfig, seconds: int, label: str = "") -> None:
+    """Start a timer in the phone's Clock app that rings after the given seconds."""
     await _notify(config, "command_activity", _activity("SET_TIMER", timer_extras(seconds, label)))
 
 
 async def set_alarm(config: FeltConfig, hour: int, minute: int, label: str = "") -> None:
+    """Set an alarm in the phone's Clock app for the given time of day."""
     extras = alarm_extras(hour, minute, label)
     await _notify(config, "command_activity", _activity("SET_ALARM", extras))
 
 
 async def ring(config: FeltConfig) -> None:
-    """Find-my-phone: a notification on the alarm stream, loud even on
-    silent.
-    """
+    """Find-my-phone: a notification on the alarm stream, loud even on silent."""
     await _notify(
         config,
         "Here! - Felt",
@@ -92,15 +93,17 @@ async def ring(config: FeltConfig) -> None:
 
 
 async def notify(config: FeltConfig, title: str, message: str, tag: str) -> None:
-    """A plain notification on the phone (the HA app), high priority so it
-    shows at once; the same tag replaces the previous one.
+    """A plain notification on the phone (the HA app), high priority so it shows at once.
+
+    The same tag replaces the previous one.
     """
     await _notify(config, message, {"title": title, "tag": tag, "priority": "high", "ttl": 0})
 
 
 async def next_alarm(config: FeltConfig) -> datetime | None:
-    """The phone's next alarm (the app's Next alarm sensor - Google Clock or
-    whatever app set it), or None when there's none set.
+    """The phone's next alarm (the app's Next alarm sensor - Google Clock or whatever app set it).
+
+    Or None when there's none set.
     """
     headers = _headers(config)
     try:

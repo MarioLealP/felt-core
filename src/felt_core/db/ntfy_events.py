@@ -4,6 +4,7 @@ from felt_core.db.session import _connect, _require_lastrowid
 
 
 def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int | None) -> int:
+    """Store one ntfy event and return its id."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -16,6 +17,7 @@ def save_ntfy_event(db_path: str, title: str | None, message: str, priority: int
 
 
 def get_recent_ntfy_events(db_path: str, limit: int = 10) -> list[dict]:
+    """Return the most recent ntfy events, newest first."""
     conn = _connect(db_path)
     rows = conn.execute(
         "SELECT title, message, priority, received_at FROM ntfy_events ORDER BY id DESC LIMIT ?",

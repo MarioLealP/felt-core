@@ -1,6 +1,7 @@
-"""The Ender 3D printer through Home Assistant (2026-10-19: Mario, "can we get
-moonraker/mainsail/klipper through printer so felt can tell me when prints
-are finished etc?").
+"""The Ender 3D printer through Home Assistant.
+
+(2026-10-19: Mario, "can we get moonraker/mainsail/klipper through printer
+so felt can tell me when prints are finished etc?").
 
 Klipper's moonraker publishes the printer over MQTT into HA (device "Ender",
 `sensor.ender_*`; workspace runbooks/ender3-max-neo-klipper.md), so she reads
@@ -60,6 +61,8 @@ class EnderUnavailableError(Exception):
 
 
 class Snapshot(BaseModel):
+    """The printer's state and progress as read from Home Assistant."""
+
     state: str
     file: str = ""
     progress: float | None = None
@@ -127,8 +130,9 @@ async def _states(config: FeltConfig, fields: tuple[str, ...]) -> dict[str, str]
 
 
 async def _filament(config: FeltConfig) -> str | None:
-    """Klipper's runout sensor (binary_sensor.ender_filament, on = filament
-    in), or None when HA doesn't have it - never in the way of the line.
+    """Klipper's runout sensor (binary_sensor.ender_filament, on = filament in), or None.
+
+    None when HA doesn't have it - never in the way of the line.
     """
     try:
         async with httpx2.AsyncClient(
@@ -141,6 +145,7 @@ async def _filament(config: FeltConfig) -> str | None:
 
 
 async def snapshot(config: FeltConfig) -> Snapshot:
+    """The printer's current state as a Snapshot, read from Home Assistant."""
     return snapshot_from(await _states(config, _FIELDS))
 
 
@@ -188,8 +193,10 @@ def describe(s: Snapshot) -> str:
 
 
 def event_for(prev: str | None, cur: str) -> str | None:
-    """Pure: the transition worth telling Mario about, if any. No previous
-    state (first run) is never an event - she'd announce an old print.
+    """Pure: the transition worth telling Mario about, if any.
+
+    No previous state (first run) is never an event - she'd announce an
+    old print.
     """
     if prev is None or prev == cur:
         return None
@@ -270,6 +277,7 @@ async def check(config: FeltConfig) -> str | None:
 
 
 async def watch(config: FeltConfig) -> None:
+    """Poll the printer forever, saying when a print ends, fails or pauses."""
     if not (config.ha_url and config.ha_token):
         logger.info("ender: HA not configured, not watching the printer")
         return

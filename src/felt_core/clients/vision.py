@@ -36,9 +36,11 @@ _POE_MAX_TOKENS = 260
 
 
 async def describe(jpeg_bytes: bytes, app: str, title: str, config: FeltConfig, *, poe: bool) -> str:
-    """felt-vision's description of the screenshot. Raises LocalLLMUnavailableError
-    when it is down or answers nothing usable (AmbientSkippedError when the gate
-    made an ambient call give way).
+    """felt-vision's description of the screenshot.
+
+    Raises LocalLLMUnavailableError when it is down or answers nothing
+    usable (AmbientSkippedError when the gate made an ambient call give
+    way).
     """
     if not config.vision_url:
         raise LocalLLMUnavailableError("vision_url is not configured")

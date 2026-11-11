@@ -61,6 +61,7 @@ def schedule_mark(config, session_id: str = SESSION) -> None:
 
 
 def sso_user(request: Request, x_authentik_username: str | None = Header(default=None)) -> str:
+    """Who the request is: the SSO name, or the HA panel user."""
     # set only by api.py's middleware, after a valid ha-felt token on /v1/ha/app/*
     if getattr(request.state, "ha_agent", False):
         return HA_PANEL_USER
@@ -70,6 +71,8 @@ def sso_user(request: Request, x_authentik_username: str | None = Header(default
 
 
 class MarkOut(BaseModel):
+    """One mark she left on a line, as the app shows it."""
+
     id: str
     type: str
     quote: str
@@ -79,12 +82,16 @@ class MarkOut(BaseModel):
 
 
 class Remark(BaseModel):
+    """One of her remarks, shown as an aside."""
+
     id: int
     content: str
     created_at: str
 
 
 class Message(BaseModel):
+    """One conversation line, with its marks and answered aside."""
+
     id: int
     role: str
     content: str
@@ -95,21 +102,29 @@ class Message(BaseModel):
 
 
 class Asides(BaseModel):
+    """Her asides waiting, and how many more there are."""
+
     asides: list[Remark]
     more: int
 
 
 class Me(BaseModel):
+    """The signed-in user's name."""
+
     user: str
 
 
 class SayRequest(BaseModel):
+    """His line to say, and the aside it answers, if any."""
+
     message: str
     # id of the aside he tapped to answer (GET /asides)
     answering: int | None = None
 
 
 class SayResponse(BaseModel):
+    """The stored user line and her reply, so the app can append them."""
+
     # the stored user line and her reply, with ids, so the app can append
     # them without refetching the page
     messages: list[Message]
@@ -117,20 +132,25 @@ class SayResponse(BaseModel):
 
 @router.get("/me", response_model=Me)
 async def me(user: Annotated[str, Depends(sso_user)]) -> Me:
+    """Who the request is signed in as."""
     return Me(user=user)
 
 
 @router.get("/history", response_model=list[Message])
 async def history(_user: Annotated[str, Depends(sso_user)], before: int | None = None, limit: int = 50) -> list[dict]:
+    """One page of the shared session history."""
     return history_page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
 @router.get("/asides", response_model=Asides)
 async def asides(_user: Annotated[str, Depends(sso_user)]) -> dict:
+    """Her asides waiting for him, and how many more there are."""
     return current_asides(load_config().db_path, SESSION)
 
 
 class MarginLine(BaseModel):
+    """One margin line as the app shows it."""
+
     id: int
     kind: str
     source: str
@@ -140,10 +160,14 @@ class MarginLine(BaseModel):
 
 
 class Unread(BaseModel):
+    """The unread margin-line count."""
+
     unread: int
 
 
 class MarkRequest(BaseModel):
+    """Which margin lines to mark, and how."""
+
     ids: list[int] = Field(default_factory=list, max_length=500)
     action: Literal["read", "dismiss", "snooze"]
     hours: float | None = None
@@ -160,6 +184,8 @@ class MarkRequest(BaseModel):
 
 
 class MarkResult(BaseModel):
+    """How many lines the action changed."""
+
     changed: int
 
 
@@ -167,16 +193,19 @@ class MarkResult(BaseModel):
 async def margins_page(
     _user: Annotated[str, Depends(sso_user)], before: int | None = None, limit: int = 50
 ) -> list[dict]:
+    """One page of margin lines, older than `before`."""
     return margins.page(load_config().db_path, SESSION, before_id=before, limit=limit)
 
 
 @router.get("/margins/count", response_model=Unread)
 async def margins_count(_user: Annotated[str, Depends(sso_user)]) -> Unread:
+    """How many margin lines are unread."""
     return Unread(unread=margins.unread(load_config().db_path, SESSION))
 
 
 @router.post("/margins/mark", response_model=MarkResult)
 async def margins_mark(req: MarkRequest, _user: Annotated[str, Depends(sso_user)]) -> MarkResult:
+    """Read, dismiss or snooze margin lines, or mark all read."""
     db_path = load_config().db_path
     if req.all:
         return MarkResult(changed=margins.read_all(db_path, SESSION))
@@ -185,18 +214,22 @@ async def margins_mark(req: MarkRequest, _user: Annotated[str, Depends(sso_user)
 
 
 class SeenRequest(BaseModel):
+    """The ids of the marks the app has drawn."""
+
     ids: list[str] = Field(min_length=1, max_length=200)
 
 
 @router.post("/marks/seen", response_model=MarkResult)
 async def marks_seen(req: SeenRequest, _user: Annotated[str, Depends(sso_user)]) -> MarkResult:
+    """Record which marks were drawn, so they show inked."""
     return MarkResult(changed=mark_seen(load_config().db_path, req.ids))
 
 
 @router.get("/stream")
 async def stream(request: Request, _user: Annotated[str, Depends(sso_user)]) -> StreamingResponse:
-    """Live notices for the open app (app_stream.py). An app window opening
-    is a sign of him, so it can start her day (diary.py).
+    """Live notices for the open app (app_stream.py).
+
+    An app window opening is a sign of him, so it can start her day (diary.py).
     """
     config = load_config()
     he_is_here(config)
@@ -214,6 +247,7 @@ async def stream(request: Request, _user: Annotated[str, Depends(sso_user)]) -> 
 
 @router.post("/chat", response_model=SayResponse)
 async def say(req: SayRequest, _user: Annotated[str, Depends(sso_user)]) -> SayResponse:
+    """Store his line, get her reply, and return both with ids."""
     text = req.message.strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty message")

@@ -49,8 +49,9 @@ def clean(message: str) -> str:
 
 
 async def handle(config: FeltConfig, message: str) -> str | None:
-    """HA's answer ("Turned off the light", "Yes", "5") when it matched and
-    did it; None to leave the message to her model.
+    """HA's answer ("Turned off the light", "Yes", "5") when it matched and did it.
+
+    None to leave the message to her model.
     """
     if not (config.ha_url and config.ha_token):
         return None

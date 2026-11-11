@@ -1,5 +1,6 @@
-"""Where the appointment is (Mario 2026-10-19: "Schedule x. OK scheduled!
-Where?") - his answer to create_calendar_event's question. The one still
+"""Where the appointment is - his answer to create_calendar_event's question.
+
+(Mario 2026-10-19: "Schedule x. OK scheduled! Where?"). The one still
 held (appointment_hold.py) goes in with the place: one add. An answer that
 comes after the 30 s, when it went in without a place, changes the one
 create_calendar_event made last (within 2 h) - never a guess by title.
@@ -29,6 +30,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Add Mario's answer as the place of the appointment he just created."""
     config = ctx.config
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")

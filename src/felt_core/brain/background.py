@@ -1,5 +1,6 @@
-"""The background loops started from api.py's lifespan: the weather
-precompute (WP-06 - keeps a ready-to-serve "what's the weather right now"
+"""The background loops started from api.py's lifespan.
+
+The weather precompute (WP-06 - keeps a ready-to-serve "what's the weather right now"
 answer warm), the music-taste poll (WP-16 Part 2 - builds the
 skip/full-play listening history that feeds back into the chat prompt) and
 the felt-llm warm-up (WP-36 D'' - primes the persona+tools prompt cache
@@ -58,7 +59,9 @@ def _weather_precompute_fresh() -> dict | None:
 
 
 async def refresh_weather_precompute(config: FeltConfig) -> None:
-    """One full precompute pass: run get_weather("now") for real, phrase
+    """One full precompute pass: run get_weather("now") for real.
+
+    Then phrase
     it (felt-llm, same as a live request would), pre-render its TTS, and warm
     the TTS cache with that exact text - so chat()'s fast path and
     api._synthesize_reply's cache lookup are naturally consistent (both
@@ -125,8 +128,9 @@ async def refresh_weather_precompute(config: FeltConfig) -> None:
 
 
 def current_weather() -> dict:
-    """WP-21: the precompute's current condition for the desktop (props:
-    umbrella when it rains, sunglasses when it's sunny) - "rain" / "sun" /
+    """WP-21: the precompute's current condition for the desktop.
+
+    Props: umbrella when it rains, sunglasses when it's sunny - "rain" / "sun" /
     "snow" / "storm" from the get_weather condition tag, None when the
     code has no mapping or nothing fresh is cached. No text, just the
     condition.
@@ -144,6 +148,7 @@ def current_weather() -> dict:
 
 
 async def weather_precompute_loop(config: FeltConfig) -> None:
+    """Keep the weather precompute refreshed on its interval."""
     while True:
         try:
             if features.enabled(config.db_path, "ambient.weather_line"):
@@ -158,7 +163,9 @@ _WARMUP_INTERVAL_S = 60
 
 
 async def warm_up_llm(config: FeltConfig) -> None:
-    """One tool-bearing chat call built exactly like a real turn (persona +
+    """One tool-bearing chat call built exactly like a real turn.
+
+    (Persona +
     every skill's tool declaration, dummy message), so felt-llm's prompt
     cache holds the ~5K-token prefix before Mario's first turn - the first
     turn after a restart otherwise costs ~22 s. Raises LocalLLMUnavailableError;
@@ -170,7 +177,9 @@ async def warm_up_llm(config: FeltConfig) -> None:
 
 
 async def llm_warmup_loop(config: FeltConfig) -> None:
-    """Checks `GET /health` every 60 s; on startup and whenever felt-llm
+    """Checks `GET /health` every 60 s.
+
+    On startup and whenever felt-llm
     comes back after being unreachable, runs the warm-up. Never raises: a
     failure is logged and retried next minute.
     """
@@ -198,7 +207,9 @@ _MUSIC_TASTE_POLL_INTERVAL_S = 15.0
 
 
 def _track_key(track: dict | None) -> str | None:
-    """A stable identity for a Spotify item. Local files (and some other
+    """A stable identity for a Spotify item.
+
+    Local files (and some other
     non-catalogue items) come back with `id: null` but still carry a
     `uri` ("spotify:local:..."), so that's the fallback key. None means
     the item can't be keyed at all and is simply not tracked - the
@@ -211,7 +222,9 @@ def _track_key(track: dict | None) -> str | None:
 
 
 def _finished_play_from_transition(previous: dict | None, current: dict | None) -> dict | None:
-    """Pure: `previous`/`current` are get_currently_playing snapshots (or
+    """Pure: builds the record of a listen that finished between two polls.
+
+    `previous`/`current` are get_currently_playing snapshots (or
     None) from two consecutive polls. A listen "finishes" - and gets
     returned as a record ready for db.record_music_play(**record) - when
     the track id changed or playback stopped since `previous`; returns
@@ -243,8 +256,9 @@ def _finished_play_from_transition(previous: dict | None, current: dict | None) 
 
 
 async def music_taste_loop(config: FeltConfig) -> None:
-    """WP-16 Part 2: polls Spotify's currently-playing endpoint to build a
-    skip/full-play history per track (see music_taste.summarize_taste for
+    """WP-16 Part 2: polls Spotify's currently-playing endpoint.
+
+    Builds a skip/full-play history per track (see music_taste.summarize_taste for
     how it's surfaced back into the prompt), and since 10-03 her remark on
     a new song (song_remarks.py). felt-tray still polls /v1/music/now, but
     only for mouthing along to a chorus on the desktop.

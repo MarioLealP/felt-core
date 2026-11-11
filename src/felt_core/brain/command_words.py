@@ -1,6 +1,8 @@
-"""What wraps a plain command, shared by the music fast path and ha_assist: a
-polite opening ("hey", "can you" / "can u", "please" / "pls") and a trailing "please" /
-"thanks" / emoji, so "can you skip this please :)" is still just "skip".
+"""What wraps a plain command, shared by the music fast path and ha_assist.
+
+A polite opening ("hey", "can you" / "can u", "please" / "pls") and a
+trailing "please" / "thanks" / emoji, so "can you skip this please :)" is
+still just "skip".
 """
 
 POLITE = (

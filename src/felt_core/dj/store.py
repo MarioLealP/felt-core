@@ -1,6 +1,6 @@
-"""DJ mode's memory: every pick she queued and how it went, and Mario's
-explicit "more like this" / "not this". Its own tables (db.py is big enough);
-created on first use.
+"""DJ mode's memory: every pick she queued and how it went, and Mario's explicit "more like this" / "not this".
+
+Its own tables (db.py is big enough); created on first use.
 """
 
 import sqlite3
@@ -35,6 +35,7 @@ def _conn(db_path: str) -> sqlite3.Connection:
 
 
 def add_pick(db_path: str, uri: str, title: str, artist: str, discovery: bool) -> None:
+    """Store one queued pick and whether it was a discovery."""
     conn = _conn(db_path)
     with conn:
         conn.execute(
@@ -45,8 +46,9 @@ def add_pick(db_path: str, uri: str, title: str, artist: str, discovery: bool) -
 
 
 def set_outcome(db_path: str, uri: str, outcome: str) -> None:
-    """`outcome`: 'played' (to the end, or near it) or 'skipped'. The latest
-    open pick with this uri gets it.
+    """`outcome`: 'played' (to the end, or near it) or 'skipped'.
+
+    The latest open pick with this uri gets it.
     """
     conn = _conn(db_path)
     with conn:
@@ -59,6 +61,7 @@ def set_outcome(db_path: str, uri: str, outcome: str) -> None:
 
 
 def recent_pick_uris(db_path: str, days: int) -> set[str]:
+    """Return the uris picked within the last `days` days."""
     conn = _conn(db_path)
     rows = conn.execute("SELECT uri FROM dj_picks WHERE picked_at >= datetime('now', ?)", (f"-{days} days",)).fetchall()
     conn.close()
@@ -77,6 +80,7 @@ def discovery_outcomes(db_path: str, last: int) -> list[bool]:
 
 
 def pick_outcomes(db_path: str, last: int) -> list[dict]:
+    """Return the latest picks that have an outcome, newest first."""
     conn = _conn(db_path)
     rows = conn.execute(
         "SELECT title, artist, discovery, outcome FROM dj_picks WHERE outcome IS NOT NULL ORDER BY id DESC LIMIT ?",
@@ -87,6 +91,7 @@ def pick_outcomes(db_path: str, last: int) -> list[dict]:
 
 
 def add_feedback(db_path: str, title: str, artist: str, liked: bool) -> None:
+    """Store Mario's like or dislike for one track."""
     conn = _conn(db_path)
     with conn:
         conn.execute(
@@ -97,6 +102,7 @@ def add_feedback(db_path: str, title: str, artist: str, liked: bool) -> None:
 
 
 def feedback(db_path: str, last: int) -> list[dict]:
+    """Return the latest feedback rows (title, artist, liked), newest first."""
     conn = _conn(db_path)
     rows = conn.execute("SELECT title, artist, liked FROM dj_feedback ORDER BY id DESC LIMIT ?", (last,)).fetchall()
     conn.close()
@@ -104,8 +110,9 @@ def feedback(db_path: str, last: int) -> list[dict]:
 
 
 def history_artists(db_path: str) -> list[dict]:
-    """Per artist from the listening history (music_taste): plays, skips. A
-    track by several artists ("A, B") counts for each.
+    """Per artist from the listening history (music_taste): plays, skips.
+
+    A track by several artists ("A, B") counts for each.
     """
     conn = _conn(db_path)
     rows = conn.execute("SELECT artists, skipped FROM music_taste").fetchall()

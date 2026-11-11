@@ -35,6 +35,8 @@ router = APIRouter()
 
 
 class ScreenContextRequest(BaseModel):
+    """A passive screen description from felt-vision and optional tone."""
+
     description: str
     tone: str | None = None
 
@@ -42,6 +44,7 @@ class ScreenContextRequest(BaseModel):
 @router.post("/v1/context/screen")
 async def screen_context_endpoint(req: ScreenContextRequest, session_id: str = "default") -> Response:
     """Receives passive screen observations from felt-vision.
+
     Returns audio+animation headers just like chat, but handles pure-silent
     reactions by skipping TTS entirely. 503 when felt-llm is down.
     """
@@ -75,10 +78,12 @@ async def react_screen_endpoint(
     tone: Annotated[str | None, Form()] = None,
     seen: Annotated[str | None, Form()] = None,
 ) -> Response:
-    """WP-07: felt-tray's new per-window capture path - the JPEG has
-    already cleared the blocklist client-side before this is ever called.
-    A single multimodal felt-llm call - 503 {"detail": "felt-llm offline"}
-    when it's unreachable, which felt-tray treats as "no reaction".
+    """WP-07: felt-tray's new per-window capture path.
+
+    The JPEG has already cleared the blocklist client-side before this is
+    ever called. A single multimodal felt-llm call - 503 {"detail":
+    "felt-llm offline"} when it's unreachable, which felt-tray treats as
+    "no reaction".
 
     cm-qplv: with its [vision] table set, felt-tray describes the screen on
     the desktop's own GPU and sends that text as `seen` instead of the image.
@@ -127,6 +132,8 @@ async def react_screen_endpoint(
 
 
 class EventReactionRequest(BaseModel):
+    """A desktop event and its details for a spoken reaction."""
+
     event: str
     details: dict[str, Any] = {}
     # WP-15 tone line, same optional field the screen endpoints take.
@@ -135,8 +142,9 @@ class EventReactionRequest(BaseModel):
 
 @router.post("/v1/react/event")
 async def react_event_endpoint(req: EventReactionRequest, session_id: str = "dashboard") -> Response:
-    """A short spoken reaction to a desktop event (events.py) - e.g.
-    {"event": "music_new_track", "details": {"title", "artist", "album"}}.
+    """A short spoken reaction to a desktop event (events.py).
+
+    e.g. {"event": "music_new_track", "details": {"title", "artist", "album"}}.
 
     Same response contract as /v1/react/screen, so clients reuse their
     handling: 200 audio/wav with X-Reply-Text (percent-encoded) and
@@ -180,6 +188,8 @@ async def react_event_endpoint(req: EventReactionRequest, session_id: str = "das
 
 
 class EventLogRequest(BaseModel):
+    """A silent desktop event kind, its data and optional timestamp."""
+
     kind: str
     data: dict[str, Any] = {}
     at: str | None = None
@@ -187,11 +197,13 @@ class EventLogRequest(BaseModel):
 
 @router.post("/v1/events", status_code=204)
 async def log_event_endpoint(req: EventLogRequest, background_tasks: BackgroundTasks) -> Response:
-    """WP-26: felt-animation's SILENT desktop-event log - game_start/stop,
-    afk_start/end, day_start, music_track, mood, window_fall, prop_used,
-    hush, ledge_sit, ... Any kind is accepted (an unrecognized one is
-    logged but contributes nothing to the diary - see diary._event_line);
-    `data` is size-capped, never rejected. No reaction, no TTS - distinct
+    """WP-26: felt-animation's SILENT desktop-event log.
+
+    game_start/stop, afk_start/end, day_start, music_track, mood,
+    window_fall, prop_used, hush, ledge_sit, ... Any kind is accepted (an
+    unrecognized one is logged but contributes nothing to the diary - see
+    diary._event_line); `data` is size-capped, never rejected. No reaction,
+    no TTS - distinct
     from /v1/react/event (events.py), which is a SPOKEN reaction. Also the
     WP-26 diary trigger: day_start/afk_end after 05:00 local writes
     yesterday's entry. It runs as a FastAPI background task: after the 204

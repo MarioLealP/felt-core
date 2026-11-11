@@ -1,7 +1,7 @@
-"""Timers — a real timer in the phone's Clock app (phone.py, via the Home
-Assistant app, 2026-10-18), so it rings on the phone. If the phone can't
-be reached, the old fallback: a push notification (notify.py) when it
-elapses.
+"""Timers — a real timer in the phone's Clock app (phone.py, via the Home Assistant app, 2026-10-18).
+
+So it rings on the phone. If the phone can't be reached, the old
+fallback: a push notification (notify.py) when it elapses.
 
 v1, deliberately simple: an in-process asyncio task, not persisted — a
 felt-core restart loses pending timers. Good enough for "remind me in 10
@@ -41,6 +41,7 @@ async def _fire_after(config, minutes: float, label: str) -> None:
 
 
 async def handle(params, ctx):
+    """Set a countdown timer on Mario's phone, with a notification fallback."""
     minutes = get_single_param(params, "minutes", "duration", "duration_minutes", "time")
     if minutes is None:
         return SkillResult(text="I need a number of minutes to set a timer.")

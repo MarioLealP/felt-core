@@ -1,5 +1,7 @@
-"""Mario's taste, written out for her model: who he plays, who he skips, what
-he told her, how her last picks went. Pure - the DJ gathers the inputs.
+"""Mario's taste, written out for her model.
+
+Who he plays, who he skips, what he told her, how her last picks went.
+Pure - the DJ gathers the inputs.
 """
 
 _TOP = 25
@@ -13,7 +15,9 @@ def build_profile(
     outcomes: list[dict],
     hour: int,
 ) -> str:
-    """`history_artists`: {artist, plays, skips} from the listening history;
+    """Build Mario's taste profile text for her model.
+
+    `history_artists`: {artist, plays, skips} from the listening history;
     `top_artists`: Spotify's ~6-month top; `feedback`: {title, artist, liked};
     `outcomes`: her recent picks {title, artist, discovery, outcome}.
     """

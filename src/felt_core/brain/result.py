@@ -10,11 +10,12 @@ from felt_core.models.plugin import UIAction
 
 
 class ChatResult(BaseModel):
-    """What chat() actually produces - a reply plus whatever side-channel
-    output the triggered skill (if any) wants relayed: a UI action (e.g.
-    a toast) and/or an animation tag for felt-overlay. A plain
-    conversational reply (no tool call) has neither - there's nothing to
-    react to.
+    """What chat() actually produces.
+
+    A reply plus whatever side-channel output the triggered skill (if
+    any) wants relayed: a UI action (e.g. a toast) and/or an animation
+    tag for felt-overlay. A plain conversational reply (no tool call) has
+    neither - there's nothing to react to.
     """
 
     reply: str

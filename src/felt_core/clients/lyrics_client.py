@@ -1,10 +1,11 @@
-"""WP-16 Part 3: LRCLIB lyrics. Spotify's public Web API has no lyrics
-endpoint, and scraping its private one is a token-hack/ToS path this
-project has already ruled out elsewhere (spotify_client.py). LRCLIB
-(lrclib.net) is public, keyless, and returns line-synced LRC text when
-available - `syncedLyrics` is preferred over `plainLyrics` since only the
-synced form carries the per-line timestamps mouth-along/current-line
-lookups need.
+"""WP-16 Part 3: LRCLIB lyrics.
+
+Spotify's public Web API has no lyrics endpoint, and scraping its
+private one is a token-hack/ToS path this project has already ruled out
+elsewhere (spotify_client.py). LRCLIB (lrclib.net) is public, keyless,
+and returns line-synced LRC text when available - `syncedLyrics` is
+preferred over `plainLyrics` since only the synced form carries the
+per-line timestamps mouth-along/current-line lookups need.
 """
 
 import hashlib
@@ -39,11 +40,12 @@ _FINAL_LINE_WINDOW_MS = 4000
 
 
 def parse_lrc(text: str) -> list[dict]:
-    """Pure: '[mm:ss.xx]lyric text' lines -> time-sorted
-    [{"time_ms": int, "text": str}]. Lines with empty text are kept
-    (LRCLIB uses them to mark instrumental gaps - useful timing
-    information) but lines with no recognizable timestamp tag at all are
-    dropped (metadata tags like [ar:...]/[ti:...]/[length:...]).
+    """Pure: '[mm:ss.xx]lyric text' lines -> time-sorted [{"time_ms": int, "text": str}].
+
+    Lines with empty text are kept (LRCLIB uses them to mark instrumental
+    gaps - useful timing information) but lines with no recognizable
+    timestamp tag at all are dropped (metadata tags like
+    [ar:...]/[ti:...]/[length:...]).
     """
     lines = []
     for raw_line in text.splitlines():
@@ -58,10 +60,11 @@ def parse_lrc(text: str) -> list[dict]:
 
 
 def with_end_times(lines: list[dict]) -> list[dict]:
-    """Pure: parse_lrc's [{"time_ms", "text"}] -> [{"start_ms", "end_ms",
-    "text"}], each line ending where the next one starts (the last one
-    gets _FINAL_LINE_WINDOW_MS). The real per-line timings a desktop
-    client needs to build a mouth-along viseme timeline.
+    """Pure: parse_lrc's [{"time_ms", "text"}] -> [{"start_ms", "end_ms", "text"}].
+
+    Each line ending where the next one starts (the last one gets
+    _FINAL_LINE_WINDOW_MS). The real per-line timings a desktop client
+    needs to build a mouth-along viseme timeline.
     """
     out = []
     for i, line in enumerate(lines):
@@ -71,10 +74,12 @@ def with_end_times(lines: list[dict]) -> list[dict]:
 
 
 def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | None:
-    """Pure: the chorus of a synced lyric - the most-repeated non-empty
-    line (>= _MIN_CHORUS_REPEATS occurrences), plus any other line
-    repeated nearly as often (within _CHORUS_COUNT_SLACK), since a chorus
-    is usually several lines. Returns.
+    """Pure: the chorus of a synced lyric.
+
+    The most-repeated non-empty line (>= _MIN_CHORUS_REPEATS occurrences),
+    plus any other line repeated nearly as often (within
+    _CHORUS_COUNT_SLACK), since a chorus is usually several lines.
+    Returns.
 
         {"text", "start_ms", "end_ms", "windows": [...]}
 
@@ -132,9 +137,10 @@ def find_chorus(lines: list[dict], position_ms: int | None = None) -> dict | Non
 
 
 def current_line(lines: list[dict], position_ms: int) -> str | None:
-    """Pure: the lyric line active at `position_ms` - the last line whose
-    timestamp has already passed. None before the first line, with no
-    lines, or if that line is itself an instrumental gap (empty text).
+    """Pure: the lyric line active at `position_ms` - the last line whose timestamp has already passed.
+
+    None before the first line, with no lines, or if that line is itself
+    an instrumental gap (empty text).
     """
     active = None
     for line in lines:
@@ -146,10 +152,12 @@ def current_line(lines: list[dict], position_ms: int) -> str | None:
 
 
 def _cache_key(track_id: str | None, track_name: str, artist_name: str, album_name: str, duration_s: int) -> str:
-    """A Spotify catalogue id (base62) is used as-is. Anything else - a
-    local file's null id, a uri with colons - would either collide
-    ("None.json" shared by every local file) or not be filesystem-safe,
-    so it's keyed by a hash of what was actually looked up instead.
+    """A Spotify catalogue id (base62) is used as-is.
+
+    Anything else - a local file's null id, a uri with colons - would
+    either collide ("None.json" shared by every local file) or not be
+    filesystem-safe, so it's keyed by a hash of what was actually looked
+    up instead.
     """
     if track_id and _TRACK_ID_RE.match(track_id):
         return track_id
@@ -174,9 +182,10 @@ async def get_lyrics(
     *,
     user_agent: str = DEFAULT_USER_AGENT,
 ) -> dict | None:
-    """`{"synced": [...], "plain": str | None}`, or None if LRCLIB has
-    nothing for this track. Cached permanently on disk, one JSON file per
-    track_id (`cache_dir/<track_id>.json`) - lyrics don't change for a
+    """`{"synced": [...], "plain": str | None}`, or None if LRCLIB has nothing for this track.
+
+    Cached permanently on disk, one JSON file per track_id
+    (`cache_dir/<track_id>.json`) - lyrics don't change for a
     given track, so this survives a felt-core restart, unlike
     get_currently_playing's short in-process TTL. A genuine "not found"
     IS cached (so a track LRCLIB has nothing for isn't re-requested every

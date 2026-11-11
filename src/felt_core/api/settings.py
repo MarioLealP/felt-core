@@ -12,11 +12,14 @@ router = APIRouter()
 
 
 class TemperatureUnitRequest(BaseModel):
+    """Which temperature unit to use: celsius or fahrenheit."""
+
     unit: Literal["celsius", "fahrenheit"]
 
 
 @router.post("/v1/settings/temperature-unit")
 async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
+    """Store the requested temperature unit and return it."""
     config = load_config()
     set_setting(config.db_path, "temperature_unit", req.unit)
     return {"unit": req.unit}
@@ -24,5 +27,6 @@ async def set_temperature_unit(req: TemperatureUnitRequest) -> dict:
 
 @router.get("/v1/settings/temperature-unit")
 async def get_temperature_unit() -> dict:
+    """Return the stored temperature unit, defaulting to celsius."""
     config = load_config()
     return {"unit": get_setting(config.db_path, "temperature_unit", "celsius")}

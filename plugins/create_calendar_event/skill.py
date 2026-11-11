@@ -1,5 +1,6 @@
-"""Calendar, write side ("add a dentist appointment Friday at 3pm") —
-Mario, 2026-09-14: "add event creation". Through Home Assistant since
+"""Calendar, write side ("add a dentist appointment Friday at 3pm").
+
+— Mario, 2026-09-14: "add event creation". Through Home Assistant since
 2026-10-19 (ha_calendar.py).
 
 Defaults to Mario's primary calendar; a named calendar ("add it to my
@@ -53,6 +54,7 @@ parameters_schema = {
 
 
 async def handle(params, ctx):
+    """Create the event on Mario's calendar, holding for a place if he didn't say where."""
     config = ctx.config
     if not connected(config):
         return SkillResult(text="The calendar isn't connected yet.")

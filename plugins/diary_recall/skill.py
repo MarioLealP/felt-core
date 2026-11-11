@@ -1,5 +1,6 @@
-"""WP-26: "what did I do yesterday?" / "how was my week?" - answered
-straight from the diary (felt_core.core.diary/db.py), not a fresh model guess.
+"""WP-26: "what did I do yesterday?" / "how was my week?" - answered straight from the diary.
+
+(felt_core.core.diary/db.py), not a fresh model guess.
 Smallest viable version: no LLM call of its own, just the stored entry/
 summary text handed back for the normal skill-phrasing step to voice
 naturally (plugins/skills.json marks this "public" - the diary text is
@@ -37,6 +38,7 @@ def _wants_week(raw: str) -> bool:
 
 
 async def handle(params, ctx):  # ruff: ignore[unused-async]  # async by contract
+    """Return yesterday's diary entry, or the week's summary when he asks for the week."""
     raw_range = str(get_single_param(params, "range") or ctx.original_message or "")
     config = ctx.config
 

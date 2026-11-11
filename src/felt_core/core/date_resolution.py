@@ -1,5 +1,6 @@
-"""Arbitrary day/date-phrase resolution, extracted so it can be unit
-tested without a network call. Built to replace get_weather's original
+"""Arbitrary day/date-phrase resolution, extracted so it can be unit tested without a network call.
+
+Built to replace get_weather's original
 fixed now/today/tomorrow/weekend string matching (flagged by Mario as
 "not right" on 2026-09-12) with genuine parsing of whatever phrase the
 router happens to pass through — "next tuesday", "in 3 days", a literal
@@ -16,8 +17,9 @@ _WEEKDAY_NAMES = {"monday", "tuesday", "wednesday", "thursday", "friday", "satur
 
 
 def resolve_date(day_text: str, today: date) -> date | None:
-    """Parse an arbitrary day/date phrase relative to `today`. Returns
-    None if `day_text` isn't a recognizable date reference at all.
+    """Parse an arbitrary day/date phrase relative to `today`.
+
+    Returns None if `day_text` isn't a recognizable date reference at all.
     """
     parsed = _parse(day_text, today)
     if parsed is not None:
@@ -56,8 +58,9 @@ _BARE_HOUR = re.compile(
 
 
 def clock_bare_hours(text: str, pm_below: int = 8) -> str:
-    """Pure: 'friday at 3' -> 'friday at 15:00', 'monday at 9' -> 'monday at
-    9:00'. Hours under `pm_below` count as afternoon (what people mean by
+    """Pure: 'friday at 3' -> 'friday at 15:00', 'monday at 9' -> 'monday at 9:00'.
+
+    Hours under `pm_below` count as afternoon (what people mean by
     'at 3'); alarms pass 0 - 'wake me at 6' is morning.
     """
 
@@ -81,7 +84,9 @@ _MONTHS = (
 
 
 def name_the_month(text: str, now: datetime) -> str:
-    """Pure: 'the 1st at 9:00' -> 'november 1st at 9:00' - the next month
+    """Pure: 'the 1st at 9:00' -> 'november 1st at 9:00'.
+
+    The next month
     that has that day (this month if it's still ahead).
     """
     m = _LONE_DAY.search(text)
@@ -121,7 +126,9 @@ _NAMES_DAY = re.compile(
 
 
 def day_only(when: str, message: str) -> bool:
-    """Pure: an all-day thing? felt-llm writes `when` and sometimes adds an
+    """Pure: whether it's an all-day thing.
+
+    felt-llm writes `when` and sometimes adds an
     hour Mario never said (live 2026-10-23: "put the 4th of November in my
     calendar" -> Wednesday 3pm), so his own message names a day and no time
     counts too. A follow-up ("none", a place) names no day: `when` decides.
@@ -141,7 +148,9 @@ _SLASHED = re.compile(r"(?<!\d[/.-])\b\d{1,2}[/.-]\d{1,2}\b")
 
 
 def fix_typos(text: str) -> str:
-    """Pure: 'on4th of novemeber' -> 'on 4th of november'. Only a word next to
+    """Pure: 'on4th of novemeber' -> 'on 4th of november'.
+
+    Only a word next to
     a number (past an "of") is taken for a month, so "the member meeting"
     stays as it is.
     """
@@ -163,7 +172,9 @@ def fix_typos(text: str) -> str:
 
 
 def _stale_year(text: str, parsed: datetime, now: datetime) -> datetime:
-    """felt-llm's sense of the year lags (its training data): '4 November 2025'
+    """felt-llm's sense of the year lags (its training data).
+
+    '4 November 2025'
     asked in October 2026 means this November, not a date already gone.
     """
     base = now.replace(tzinfo=None) if parsed.tzinfo is None else now
@@ -181,8 +192,9 @@ def _stale_year(text: str, parsed: datetime, now: datetime) -> datetime:
 
 
 def resolve_datetime(text: str, now: datetime, pm_below: int = 8) -> datetime | None:
-    """Parse an arbitrary time/date phrase ("7:30am", "9pm", "tomorrow at
-    9am") into a concrete future datetime relative to `now`. Used by
+    """Parse an arbitrary time/date phrase ("7:30am", "9pm", "tomorrow at 9am") into a concrete future datetime.
+
+    Relative to `now`. Used by
     set_alarm, where (unlike get_weather's date-only resolve_date above)
     the time of day itself is the whole point. Confirmed 2026-09-12:
     dateparser's PREFER_DATES_FROM="future" already rolls a bare
@@ -204,7 +216,9 @@ def resolve_datetime(text: str, now: datetime, pm_below: int = 8) -> datetime | 
 
 
 def upcoming_weekend(today: date) -> tuple[date, date]:
-    """The next Saturday+Sunday pair from `today` — if `today` already
+    """The next Saturday+Sunday pair from `today`.
+
+    If `today` already
     falls on the weekend, that same weekend is returned rather than the
     following one.
     """

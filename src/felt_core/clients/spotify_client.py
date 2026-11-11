@@ -1,5 +1,6 @@
-"""Spotify — Felt's own dedicated OAuth client (2026-09-14), for
-play_music (search + start new playback by name) and, since WP-48
+"""Spotify — Felt's own dedicated OAuth client (2026-09-14).
+
+For play_music (search + start new playback by name) and, since WP-48
 (2026-10-17), media_control's transport (pause/resume/skip/back/volume)
 and "save this song": the old MPRIS path went through felt-desktop-agent,
 retired in WP-62 M2b. A plain server-side API integration - the Spotify
@@ -62,6 +63,7 @@ _FILLER = re.compile(r"^(?:some|a\s+bit\s+of|the\s+song)\s+", re.IGNORECASE)
 
 
 async def search_track(client: httpx2.AsyncClient, config: FeltConfig, query: str) -> dict | None:
+    """The Spotify track for `query` ("title by artist" gets field searches first)."""
     query = _FILLER.sub("", query.strip())
     m = _BY.match(query)
     tries = [query]
@@ -102,8 +104,9 @@ def _looks_like(track: dict, title: str, artist: str) -> bool:
 
 
 def music_playing_cached() -> bool | None:
-    """Whether music is playing per the last poll (no API call); None when
-    nothing's been read yet or the read is stale.
+    """Whether music is playing per the last poll (no API call).
+
+    None when nothing's been read yet or the read is stale.
     """
     data = _now_playing_cache["data"]
     if data == "unset" or time.monotonic() > _now_playing_cache["cached_at"] + 60:
@@ -112,7 +115,8 @@ def music_playing_cached() -> bool | None:
 
 
 async def get_currently_playing(client: httpx2.AsyncClient, config: FeltConfig) -> dict | None:
-    """WP-16 Part 2: `{track, progress_ms, duration_ms, is_playing}` or
+    """WP-16 Part 2: `{track, progress_ms, duration_ms, is_playing}` or None.
+
     None when nothing's loaded (204 No Content, or no `item` in the body -
     both happen, e.g. an empty queue after the last track ends). `track`
     is the raw Spotify track object (same shape search_track returns), so
@@ -150,6 +154,7 @@ async def get_currently_playing(client: httpx2.AsyncClient, config: FeltConfig) 
 
 
 async def list_devices(client: httpx2.AsyncClient, config: FeltConfig) -> list[dict]:
+    """The Spotify devices (players) that could play music."""
     token = await _get_access_token(client, config)
     response = await client.get(f"{_API_BASE}/me/player/devices", headers={"Authorization": f"Bearer {token}"})
     response.raise_for_status()
@@ -157,8 +162,9 @@ async def list_devices(client: httpx2.AsyncClient, config: FeltConfig) -> list[d
 
 
 async def _player_call(client: httpx2.AsyncClient, config: FeltConfig, method: str, path: str, **kwargs) -> None:
-    """One player/library change; the now-playing cache is dropped so the
-    next read sees it.
+    """One player/library change.
+
+    The now-playing cache is dropped so the next read sees it.
     """
     token = await _get_access_token(client, config)
     response = await client.request(
@@ -169,7 +175,8 @@ async def _player_call(client: httpx2.AsyncClient, config: FeltConfig, method: s
 
 
 async def get_player(client: httpx2.AsyncClient, config: FeltConfig) -> dict | None:
-    """The playback state (`is_playing`, `device.volume_percent`, ...), or
+    """The playback state (`is_playing`, `device.volume_percent`, ...).
+
     None when no device is active (204).
     """
     token = await _get_access_token(client, config)
@@ -181,38 +188,47 @@ async def get_player(client: httpx2.AsyncClient, config: FeltConfig) -> dict | N
 
 
 async def pause(client: httpx2.AsyncClient, config: FeltConfig) -> None:
+    """Pause playback."""
     await _player_call(client, config, "PUT", "/me/player/pause")
 
 
 async def resume(client: httpx2.AsyncClient, config: FeltConfig) -> None:
+    """Resume playback."""
     await _player_call(client, config, "PUT", "/me/player/play")
 
 
 async def next_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
+    """Skip to the next track."""
     await _player_call(client, config, "POST", "/me/player/next")
 
 
 async def previous_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
+    """Skip back to the previous track."""
     await _player_call(client, config, "POST", "/me/player/previous")
 
 
 async def restart_track(client: httpx2.AsyncClient, config: FeltConfig) -> None:
+    """Restart the current track from the beginning."""
     await _player_call(client, config, "PUT", "/me/player/seek", params={"position_ms": 0})
 
 
 async def set_volume(client: httpx2.AsyncClient, config: FeltConfig, percent: int) -> None:
+    """Set the volume to `percent` (clamped to 0-100)."""
     percent = max(0, min(100, percent))
     await _player_call(client, config, "PUT", "/me/player/volume", params={"volume_percent": percent})
 
 
 async def save_to_library(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
-    """The generic library endpoint (Spotify's February 2026 change replaced
-    PUT /me/tracks); scope user-library-modify.
+    """Save `uri` to the library via the generic library endpoint.
+
+    Spotify's February 2026 change replaced PUT /me/tracks; scope
+    user-library-modify.
     """
     await _player_call(client, config, "PUT", "/me/library", params={"uris": uri})
 
 
 async def queue_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str) -> None:
+    """Add `uri` to Spotify's play queue."""
     await _player_call(client, config, "POST", "/me/player/queue", params={"uri": uri})
 
 
@@ -221,15 +237,17 @@ class NoActivePlayerError(Exception):
 
 
 async def start_track(client: httpx2.AsyncClient, config: FeltConfig, uri: str, name: str | None = None) -> None:
-    """Plays `uri` now: queued, then skipped to. Not PUT /me/player/play with
-    uris - on Mario's Linux desktop client that's accepted (204) and loads
-    nothing, and while playing it stops the music (2026-10-18). Queue + next
-    works while playing or paused (and resumes); a freshly started client
-    with nothing played yet has no active device (404) -> NoActivePlayerError.
-    The queued song lands behind anything already queued (DJ picks, his own
-    adds), and Spotify's queue list lags a fresh add - so it skips one at a
-    time, each time waiting for the change to show, until the song is on
-    (`name` too: Spotify can relink a track to another uri).
+    """Plays `uri` now: queued, then skipped to.
+
+    Not PUT /me/player/play with uris - on Mario's Linux desktop client
+    that's accepted (204) and loads nothing, and while playing it stops the
+    music (2026-10-18). Queue + next works while playing or paused (and
+    resumes); a freshly started client with nothing played yet has no active
+    device (404) -> NoActivePlayerError. The queued song lands behind
+    anything already queued (DJ picks, his own adds), and Spotify's queue
+    list lags a fresh add - so it skips one at a time, each time waiting for
+    the change to show, until the song is on (`name` too: Spotify can relink
+    a track to another uri).
     """
     await add_to_queue(client, config, uri)
     _felt_started[uri] = time.monotonic()
@@ -323,8 +341,10 @@ def norm_name(text: str) -> str:
 
 
 async def artist_tracks(client: httpx2.AsyncClient, config: FeltConfig, artist: str) -> list[dict]:
-    """Tracks whose main artist is `artist` (by name, Spotify's search order -
-    roughly the popular ones first); empty if Spotify has no such artist.
+    """Tracks whose main artist is `artist` (by name).
+
+    Spotify's search order - roughly the popular ones first; empty if
+    Spotify has no such artist.
     """
     data = await _get(client, config, "/search", q=f'artist:"{artist}"', type="track", limit=10)
     want = norm_name(artist)
@@ -333,9 +353,10 @@ async def artist_tracks(client: httpx2.AsyncClient, config: FeltConfig, artist: 
 
 
 def pick_device(devices: list[dict]) -> dict | None:
-    """Pure: prefer whichever device Spotify already reports as active
-    (same "prefer Playing over paused" precedent as media_control's own
-    MPRIS player selection), otherwise just the first available one.
+    """Pure: prefer whichever device Spotify already reports as active.
+
+    Same "prefer Playing over paused" precedent as media_control's own
+    MPRIS player selection; otherwise just the first available one.
     """
     if not devices:
         return None

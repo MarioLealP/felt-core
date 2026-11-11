@@ -6,6 +6,7 @@ from felt_core.db.session import _connect, _require_lastrowid
 
 
 def insert_self_memory(db_path: str, kind: str, text: str, keywords_json: str, source_date: str | None) -> int:
+    """Store one self-memory row and return its id."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute(
@@ -37,6 +38,7 @@ def _row_to_self_memory(row: tuple) -> dict:
 
 
 def get_self_memory(db_path: str, memory_id: int) -> dict | None:
+    """Return one self-memory row by id, or None."""
     conn = _connect(db_path)
     row = conn.execute(f"SELECT {_SELF_MEMORY_COLUMNS} FROM self_memory WHERE id = ?", (memory_id,)).fetchone()  # ruff: ignore[hardcoded-sql-expression]  # constant SQL: only ? placeholders and fixed columns go in
     conn.close()
@@ -44,6 +46,7 @@ def get_self_memory(db_path: str, memory_id: int) -> dict | None:
 
 
 def get_self_memories(db_path: str, status: str | None = None) -> list[dict]:
+    """Return self-memories newest first, optionally only those with a status."""
     conn = _connect(db_path)
     if status is not None:
         rows = conn.execute(
@@ -57,6 +60,7 @@ def get_self_memories(db_path: str, status: str | None = None) -> list[dict]:
 
 
 def get_vetoed_self_memory_texts(db_path: str) -> list[str]:
+    """Return the texts Mario vetoed, for the never-propose list."""
     conn = _connect(db_path)
     rows = conn.execute("SELECT text FROM self_memory WHERE status = 'vetoed'").fetchall()
     conn.close()
@@ -64,6 +68,7 @@ def get_vetoed_self_memory_texts(db_path: str) -> list[str]:
 
 
 def count_active_self_memories(db_path: str) -> int:
+    """Count the self-memories with status active."""
     conn = _connect(db_path)
     row = conn.execute("SELECT COUNT(*) FROM self_memory WHERE status = 'active'").fetchone()
     conn.close()
@@ -79,6 +84,7 @@ def update_self_memory(
     status: str | None = None,
 ) -> bool:
     """Mario's edit/pin/veto/retire actions (PATCH /v1/self-memory/{id}).
+
     Only the fields actually passed are touched; a text edit also marks
     the row `edited` (same convention as diary's PATCH).
     """
@@ -106,6 +112,7 @@ def update_self_memory(
 
 
 def delete_self_memory(db_path: str, memory_id: int) -> bool:
+    """Delete a self-memory row and return whether it existed."""
     conn = _connect(db_path)
     with conn:
         cursor = conn.execute("DELETE FROM self_memory WHERE id = ?", (memory_id,))
@@ -115,9 +122,10 @@ def delete_self_memory(db_path: str, memory_id: int) -> bool:
 
 
 def touch_self_memories(db_path: str, memory_ids: list[int]) -> None:
-    """Increments `uses` and stamps `last_used` for every memory actually
-    placed in a prompt (self_memory.memory_block) - what the ranking's
-    recency/cooldown signals are computed from next time.
+    """Increments `uses` and stamps `last_used` for every memory actually placed in a prompt.
+
+    (self_memory.memory_block) - what the ranking's recency/cooldown signals
+    are computed from next time.
     """
     if not memory_ids:
         return
@@ -131,6 +139,7 @@ def touch_self_memories(db_path: str, memory_ids: list[int]) -> None:
 
 
 def retire_self_memories(db_path: str, memory_ids: list[int]) -> None:
+    """Retire the given self-memories while they're still active."""
     if not memory_ids:
         return
     conn = _connect(db_path)

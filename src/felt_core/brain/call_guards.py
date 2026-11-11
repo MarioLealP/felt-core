@@ -111,10 +111,11 @@ def _router_presence_allowed(message: str, params: dict) -> bool:
 def _apply_call_guards(
     call: tuple[str, dict] | None, fast_call: tuple[str, dict] | None, message: str
 ) -> tuple[str, dict] | None:
-    """The presence guard and the per-skill guards, shared by the router
-    path and the WP-36 local tool-calling path: a model's pick only stands
-    if it clears them. `fast_call` (the deterministic presence regex) is
-    never second-guessed.
+    """The presence guard and the per-skill guards, shared by the router path.
+
+    The WP-36 local tool-calling path shares them too: a model's pick only
+    stands if it clears them. `fast_call` (the deterministic presence regex)
+    is never second-guessed.
     """
     if (
         fast_call is None

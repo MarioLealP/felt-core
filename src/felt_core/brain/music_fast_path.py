@@ -150,6 +150,7 @@ _TRAILING_SKIP = re.compile(r"[,.!]\s*(?:next|skip(?:\s+(?:it|this|this\s+one))?
 
 
 def music_fast_path(message: str) -> tuple[str, dict] | None:
+    """The skill and params for a whole-message music command, or None when there isn't one."""
     for pattern, params in _DJ:
         if pattern.match(message):
             return "dj_mode", dict(params)

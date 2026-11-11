@@ -1,4 +1,6 @@
-"""Lists alarms: the phone's next one (the HA app's Next alarm sensor,
+"""Lists alarms: the phone's next one.
+
+(the HA app's Next alarm sensor,
 2026-10-18 - set_alarm puts them in the phone's Clock app since then) and
 any still pending in Felt's own scheduling (the fallback when the phone
 was unreachable, or a date further out than a phone alarm can hold).
@@ -21,6 +23,7 @@ def _when(at: datetime) -> str:
 
 
 async def handle(params, ctx):
+    """List the phone's next alarm and any alarms still pending in Felt's own scheduling."""
     del params
     lines = []
     try:

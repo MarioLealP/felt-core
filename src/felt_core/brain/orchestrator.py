@@ -1,6 +1,6 @@
-"""The brain loop: one felt-llm call carries the persona, the history, the
-message and every skill as a native tool (WP-36 D'': felt-llm is the only
-backend - no router model, no cloud, no fallback). Real conversation
+"""The brain loop: one felt-llm call carries the persona, the history, the message and every skill as a native tool.
+
+(WP-36 D'': felt-llm is the only backend - no router model, no cloud, no fallback). Real conversation
 memory (2026-09-11) - a session's prior messages are loaded from SQLite
 and included, so a follow-up question actually has context.
 
@@ -75,11 +75,11 @@ async def _chat_local(
     history: list[dict],
     speaker: ReplySpeaker | None = None,
 ) -> ChatResult:
-    """One felt-llm call carries the persona, the history, the message and
-    every skill as a native tool. A plain reply comes back as text; a tool
-    call goes through the guards, the weather fast path and run_skill,
-    then a SECOND call on the same prefix (+ the tool_call and its result)
-    phrases the answer. Raises LocalLLMUnavailableError if felt-llm is down at
+    """One felt-llm call carries the persona, the history, the message and every skill as a native tool.
+
+    A plain reply comes back as text; a tool call goes through the guards, the weather
+    fast path and run_skill, then a SECOND call on the same prefix (+ the tool_call and
+    its result) phrases the answer. Raises LocalLLMUnavailableError if felt-llm is down at
     any point (the API answers 503).
     """
     prefix = local_turn_messages(message, history, config, tone)
@@ -246,6 +246,7 @@ HER_LINES_N = 6
 
 
 def her_lines_note(lines: list[dict]) -> str:
+    """Build the note of her recent unprompted lines that goes into the history."""
     listed = "\n".join(f"- {line['content']}" for line in lines)
     return (
         "Things you said on your own recently, outside this conversation (he may "
@@ -261,6 +262,7 @@ async def chat(
     answering: str | None = None,
     speaker: ReplySpeaker | None = None,
 ) -> ChatResult:
+    """Answer one message from Mario and return her reply."""
     # Checked before anything else, including history/facts loading — a
     # bare "yes" / "tell me more" answering her mail mention (emails.py) has
     # to be caught here or it falls through to a generic chat reply that
@@ -317,15 +319,15 @@ async def chat_streamed(
     tone: str | None = None,
     answering: str | None = None,
 ) -> AsyncIterator[str | ReplyMeta | ChatResult]:
-    """chat(), streamed (WP-65): yields her reply in sentence chunks (as
-    written, not yet stripped for TTS) the moment each one is complete -
+    """chat(), streamed (WP-65): yields her reply in sentence chunks.
+
+    (as written, not yet stripped for TTS) the moment each one is complete -
     preceded by a ReplyMeta when the reply has a ui_action / animation tag
     known before her first words - and finally the whole ChatResult, the
     same one chat() would return, its `reply` being everything the chunks
-    said. Same turn, same tools, guards
-    and history (written once, at the end); only the felt-llm calls that can
-    be her answer stream. Raises LocalLLMUnavailableError like chat(), possibly
-    after some chunks.
+    said. Same turn, same tools, guards and history (written once, at the
+    end); only the felt-llm calls that can be her answer stream. Raises
+    LocalLLMUnavailableError like chat(), possibly after some chunks.
     """
     speaker = ReplySpeaker(config)
     turn = asyncio.create_task(chat(message, config, session_id, tone, answering, speaker))

@@ -8,13 +8,14 @@ from felt_core.db.schema import _create_schema
 
 
 def _require_lastrowid(cursor: sqlite3.Cursor) -> int:
-    """`Cursor.lastrowid` is typed `int | None` by the stdlib stub because
-    it's genuinely `None` for a statement that isn't an INSERT - but every
-    caller here only ever calls this right after an INSERT, where sqlite3
-    always sets it. Narrows the type at the one real use; if this ever
-    fired for real it would mean the INSERT itself silently didn't happen,
-    which deserves a loud error, not a `None` propagating into a call site
-    that thinks it got an `int`.
+    """Narrows `Cursor.lastrowid` to `int` at the one real use.
+
+    It's typed `int | None` by the stdlib stub because it's genuinely `None`
+    for a statement that isn't an INSERT - but every caller here only ever
+    calls this right after an INSERT, where sqlite3 always sets it. If this
+    ever fired for real it would mean the INSERT itself silently didn't
+    happen, which deserves a loud error, not a `None` propagating into a
+    call site that thinks it got an `int`.
     """
     if cursor.lastrowid is None:
         raise RuntimeError("INSERT did not produce a lastrowid")
