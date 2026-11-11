@@ -56,13 +56,24 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 # One engine per database. NullPool: a connection per session, closed after, like `_connect` - and nothing pooled
 # that's tied to an event loop that has since closed (each test runs its own loop).
+#
+# AUTOCOMMIT: every statement is its own transaction, so no lock is held across an `await`. Otherwise a write keeps
+# SQLite's write lock until its COMMIT, which SQLAlchemy sends in a later step - and the loop runs other tasks in
+# between. While the old sync `_connect` code still runs ON the loop, a sync write there waited for that lock and
+# blocked the very loop that would release it (a 30 s stall, then "database is locked"; tests/test_db_session.py).
+# Each query here is one statement; one that needs several atomically has to say so.
 _engines: dict[str, AsyncEngine] = {}
 
 
 def _engine(db_path: str) -> AsyncEngine:
     engine = _engines.get(db_path)
     if engine is None:
-        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", poolclass=NullPool, connect_args={"timeout": 30})
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{db_path}",
+            poolclass=NullPool,
+            connect_args={"timeout": 30},
+            isolation_level="AUTOCOMMIT",
+        )
         _engines[db_path] = engine
     return engine
 
